@@ -1,0 +1,63 @@
+name: ModNVote
+version: "${version}"
+main: com.modnmetl.modnvote.ModNVotePlugin
+api-version: "1.21"
+author: MODN METL LTD
+website: https://github.com/MODNMETL/modnvote
+
+commands:
+  modnvote:
+    description: ModNVote main command
+    usage: "/modnvote <yes|no|status|verify|audit|fullaudit|reset|reload>"
+    permission: modnvote.use
+    aliases: [mvote]
+
+
+permissions:
+  modnvote.*:
+    description: All ModNVote permissions
+    default: op
+    children:
+      modnvote.use: true
+      modnvote.vote: true
+      modnvote.status: true
+      modnvote.verify: true
+      modnvote.admin.reset: true
+      modnvote.admin.reload: true
+      modnvote.admin.audit: true
+      modnvote.admin.fullaudit: true
+
+  modnvote.use:
+    description: Allow using /modnvote
+    default: true
+
+  modnvote.vote:
+    description: Allow casting a vote
+    default: true
+
+  modnvote.status:
+    description: Allow viewing tallies
+    default: true
+
+  modnvote.verify:
+    description: Allow verifying tally integrity (HMAC check)
+    default: true
+
+  modnvote.admin.reset:
+    description: Reset all votes and tallies (admin)
+    default: op
+
+  modnvote.admin.reload:
+    description: Reload ModNVote config.yml (admin)
+    default: op
+
+  modnvote.admin.audit:
+    description: Show audit summary (admin)
+    default: op
+
+  modnvote.admin.fullaudit:
+    description: Show full audit grouped by IP (admin)
+    default: op
+
+softdepend:
+  - PlaceholderAPI
