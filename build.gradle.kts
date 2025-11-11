@@ -3,7 +3,7 @@ import org.gradle.jvm.tasks.Jar
 plugins { `java` }
 
 group = "com.modnmetl"
-version = "1.1.1"
+version = "1.1.2"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
