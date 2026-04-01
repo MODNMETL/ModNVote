@@ -40,10 +40,10 @@ permissions:
     description: Allow creating seed or test polls
     default: op
 
-  modnvote.admin.poll.open:
-    description: Allow opening stored polls
-    default: op
+    modnvote.admin.poll.open:
+      description: Allow opening stored polls
+      default: op
 
-  modnvote.admin.poll.close:
-    description: Allow closing open polls
-    default: op
+    modnvote.admin.poll.close:
+      description: Allow closing open polls
+      default: op
