@@ -4,7 +4,7 @@
 ModNVote 2.0
 
 ## Current objective
-Create the 2.0 architecture scaffold and document the core design so that later chat sessions can continue the project cleanly and consistently.
+Build the 2.0 runtime and persistence layer cleanly so the first real poll type, the ranked horse-breed poll, can be implemented on a proper ballot-first foundation.
 
 ## Agreed decisions so far
 
@@ -12,7 +12,7 @@ Create the 2.0 architecture scaffold and document the core design so that later 
 - Keep the existing repo history intact
 - Work on branch: `feature/modnvote-2.0-core`
 - Treat 2.0 as a clean architectural reset
-- Do not extend the 1.x single-round yes/no model
+- Replace the 1.x runtime rather than maintaining transition compatibility
 - Ballots will be the canonical source of truth
 - Discord webhooks will be used as an external witness mechanism
 - Design now for later Folia support via platform abstractions
@@ -25,20 +25,27 @@ Create the 2.0 architecture scaffold and document the core design so that later 
 - Project name updated to ModNVote
 - Java 21 toolchain retained
 - ShadowJar adopted for self-contained release jars
-- Initial 2.0 docs and source scaffold are being created
+- 1.x runtime replaced with 2.0 bootstrap, schema initializer, and root command scaffold
+- Clean-break config now uses `modnvote.db`
+- Poll persistence work is now being added
 
-## Important caution
+## Current implemented runtime pieces
 
-Do not delete the old 1.x runtime files yet.  
-The first 2.0 steps are additive until the new bootstrap and runtime path are ready.
+- 2.0 plugin bootstrap
+- platform abstraction with Paper adapter
+- schema initializer
+- ballot and poll domain model foundation
+- root admin command scaffold
+- initial poll persistence DAOs
 
 ## Next tasks
 
-- Add 2.0 docs
-- Add core enums and domain classes
-- Add Paper platform abstraction
-- Design new database schema
-- Begin replacement of old runtime bootstrap once the new scaffold is stable
+- Add poll persistence and option persistence
+- Add first seed breed poll creation flow
+- Add poll listing flow
+- Add audit event persistence
+- Add first real poll open/close lifecycle
+- Begin ranked single-winner counting support
 
 ## Open questions
 

@@ -1,0 +1,29 @@
+# ============================================================
+# ModNVote 2.0 Configuration
+# ============================================================
+# This is the new clean-break configuration for ModNVote 2.x.
+# Existing 1.x data/config installations should not be reused.
+# ============================================================
+
+general:
+  debug: false
+
+storage:
+  sqlite_file: "modnvote.db"
+
+publication:
+  discord_webhooks: []
+  publish_poll_opened: true
+  publish_poll_closed: true
+  publish_checkpoints: true
+
+integrity:
+  checkpoint_interval_ballots: 25
+  canonicalization_version: 1
+
+ui:
+  require_confirmation: true
+
+messages:
+  prefix: "&6[ModNVote] "
+  reloaded: "&aConfiguration reloaded."

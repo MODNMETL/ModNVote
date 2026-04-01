@@ -1,7 +1,6 @@
 package com.modnmetl.modnvote.commands;
 
 import com.modnmetl.modnvote.ModNVotePlugin;
-import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.PollService;
 import org.bukkit.ChatColor;
@@ -17,6 +16,10 @@ import java.util.Objects;
 
 /**
  * Temporary 2.0 root command scaffold.
+ *
+ * This replaces the old 1.x command tree with a poll-oriented command entrypoint.
+ * The current implementation is intentionally small so the new runtime can boot,
+ * be tested, and then extended incrementally.
  */
 public final class PollCommand implements CommandExecutor, TabCompleter {
 
@@ -61,45 +64,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
                 return true;
             }
-            case "list" -> {
-                if (!sender.hasPermission("modnvote.admin.poll.list")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
-                    return true;
-                }
-
-                try {
-                    List<Poll> polls = pollService.listPolls();
-                    if (polls.isEmpty()) {
-                        sender.sendMessage(ChatColor.YELLOW + "No polls currently exist.");
-                        return true;
-                    }
-
-                    sender.sendMessage(ChatColor.GOLD + "Stored polls:");
-                    for (Poll poll : polls) {
-                        sender.sendMessage(ChatColor.YELLOW + "- #" + poll.pollId()
-                                + " [" + poll.status().name() + "] "
-                                + poll.slug() + " :: " + poll.title()
-                                + " (" + poll.pollType().name() + ")");
-                    }
-                } catch (Exception e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to list polls: " + e.getMessage());
-                }
-                return true;
-            }
-            case "seedbreed" -> {
-                if (!sender.hasPermission("modnvote.admin.poll.create")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
-                    return true;
-                }
-
-                try {
-                    long pollId = pollService.createSeedBreedPoll(sender.getName());
-                    sender.sendMessage(ChatColor.GREEN + "Created seed breed poll with ID " + pollId + ".");
-                } catch (Exception e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to create seed breed poll: " + e.getMessage());
-                }
-                return true;
-            }
             default -> {
                 sendHelp(sender, label);
                 return true;
@@ -111,8 +75,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.GOLD + "ModNVote 2.0 Commands");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " status");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " reload");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " list");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " seedbreed");
     }
 
     @Override
@@ -121,15 +83,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1) {
             completions.add("status");
-
             if (sender.hasPermission("modnvote.admin.reload")) {
                 completions.add("reload");
-            }
-            if (sender.hasPermission("modnvote.admin.poll.list")) {
-                completions.add("list");
-            }
-            if (sender.hasPermission("modnvote.admin.poll.create")) {
-                completions.add("seedbreed");
             }
         }
 
