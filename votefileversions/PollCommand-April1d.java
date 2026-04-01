@@ -101,44 +101,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
-            case "open" -> {
-                if (!sender.hasPermission("modnvote.admin.poll.open")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
-                    return true;
-                }
-                if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " open <pollId>");
-                    return true;
-                }
-
-                try {
-                    long pollId = parsePollId(args[1]);
-                    pollService.openPoll(pollId, sender.getName());
-                    sender.sendMessage(ChatColor.GREEN + "Opened poll #" + pollId + ".");
-                } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to open poll: " + e.getMessage());
-                }
-                return true;
-            }
-            case "close" -> {
-                if (!sender.hasPermission("modnvote.admin.poll.close")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
-                    return true;
-                }
-                if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " close <pollId>");
-                    return true;
-                }
-
-                try {
-                    long pollId = parsePollId(args[1]);
-                    pollService.closePoll(pollId, sender.getName());
-                    sender.sendMessage(ChatColor.GREEN + "Closed poll #" + pollId + ".");
-                } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to close poll: " + e.getMessage());
-                }
-                return true;
-            }
             default -> {
                 sendHelp(sender, label);
                 return true;
@@ -152,16 +114,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " reload");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " list");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " seedbreed");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " open <pollId>");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " close <pollId>");
-    }
-
-    private long parsePollId(String raw) throws PollServiceException {
-        try {
-            return Long.parseLong(raw);
-        } catch (NumberFormatException e) {
-            throw new PollServiceException("Poll id must be a whole number.");
-        }
     }
 
     @Override
@@ -179,12 +131,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("seedbreed");
-            }
-            if (sender.hasPermission("modnvote.admin.poll.open")) {
-                completions.add("open");
-            }
-            if (sender.hasPermission("modnvote.admin.poll.close")) {
-                completions.add("close");
             }
         }
 

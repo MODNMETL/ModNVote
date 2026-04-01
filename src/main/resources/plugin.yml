@@ -9,7 +9,7 @@ description: ModNVote 2.0 - secure poll and election platform
 commands:
   modnvote:
     description: ModNVote 2.0 root command
-    usage: "/modnvote <status|reload|list|seedbreed>"
+    usage: "/modnvote <status|reload|list|seedbreed|open|close>"
     permission: modnvote.use
 
 permissions:
@@ -21,6 +21,8 @@ permissions:
       modnvote.admin.reload: true
       modnvote.admin.poll.list: true
       modnvote.admin.poll.create: true
+      modnvote.admin.poll.open: true
+      modnvote.admin.poll.close: true
 
   modnvote.use:
     description: Allow use of base ModNVote command
@@ -37,3 +39,11 @@ permissions:
   modnvote.admin.poll.create:
     description: Allow creating seed or test polls
     default: op
+
+    modnvote.admin.poll.open:
+      description: Allow opening stored polls
+      default: op
+
+    modnvote.admin.poll.close:
+      description: Allow closing open polls
+      default: op

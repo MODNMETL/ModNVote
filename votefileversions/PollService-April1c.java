@@ -5,7 +5,6 @@ import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
-import com.modnmetl.modnvote.storage.AuditEventDao;
 import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.PollDao;
 import com.modnmetl.modnvote.storage.PollOptionDao;
@@ -26,7 +25,6 @@ public final class PollService {
     private final Logger logger;
     private final PollDao pollDao;
     private final PollOptionDao pollOptionDao;
-    private final AuditEventDao auditEventDao;
 
     public PollService(DatabaseManager databaseManager,
                        PlatformAdapter platformAdapter,
@@ -36,7 +34,6 @@ public final class PollService {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.pollDao = new PollDao(databaseManager);
         this.pollOptionDao = new PollOptionDao(databaseManager);
-        this.auditEventDao = new AuditEventDao(databaseManager);
     }
 
     public boolean isInitialized() {
@@ -52,14 +49,6 @@ public final class PollService {
             return pollDao.findAllPolls();
         } catch (Exception e) {
             throw new PollServiceException("Failed to load polls", e);
-        }
-    }
-
-    public Poll findPollById(long pollId) throws PollServiceException {
-        try {
-            return pollDao.findPollById(pollId);
-        } catch (Exception e) {
-            throw new PollServiceException("Failed to load poll #" + pollId, e);
         }
     }
 
@@ -100,12 +89,6 @@ public final class PollService {
                 try {
                     long pollId = pollDao.insertPoll(connection, poll, createdBy, "UUID_AND_IP_HEURISTIC", "{}");
                     pollOptionDao.insertOptions(connection, pollId, options);
-                    auditEventDao.insertPollEvent(
-                            connection,
-                            pollId,
-                            "POLL_CREATED",
-                            "actor=" + createdBy + ";slug=" + poll.slug() + ";status=" + poll.status().name()
-                    );
                     connection.commit();
                     return pollId;
                 } catch (Exception e) {
@@ -117,76 +100,6 @@ public final class PollService {
             }
         } catch (Exception e) {
             throw new PollServiceException("Failed to create seed breed poll", e);
-        }
-    }
-
-    public void openPoll(long pollId, String actor) throws PollServiceException {
-        try {
-            Poll poll = pollDao.findPollById(pollId);
-            if (poll == null) {
-                throw new PollServiceException("Poll #" + pollId + " does not exist.");
-            }
-            if (poll.status() != PollStatus.DRAFT) {
-                throw new PollServiceException("Poll #" + pollId + " is not in DRAFT state.");
-            }
-
-            try (Connection connection = databaseManager.getConnection()) {
-                connection.setAutoCommit(false);
-                try {
-                    pollDao.updatePollStatus(connection, pollId, PollStatus.OPEN);
-                    auditEventDao.insertPollEvent(
-                            connection,
-                            pollId,
-                            "POLL_OPENED",
-                            "actor=" + actor + ";poll_id=" + pollId + ";from=DRAFT;to=OPEN"
-                    );
-                    connection.commit();
-                } catch (Exception e) {
-                    connection.rollback();
-                    throw e;
-                } finally {
-                    connection.setAutoCommit(true);
-                }
-            }
-        } catch (PollServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new PollServiceException("Failed to open poll #" + pollId, e);
-        }
-    }
-
-    public void closePoll(long pollId, String actor) throws PollServiceException {
-        try {
-            Poll poll = pollDao.findPollById(pollId);
-            if (poll == null) {
-                throw new PollServiceException("Poll #" + pollId + " does not exist.");
-            }
-            if (poll.status() != PollStatus.OPEN) {
-                throw new PollServiceException("Poll #" + pollId + " is not in OPEN state.");
-            }
-
-            try (Connection connection = databaseManager.getConnection()) {
-                connection.setAutoCommit(false);
-                try {
-                    pollDao.updatePollStatus(connection, pollId, PollStatus.CLOSED);
-                    auditEventDao.insertPollEvent(
-                            connection,
-                            pollId,
-                            "POLL_CLOSED",
-                            "actor=" + actor + ";poll_id=" + pollId + ";from=OPEN;to=CLOSED"
-                    );
-                    connection.commit();
-                } catch (Exception e) {
-                    connection.rollback();
-                    throw e;
-                } finally {
-                    connection.setAutoCommit(true);
-                }
-            }
-        } catch (PollServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new PollServiceException("Failed to close poll #" + pollId, e);
         }
     }
 

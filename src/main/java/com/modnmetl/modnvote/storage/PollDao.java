@@ -127,6 +127,50 @@ public final class PollDao {
         }
     }
 
+    public Poll findPollById(long pollId) throws SQLException {
+        String sql = """
+                SELECT
+                    poll_id,
+                    slug,
+                    title,
+                    description,
+                    poll_type,
+                    status,
+                    opens_at,
+                    closes_at,
+                    max_rankings,
+                    seat_count,
+                    allow_partial_ranking,
+                    requires_confirmation
+                FROM polls
+                WHERE poll_id = ?
+                LIMIT 1
+                """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public void updatePollStatus(Connection connection, long pollId, PollStatus status) throws SQLException {
+        String sql = "UPDATE polls SET status = ? WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, status.name());
+            ps.setLong(2, pollId);
+            ps.executeUpdate();
+        }
+    }
+
     private Poll mapRow(ResultSet rs) throws SQLException {
         Long opensAtMillis = getNullableLong(rs, "opens_at");
         Long closesAtMillis = getNullableLong(rs, "closes_at");
