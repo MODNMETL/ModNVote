@@ -4,7 +4,6 @@ import com.modnmetl.modnvote.ModNVotePlugin;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.PollService;
-import com.modnmetl.modnvote.service.PollServiceException;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -82,7 +81,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                                 + poll.slug() + " :: " + poll.title()
                                 + " (" + poll.pollType().name() + ")");
                     }
-                } catch (PollServiceException e) {
+                } catch (Exception e) {
                     sender.sendMessage(ChatColor.RED + "Failed to list polls: " + e.getMessage());
                 }
                 return true;
@@ -96,7 +95,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 try {
                     long pollId = pollService.createSeedBreedPoll(sender.getName());
                     sender.sendMessage(ChatColor.GREEN + "Created seed breed poll with ID " + pollId + ".");
-                } catch (PollServiceException e) {
+                } catch (Exception e) {
                     sender.sendMessage(ChatColor.RED + "Failed to create seed breed poll: " + e.getMessage());
                 }
                 return true;

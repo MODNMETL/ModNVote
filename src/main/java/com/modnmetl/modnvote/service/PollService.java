@@ -12,7 +12,6 @@ import com.modnmetl.modnvote.storage.PollOptionDao;
 import java.sql.Connection;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Logger;
 
@@ -45,54 +44,62 @@ public final class PollService {
         return "PollService ready";
     }
 
-    public List<Poll> listPolls() throws Exception {
-        return pollDao.findAllPolls();
+    public List<Poll> listPolls() throws PollServiceException {
+        try {
+            return pollDao.findAllPolls();
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to load polls", e);
+        }
     }
 
-    public long createSeedBreedPoll(String createdBy) throws Exception {
-        String slug = "breed-of-the-month-" + Instant.now().toEpochMilli();
+    public long createSeedBreedPoll(String createdBy) throws PollServiceException {
+        try {
+            String slug = "breed-of-the-month-" + Instant.now().toEpochMilli();
 
-        if (pollDao.pollExistsBySlug(slug)) {
-            throw new IllegalStateException("Generated slug already exists: " + slug);
-        }
-
-        Poll poll = new Poll(
-                0L,
-                slug,
-                "Breed of the Month",
-                "Rank the nominated horse breeds in order of preference.",
-                PollType.RANKED_SINGLE_WINNER,
-                PollStatus.DRAFT,
-                null,
-                null,
-                6,
-                1,
-                true,
-                true
-        );
-
-        List<PollOption> options = List.of(
-                new PollOption(0L, 0L, "arabian", "Arabian", "Elegant, fast, and refined.", 0),
-                new PollOption(0L, 0L, "shire", "Shire", "Large, powerful, and steady.", 1),
-                new PollOption(0L, 0L, "mustang", "Mustang", "Hardy, agile, and spirited.", 2),
-                new PollOption(0L, 0L, "friesian", "Friesian", "Striking black coat and noble bearing.", 3),
-                new PollOption(0L, 0L, "andalusian", "Andalusian", "Strong, responsive, and graceful.", 4),
-                new PollOption(0L, 0L, "clydesdale", "Clydesdale", "Heavy draft strength with calm temperament.", 5)
-        );
-
-        try (Connection connection = databaseManager.getConnection()) {
-            connection.setAutoCommit(false);
-            try {
-                long pollId = pollDao.insertPoll(connection, poll, createdBy, "UUID_AND_IP_HEURISTIC", "{}");
-                pollOptionDao.insertOptions(connection, pollId, options);
-                connection.commit();
-                return pollId;
-            } catch (Exception e) {
-                connection.rollback();
-                throw e;
-            } finally {
-                connection.setAutoCommit(true);
+            if (pollDao.pollExistsBySlug(slug)) {
+                throw new IllegalStateException("Generated slug already exists: " + slug);
             }
+
+            Poll poll = new Poll(
+                    0L,
+                    slug,
+                    "Breed of the Month",
+                    "Rank the nominated horse breeds in order of preference.",
+                    PollType.RANKED_SINGLE_WINNER,
+                    PollStatus.DRAFT,
+                    null,
+                    null,
+                    6,
+                    1,
+                    true,
+                    true
+            );
+
+            List<PollOption> options = List.of(
+                    new PollOption(0L, 0L, "arabian", "Arabian", "Elegant, fast, and refined.", 0),
+                    new PollOption(0L, 0L, "shire", "Shire", "Large, powerful, and steady.", 1),
+                    new PollOption(0L, 0L, "mustang", "Mustang", "Hardy, agile, and spirited.", 2),
+                    new PollOption(0L, 0L, "friesian", "Friesian", "Striking black coat and noble bearing.", 3),
+                    new PollOption(0L, 0L, "andalusian", "Andalusian", "Strong, responsive, and graceful.", 4),
+                    new PollOption(0L, 0L, "clydesdale", "Clydesdale", "Heavy draft strength with calm temperament.", 5)
+            );
+
+            try (Connection connection = databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try {
+                    long pollId = pollDao.insertPoll(connection, poll, createdBy, "UUID_AND_IP_HEURISTIC", "{}");
+                    pollOptionDao.insertOptions(connection, pollId, options);
+                    connection.commit();
+                    return pollId;
+                } catch (Exception e) {
+                    connection.rollback();
+                    throw e;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            }
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to create seed breed poll", e);
         }
     }
 
