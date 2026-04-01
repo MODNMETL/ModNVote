@@ -1,1 +1,1 @@
-rootProject.name = "modnvote"
+rootProject.name = "ModNVote"

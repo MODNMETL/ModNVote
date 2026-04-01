@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-Implementation-Title: ModNVote
-Implementation-Version: 1.1.3
-Built-By: MODN METL
-
