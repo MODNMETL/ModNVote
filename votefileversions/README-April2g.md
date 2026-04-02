@@ -58,8 +58,15 @@ It does **not** claim to make tampering impossible — instead, it makes it **de
 
 ### Key principles
 
-**Ballots are the source of truth**  
-Votes are stored as full ballots, not just tallies.
+**Anonymous ballots are the source of truth**  
+Vote content is stored as anonymous ballots, separated from voter identity.
+
+**Participation is tracked separately**  
+The system records that a player has voted without storing how they voted.
+
+This ensures both:
+- verifiable inclusion
+- strong voter privacy
 
 **Append-only audit chain**  
 All lifecycle events are recorded and hash-linked.

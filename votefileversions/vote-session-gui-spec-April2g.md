@@ -21,10 +21,11 @@ It ensures:
 
 ## Core Design Principles
 
-### 1. Ballots are the source of truth
+### 1. Anonymous Ballots are the source of truth for vote content with participation tracked separately.
 
 The GUI never commits data directly.
 All submissions must go through the service layer.
+
 
 ### 2. Validation is server-side
 

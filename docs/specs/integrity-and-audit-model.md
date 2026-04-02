@@ -5,7 +5,7 @@
 A local database seal alone does not provide strong assurance if a hostile admin has offline access to the same machine that stores both the database and the signing material.
 
 ModNVote 2.0 therefore uses a stronger integrity model:
-- ballot-first canonical storage
+- anonymous ballot-first canonical storage
 - append-only audit chain
 - checkpoint hashing
 - external witness publication
@@ -14,12 +14,13 @@ ModNVote 2.0 therefore uses a stronger integrity model:
 ## Ballot integrity
 
 Each ballot will be canonicalized and hashed.  
-The canonical form will include:
+The canonical anonymous ballot form will include:
 - poll id
-- voter identity key
 - ordered preferences
 - submission timestamp
 - rule snapshot version
+
+Identity data MUST NOT be included in the canonical ballot.
 
 ## Audit chain
 

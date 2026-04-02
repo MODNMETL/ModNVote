@@ -12,7 +12,8 @@ The second is a higher-trust community election system for a Mayor and a 5-seat 
 ## Primary goals
 
 - Replace the 1.x single-round yes/no design with a true multi-poll architecture
-- Store ballots as the canonical source of truth
+- Store anonymous ballots as the canonical source of truth for vote content
+- Store participation records as the canonical source of truth for voter eligibility and inclusion
 - Support multiple vote types from a shared core
 - Provide deterministic recounting
 - Provide tamper-evident audit trails
@@ -29,8 +30,17 @@ The second is a higher-trust community election system for a Mayor and a 5-seat 
 
 ## Core principles
 
-### 1. Ballots are the source of truth
-Tallies, winners, recounts, and audit summaries are derived from stored ballots.
+### 1. Anonymous ballots are the source of truth for vote content
+
+Tallies, winners, recounts, and audit summaries are derived from stored anonymous ballots.
+
+Voter eligibility and inclusion are tracked separately via participation records.
+
+### 1b. Identity and vote content must be separated
+
+At no point may persistent storage allow identity-to-vote reconstruction.
+
+Participation (identity-aware) and ballot content (identity-free) are stored separately and cannot be joined to reveal how a player voted.
 
 ### 2. Validation is server-side
 The GUI helps the player understand their vote, but the server always re-validates the ballot before commit.
@@ -43,6 +53,12 @@ A local seal alone is not enough against a privileged hostile admin. Checkpoints
 
 ### 5. Platform work must be isolated
 Business logic must not depend on brittle “main thread only” assumptions. Platform scheduling and player-bound execution are abstracted.
+
+### 6. Privacy is enforced structurally
+This is not optional — any design that allows identity-to-vote linkage is invalid.
+The system must ensure that database access alone cannot reveal how a player voted.
+
+See: `privacy-model.md`
 
 ## Supported vote engines
 
