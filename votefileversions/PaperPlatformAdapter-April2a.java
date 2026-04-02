@@ -36,8 +36,10 @@ public final class PaperPlatformAdapter implements PlatformAdapter {
 
     @Override
     public void runForPlayer(Player player, Runnable task) {
-        // Paper-safe for now. Later, a Folia-specific adapter can schedule
-        // directly against the player/entity scheduler when that support is added.
+    // Paper-safe for now.
+    // IMPORTANT: This must be replaced with entity/region scheduler logic
+    // when implementing Folia support, otherwise cross-thread access issues
+    // will occur.
         Bukkit.getScheduler().runTask(plugin, task);
     }
 }
