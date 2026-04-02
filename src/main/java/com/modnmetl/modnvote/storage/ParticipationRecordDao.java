@@ -102,4 +102,30 @@ public final class ParticipationRecordDao {
             }
         }
     }
+
+    public String findReceiptHashByPollAndTokenHash(long pollId, String participationTokenHash) throws SQLException {
+        Objects.requireNonNull(participationTokenHash, "participationTokenHash");
+
+        String sql = """
+                SELECT receipt_hash
+                FROM participation_records
+                WHERE poll_id = ?
+                  AND participation_token_hash = ?
+                LIMIT 1
+                """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+            ps.setString(2, participationTokenHash);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("receipt_hash");
+                }
+            }
+        }
+
+        return null;
+    }
 }

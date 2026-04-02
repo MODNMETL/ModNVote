@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 /**
- * Service layer for ballot submission and validation work.
+ * Service layer for ballot submission and verification work.
  *
  * This privacy-preserving revision separates:
  * - participation tracking (identity-aware, no vote content)
@@ -188,6 +188,37 @@ public final class BallotService {
         }
     }
 
+    public VerificationResult verifyVoterInclusion(long pollId, String identityKey) throws PollServiceException {
+        requireNonBlank(identityKey, "identityKey");
+
+        try {
+            Poll poll = pollDao.findPollById(pollId);
+            if (poll == null) {
+                throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            }
+
+            String participationTokenHash = deriveParticipationTokenHash(poll, identityKey);
+            String receiptHash = participationRecordDao.findReceiptHashByPollAndTokenHash(pollId, participationTokenHash);
+            boolean included = receiptHash != null;
+            boolean receiptBackedByAnonymousBallot = included
+                    && anonymousBallotDao.existsAnonymousBallotForPollAndReceiptHash(pollId, receiptHash);
+            boolean auditChainValid = auditEventDao.isPollAuditChainValid(pollId);
+
+            return new VerificationResult(
+                    pollId,
+                    included,
+                    receiptBackedByAnonymousBallot,
+                    auditChainValid,
+                    receiptHash
+            );
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warning("Failed to verify voter inclusion for poll #" + pollId + ": " + e.getMessage());
+            throw new PollServiceException("Failed to verify voter inclusion for poll #" + pollId, e);
+        }
+    }
+
     private void validateRankedSelection(Poll poll,
                                          List<PollOption> availableOptions,
                                          List<Long> rankedOptionIds) throws PollServiceException {
@@ -327,6 +358,15 @@ public final class BallotService {
             String ballotHash,
             String receiptHash,
             Instant submittedAt
+    ) {
+    }
+
+    public record VerificationResult(
+            long pollId,
+            boolean included,
+            boolean receiptBackedByAnonymousBallot,
+            boolean auditChainValid,
+            String receiptHash
     ) {
     }
 }

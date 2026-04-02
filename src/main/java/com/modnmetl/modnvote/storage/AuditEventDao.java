@@ -13,15 +13,11 @@ import java.util.Objects;
 /**
  * DAO for append-only audit event persistence.
  *
- * This is the first structural implementation of the 2.0 audit chain.
  * Each poll event stores:
  * - a per-poll sequence number
  * - a canonical payload
  * - the previous event hash
  * - the current event hash
- *
- * This is intentionally lightweight for the first lifecycle step and will later
- * be extended with richer payloads and checkpoint publication.
  */
 public final class AuditEventDao {
 
@@ -68,6 +64,56 @@ public final class AuditEventDao {
             ps.setString(6, eventHash);
             ps.setLong(7, Instant.now().toEpochMilli());
             ps.executeUpdate();
+        }
+    }
+
+    public boolean isPollAuditChainValid(long pollId) throws SQLException {
+        String sql = """
+                SELECT
+                    sequence_no,
+                    event_type,
+                    canonical_payload,
+                    prev_hash,
+                    event_hash
+                FROM audit_events
+                WHERE poll_id = ?
+                ORDER BY sequence_no ASC
+                """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                int expectedSequence = 1;
+                String previousHash = null;
+
+                while (rs.next()) {
+                    int sequenceNo = rs.getInt("sequence_no");
+                    String eventType = rs.getString("event_type");
+                    String canonicalPayload = rs.getString("canonical_payload");
+                    String storedPrevHash = rs.getString("prev_hash");
+                    String storedEventHash = rs.getString("event_hash");
+
+                    if (sequenceNo != expectedSequence) {
+                        return false;
+                    }
+
+                    if (!Objects.equals(previousHash, storedPrevHash)) {
+                        return false;
+                    }
+
+                    String recomputedHash = hash(previousHash == null ? "" : previousHash, eventType, canonicalPayload);
+                    if (!recomputedHash.equals(storedEventHash)) {
+                        return false;
+                    }
+
+                    previousHash = storedEventHash;
+                    expectedSequence++;
+                }
+
+                return true;
+            }
         }
     }
 

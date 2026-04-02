@@ -10,6 +10,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -139,6 +140,51 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+            case "verify" -> {
+                if (!sender.hasPermission("modnvote.verify")) {
+                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    return true;
+                }
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " verify <pollId>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    BallotService.VerificationResult result = ballotService.verifyVoterInclusion(
+                            pollId,
+                            player.getUniqueId().toString()
+                    );
+
+                    sender.sendMessage(ChatColor.GOLD + "Verification for poll #" + pollId + ":");
+
+                    if (result.included()) {
+                        sender.sendMessage(ChatColor.GREEN + "- Your vote is included in this poll.");
+                    } else {
+                        sender.sendMessage(ChatColor.RED + "- No recorded vote from you was found in this poll.");
+                    }
+
+                    if (result.receiptBackedByAnonymousBallot()) {
+                        sender.sendMessage(ChatColor.GREEN + "- Your recorded participation is backed by an anonymous ballot.");
+                    } else if (result.included()) {
+                        sender.sendMessage(ChatColor.RED + "- Your recorded participation is not backed by an anonymous ballot.");
+                    }
+
+                    if (result.auditChainValid()) {
+                        sender.sendMessage(ChatColor.GREEN + "- The poll audit chain is currently valid.");
+                    } else {
+                        sender.sendMessage(ChatColor.RED + "- The poll audit chain is INVALID.");
+                    }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(ChatColor.RED + "Failed to verify poll inclusion: " + e.getMessage());
+                }
+                return true;
+            }
             default -> {
                 sendHelp(sender, label);
                 return true;
@@ -154,6 +200,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " seedbreed");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " open <pollId>");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " close <pollId>");
+        sender.sendMessage(ChatColor.YELLOW + "/" + label + " verify <pollId>");
     }
 
     private long parsePollId(String raw) throws PollServiceException {
@@ -185,6 +232,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.admin.poll.close")) {
                 completions.add("close");
+            }
+            if (sender.hasPermission("modnvote.verify")) {
+                completions.add("verify");
             }
         }
 

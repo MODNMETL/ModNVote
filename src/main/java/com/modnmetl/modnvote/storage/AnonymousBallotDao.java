@@ -57,4 +57,26 @@ public final class AnonymousBallotDao {
 
         throw new SQLException("Failed to insert anonymous ballot; no generated key returned.");
     }
+
+    public boolean existsAnonymousBallotForPollAndReceiptHash(long pollId, String receiptHash) throws SQLException {
+        Objects.requireNonNull(receiptHash, "receiptHash");
+
+        String sql = """
+                SELECT 1
+                FROM anonymous_ballots
+                WHERE poll_id = ?
+                  AND receipt_hash = ?
+                LIMIT 1
+                """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+            ps.setString(2, receiptHash);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
 }
