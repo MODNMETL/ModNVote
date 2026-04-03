@@ -134,7 +134,7 @@ public final class AnonymousBallotDao {
     }
 
     public record StoredAnonymousBallot(
-            long anonymous_ballotId,
+            long anonymousBallotId,
             String ballotHash,
             String receiptHash,
             Instant submittedAt
