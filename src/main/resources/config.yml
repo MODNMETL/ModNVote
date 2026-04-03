@@ -27,3 +27,6 @@ ui:
 messages:
   prefix: "&6[ModNVote] "
   reloaded: "&aConfiguration reloaded."
+
+permissions:
+  bypass_node: "modnvote.bypass"

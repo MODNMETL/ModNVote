@@ -13,9 +13,6 @@ import java.util.Objects;
  *
  * Participation records prove inclusion and enforce one vote per derived
  * participation token, while never storing vote content.
- *
- * IP hashes are stored only in the participation layer so the plugin can
- * apply duplicate-prevention heuristics without linking identities to ballots.
  */
 public final class ParticipationRecordDao {
 
@@ -99,30 +96,6 @@ public final class ParticipationRecordDao {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, pollId);
             ps.setString(2, participationTokenHash);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        }
-    }
-
-    public boolean existsParticipationForPollAndIpHash(Connection connection,
-                                                       long pollId,
-                                                       String ipHash) throws SQLException {
-        Objects.requireNonNull(connection, "connection");
-        Objects.requireNonNull(ipHash, "ipHash");
-
-        String sql = """
-                SELECT 1
-                FROM participation_records
-                WHERE poll_id = ?
-                  AND ip_hash = ?
-                LIMIT 1
-                """;
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, pollId);
-            ps.setString(2, ipHash);
 
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();

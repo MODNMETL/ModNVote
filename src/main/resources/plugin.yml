@@ -23,6 +23,7 @@ permissions:
       modnvote.admin.poll.create: true
       modnvote.admin.poll.open: true
       modnvote.admin.poll.close: true
+      modnvote.admin.poll.verify: true
 
   modnvote.use:
     description: Allow use of base ModNVote command
@@ -46,4 +47,12 @@ permissions:
 
   modnvote.admin.poll.close:
     description: Allow closing open polls
+    default: op
+
+  modnvote.admin.poll.verify:
+    description: Allow closing open polls
+    default: op
+
+  modnvote.testvote:
+    description: Allows test vote submission
     default: op

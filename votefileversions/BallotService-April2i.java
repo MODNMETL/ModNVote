@@ -79,8 +79,7 @@ public final class BallotService {
                                                String clientPlatform,
                                                List<Long> rankedOptionIds,
                                                String ipHash,
-                                               String floodgateId,
-                                               boolean bypassIpDuplicateCheck) throws PollServiceException {
+                                               String floodgateId) throws PollServiceException {
         requireNonBlank(identityKey, "identityKey");
         requireNonBlank(clientPlatform, "clientPlatform");
         Objects.requireNonNull(rankedOptionIds, "rankedOptionIds");
@@ -129,11 +128,6 @@ public final class BallotService {
                             participationTokenHash
                     )) {
                         throw new PollServiceException("A vote has already been recorded for this participant in poll #" + pollId + ".");
-                    }
-
-                    if (!bypassIpDuplicateCheck && ipHash != null
-                            && participationRecordDao.existsParticipationForPollAndIpHash(connection, pollId, ipHash)) {
-                        throw new PollServiceException("A vote from your location has already been recorded for poll #" + pollId + ".");
                     }
 
                     participationRecordDao.insertParticipationRecord(

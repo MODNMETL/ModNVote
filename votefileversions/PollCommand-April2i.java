@@ -12,11 +12,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -189,66 +185,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
-            case "testvote" -> {
-                if (!sender.hasPermission("modnvote.testvote")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
-                    return true;
-                }
-                if (!(sender instanceof Player player)) {
-                    sender.sendMessage(ChatColor.RED + "Only players can use this command.");
-                    return true;
-                }
-                if (args.length < 3) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " testvote <pollId> <optionId1> <optionId2> ...");
-                    return true;
-                }
-
-                try {
-                    long pollId = parsePollId(args[1]);
-
-                    List<Long> rankedOptionIds = new ArrayList<>();
-                    for (int i = 2; i < args.length; i++) {
-                        try {
-                            rankedOptionIds.add(Long.parseLong(args[i]));
-                        } catch (NumberFormatException e) {
-                            sender.sendMessage(ChatColor.RED + "Option ids must be whole numbers.");
-                            return true;
-                        }
-                    }
-
-                    String ipHash = hashPlayerIp(player);
-                    if (ipHash == null) {
-                        sender.sendMessage(ChatColor.RED + "Unable to determine your network address for duplicate-prevention checks.");
-                        return true;
-                    }
-
-                    String bypassNode = plugin.getConfig().getString("permissions.bypass_node", "modnvote.bypass");
-                    boolean bypassIpDuplicateCheck = player.hasPermission(bypassNode);
-
-                    BallotService.SubmissionResult result = ballotService.submitRankedBallot(
-                            pollId,
-                            player.getUniqueId().toString(),
-                            "TEST_COMMAND",
-                            rankedOptionIds,
-                            ipHash,
-                            null,
-                            bypassIpDuplicateCheck
-                    );
-
-                    sender.sendMessage(ChatColor.GREEN + "Vote submitted successfully.");
-                    sender.sendMessage(ChatColor.YELLOW + "- Ballot hash: " + result.ballotHash());
-                    sender.sendMessage(ChatColor.YELLOW + "- Receipt hash: " + result.receiptHash());
-
-                    if (bypassIpDuplicateCheck) {
-                        sender.sendMessage(ChatColor.YELLOW + "- IP duplicate check bypass was active for your account.");
-                    }
-
-                } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Vote submission failed: " + e.getMessage());
-                }
-
-                return true;
-            }
             default -> {
                 sendHelp(sender, label);
                 return true;
@@ -265,7 +201,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " open <pollId>");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " close <pollId>");
         sender.sendMessage(ChatColor.YELLOW + "/" + label + " verify <pollId>");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " testvote <pollId> <optionIds...>");
     }
 
     private long parsePollId(String raw) throws PollServiceException {
@@ -273,22 +208,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
             throw new PollServiceException("Poll id must be a whole number.");
-        }
-    }
-
-    private String hashPlayerIp(Player player) {
-        try {
-            InetSocketAddress address = player.getAddress();
-            if (address == null || address.getAddress() == null) {
-                return null;
-            }
-
-            String hostAddress = address.getAddress().getHostAddress();
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(hostAddress.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (Exception e) {
-            return null;
         }
     }
 
@@ -316,9 +235,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.verify")) {
                 completions.add("verify");
-            }
-            if (sender.hasPermission("modnvote.testvote")) {
-                completions.add("testvote");
             }
         }
 
