@@ -28,11 +28,13 @@ public final class ModNVotePlugin extends JavaPlugin {
     private SchemaInitializer schemaInitializer;
     private PollService pollService;
     private BallotService ballotService;
+    private com.modnmetl.modnvote.config.MessageService messageService;
+    private com.modnmetl.modnvote.service.IntegrityVerificationService integrityVerificationService;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-
+        saveResource("messages.yml", false);
         try {
             this.platformAdapter = new PaperPlatformAdapter(this);
 
@@ -45,7 +47,12 @@ public final class ModNVotePlugin extends JavaPlugin {
 
             this.pollService = new PollService(databaseManager, platformAdapter, getLogger());
             this.ballotService = new BallotService(databaseManager, platformAdapter, getLogger());
-
+            this.messageService = new com.modnmetl.modnvote.config.MessageService(this);
+            this.integrityVerificationService = new com.modnmetl.modnvote.service.IntegrityVerificationService(
+                    databaseManager,
+                    platformAdapter,
+                    getLogger()
+            );
             registerCommands();
 
             getLogger().info("ModNVote 2.0 bootstrap enabled successfully.");
@@ -68,7 +75,13 @@ public final class ModNVotePlugin extends JavaPlugin {
             throw new IllegalStateException("Command 'modnvote' is not defined in plugin.yml");
         }
 
-        PollCommand executor = new PollCommand(this, pollService, ballotService);
+        PollCommand executor = new PollCommand(
+                this,
+                pollService,
+                ballotService,
+                integrityVerificationService,
+                messageService
+        );
         command.setExecutor(executor);
         command.setTabCompleter(executor);
     }
@@ -87,5 +100,13 @@ public final class ModNVotePlugin extends JavaPlugin {
 
     public BallotService getBallotService() {
         return Objects.requireNonNull(ballotService, "ballotService");
+    }
+
+    public com.modnmetl.modnvote.config.MessageService getMessageService() {
+        return Objects.requireNonNull(messageService, "messageService");
+    }
+
+    public com.modnmetl.modnvote.service.IntegrityVerificationService getIntegrityVerificationService() {
+        return Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
     }
 }

@@ -79,4 +79,65 @@ public final class AnonymousBallotDao {
             }
         }
     }
+
+    public java.util.List<StoredAnonymousBallot> findAnonymousBallotsByPollId(long pollId) throws SQLException {
+        String sql = """
+            SELECT
+                anonymous_ballot_id,
+                ballot_hash,
+                receipt_hash,
+                submitted_at
+            FROM anonymous_ballots
+            WHERE poll_id = ?
+            ORDER BY anonymous_ballot_id ASC
+            """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                java.util.List<StoredAnonymousBallot> out = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    out.add(new StoredAnonymousBallot(
+                            rs.getLong("anonymous_ballot_id"),
+                            rs.getString("ballot_hash"),
+                            rs.getString("receipt_hash"),
+                            Instant.ofEpochMilli(rs.getLong("submitted_at"))
+                    ));
+                }
+                return out;
+            }
+        }
+    }
+
+    public java.util.List<String> findReceiptHashesByPollId(long pollId) throws SQLException {
+        String sql = """
+            SELECT receipt_hash
+            FROM anonymous_ballots
+            WHERE poll_id = ?
+            ORDER BY anonymous_ballot_id ASC
+            """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                java.util.List<String> out = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    out.add(rs.getString("receipt_hash"));
+                }
+                return out;
+            }
+        }
+    }
+
+    public record StoredAnonymousBallot(
+            long anonymous_ballotId,
+            String ballotHash,
+            String receiptHash,
+            Instant submittedAt
+    ) {
+    }
 }

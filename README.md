@@ -108,8 +108,26 @@ Voting is a **trust interface**, not just a mechanic.
 
 - Poll creation and storage
 - Poll lifecycle (DRAFT → OPEN → CLOSED)
+- Privacy-preserving participation tracking
+- Anonymous ballot storage for vote content
 - Ranked poll foundation
 - Audit event chain (hash-linked)
+- Player inclusion verification
+- IP-based duplicate-prevention heuristics with bypass support
+
+### Verification and duplicate prevention
+
+Current 2.0 builds can verify:
+
+- whether your participation is recorded in a poll
+- whether that participation is backed by an anonymous ballot
+- whether the poll audit chain is currently valid
+
+Current testing builds also apply duplicate-prevention heuristics by:
+
+- blocking repeat participation from the same identity in the same poll
+- blocking repeat participation from the same IP in the same poll
+- allowing same-household exceptions via a configurable bypass permission
 
 ### Commands:
 ```
@@ -118,7 +136,9 @@ Voting is a **trust interface**, not just a mechanic.
 /modnvote list  
 /modnvote seedbreed  
 /modnvote open <pollId>  
-/modnvote close <pollId>
+/modnvote close <pollId>  
+/modnvote verify <pollId>  
+/modnvote testvote <pollId> <optionId1> <optionId2> ...
 ```
 
 ---

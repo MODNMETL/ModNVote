@@ -29,4 +29,6 @@ messages:
   reloaded: "&aConfiguration reloaded."
 
 permissions:
+  # Grant this node only where you intentionally want a player to bypass
+  # IP-based duplicate prevention, such as approved same-household cases.
   bypass_node: "modnvote.bypass"

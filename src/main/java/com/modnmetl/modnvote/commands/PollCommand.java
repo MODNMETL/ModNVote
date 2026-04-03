@@ -1,8 +1,10 @@
 package com.modnmetl.modnvote.commands;
 
 import com.modnmetl.modnvote.ModNVotePlugin;
+import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.service.BallotService;
+import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
 import org.bukkit.ChatColor;
@@ -19,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -29,13 +32,19 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private final ModNVotePlugin plugin;
     private final PollService pollService;
     private final BallotService ballotService;
+    private final IntegrityVerificationService integrityVerificationService;
+    private final MessageService messages;
 
     public PollCommand(ModNVotePlugin plugin,
                        PollService pollService,
-                       BallotService ballotService) {
+                       BallotService ballotService,
+                       IntegrityVerificationService integrityVerificationService,
+                       MessageService messages) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.pollService = Objects.requireNonNull(pollService, "pollService");
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
+        this.integrityVerificationService = Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
+        this.messages = Objects.requireNonNull(messages, "messages");
     }
 
     @Override
@@ -49,157 +58,212 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
         switch (subcommand) {
             case "status" -> {
-                sender.sendMessage(ChatColor.GOLD + "ModNVote 2.0");
-                sender.sendMessage(ChatColor.YELLOW + "- " + pollService.getStatusSummary());
-                sender.sendMessage(ChatColor.YELLOW + "- " + ballotService.getStatusSummary());
-                sender.sendMessage(ChatColor.YELLOW + "- Database: "
-                        + plugin.getDatabaseManager().getDatabasePath().toAbsolutePath());
+                sender.sendMessage(messages.getRaw("status.header"));
+                sender.sendMessage(messages.formatRaw("status.poll_service",
+                        Map.of("value", pollService.getStatusSummary())));
+                sender.sendMessage(messages.formatRaw("status.ballot_service",
+                        Map.of("value", ballotService.getStatusSummary())));
+                sender.sendMessage(messages.formatRaw("status.integrity_service",
+                        Map.of("value", integrityVerificationService.getStatusSummary())));
+                sender.sendMessage(messages.formatRaw("status.database",
+                        Map.of("value", plugin.getDatabaseManager().getDatabasePath().toAbsolutePath().toString())));
                 return true;
             }
             case "reload" -> {
                 if (!sender.hasPermission("modnvote.admin.reload")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
 
-                plugin.reloadConfig();
-                String message = plugin.getConfig().getString("messages.reloaded", "&aConfiguration reloaded.");
-                sender.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+                plugin.reloadPluginConfiguration();
+                sender.sendMessage(messages.get("reload.success"));
                 return true;
             }
             case "list" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.list")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
 
                 try {
                     List<Poll> polls = pollService.listPolls();
                     if (polls.isEmpty()) {
-                        sender.sendMessage(ChatColor.YELLOW + "No polls currently exist.");
+                        sender.sendMessage(messages.get("list.empty"));
                         return true;
                     }
 
-                    sender.sendMessage(ChatColor.GOLD + "Stored polls:");
+                    sender.sendMessage(messages.getRaw("list.header"));
                     for (Poll poll : polls) {
-                        sender.sendMessage(ChatColor.YELLOW + "- #" + poll.pollId()
-                                + " [" + poll.status().name() + "] "
-                                + poll.slug() + " :: " + poll.title()
-                                + " (" + poll.pollType().name() + ")");
+                        sender.sendMessage(messages.formatRaw("list.entry", Map.of(
+                                "poll_id", String.valueOf(poll.pollId()),
+                                "status", poll.status().name(),
+                                "slug", poll.slug(),
+                                "title", poll.title(),
+                                "type", poll.pollType().name()
+                        )));
                     }
                 } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to list polls: " + e.getMessage());
+                    sender.sendMessage(messages.format("list.failed",
+                            Map.of("reason", e.getMessage())));
                 }
                 return true;
             }
             case "seedbreed" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.create")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
 
                 try {
                     long pollId = pollService.createSeedBreedPoll(sender.getName());
-                    sender.sendMessage(ChatColor.GREEN + "Created seed breed poll with ID " + pollId + ".");
+                    Poll poll = pollService.findPollById(pollId);
+
+                    String title = poll != null ? poll.title() : "Seed Breed Poll";
+
+                    sender.sendMessage(messages.format("seedbreed.success", Map.of(
+                            "poll_id", String.valueOf(pollId),
+                            "title", title
+                    )));
                 } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to create seed breed poll: " + e.getMessage());
+                    sender.sendMessage(messages.format("seedbreed.failed",
+                            Map.of("reason", e.getMessage())));
                 }
                 return true;
             }
             case "open" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.open")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " open <pollId>");
+                    sender.sendMessage(messages.format("open.usage", Map.of("label", label)));
                     return true;
                 }
 
                 try {
                     long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
+
                     pollService.openPoll(pollId, sender.getName());
-                    sender.sendMessage(ChatColor.GREEN + "Opened poll #" + pollId + ".");
+
+                    sender.sendMessage(messages.format("open.success", Map.of(
+                            "poll_id", String.valueOf(pollId),
+                            "title", poll.title()
+                    )));
                 } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to open poll: " + e.getMessage());
+                    sender.sendMessage(messages.format("open.failed",
+                            Map.of("reason", e.getMessage())));
                 }
                 return true;
             }
             case "close" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.close")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " close <pollId>");
+                    sender.sendMessage(messages.format("close.usage", Map.of("label", label)));
                     return true;
                 }
 
                 try {
                     long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
+
                     pollService.closePoll(pollId, sender.getName());
-                    sender.sendMessage(ChatColor.GREEN + "Closed poll #" + pollId + ".");
+
+                    sender.sendMessage(messages.format("close.success", Map.of(
+                            "poll_id", String.valueOf(pollId),
+                            "title", poll.title()
+                    )));
                 } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to close poll: " + e.getMessage());
+                    sender.sendMessage(messages.format("close.failed",
+                            Map.of("reason", e.getMessage())));
                 }
                 return true;
             }
             case "verify" -> {
                 if (!sender.hasPermission("modnvote.verify")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
                 if (!(sender instanceof Player player)) {
-                    sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                    sender.sendMessage(messages.get("general.players_only"));
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " verify <pollId>");
+                    sender.sendMessage(messages.format("verify.usage", Map.of("label", label)));
                     return true;
                 }
 
                 try {
                     long pollId = parsePollId(args[1]);
-                    BallotService.VerificationResult result = ballotService.verifyVoterInclusion(
+                    Poll poll = requirePoll(pollId);
+
+                    BallotService.VerificationResult inclusionResult = ballotService.verifyVoterInclusion(
                             pollId,
                             player.getUniqueId().toString()
                     );
 
-                    sender.sendMessage(ChatColor.GOLD + "Verification for poll #" + pollId + ":");
+                    IntegrityVerificationService.IntegrityVerificationResult integrityResult =
+                            integrityVerificationService.verifyPollIntegrity(pollId);
 
-                    if (result.included()) {
-                        sender.sendMessage(ChatColor.GREEN + "- Your vote is included in this poll.");
+                    sender.sendMessage(messages.formatRaw("verify.header", Map.of(
+                            "poll_id", String.valueOf(pollId),
+                            "title", poll.title()
+                    )));
+
+                    if (inclusionResult.included()) {
+                        sender.sendMessage(messages.get("verify.included"));
                     } else {
-                        sender.sendMessage(ChatColor.RED + "- No recorded vote from you was found in this poll.");
+                        sender.sendMessage(messages.get("verify.not_included"));
                     }
 
-                    if (result.receiptBackedByAnonymousBallot()) {
-                        sender.sendMessage(ChatColor.GREEN + "- Your recorded participation is backed by an anonymous ballot.");
-                    } else if (result.included()) {
-                        sender.sendMessage(ChatColor.RED + "- Your recorded participation is not backed by an anonymous ballot.");
+                    if (inclusionResult.receiptBackedByAnonymousBallot()) {
+                        sender.sendMessage(messages.get("verify.receipt_backed"));
+                    } else if (inclusionResult.included()) {
+                        sender.sendMessage(messages.get("verify.receipt_missing"));
                     }
 
-                    if (result.auditChainValid()) {
-                        sender.sendMessage(ChatColor.GREEN + "- The poll audit chain is currently valid.");
+                    if (inclusionResult.auditChainValid()) {
+                        sender.sendMessage(messages.get("verify.audit_valid"));
                     } else {
-                        sender.sendMessage(ChatColor.RED + "- The poll audit chain is INVALID.");
+                        sender.sendMessage(messages.get("verify.audit_invalid"));
+                    }
+
+                    if (integrityResult.ballotHashesValid()) {
+                        sender.sendMessage(messages.get("verify.integrity_valid"));
+                    } else {
+                        sender.sendMessage(messages.get("verify.integrity_invalid"));
+                    }
+
+                    if (integrityResult.receiptSetsMatch()) {
+                        sender.sendMessage(messages.get("verify.integrity_receipts_match"));
+                    } else {
+                        sender.sendMessage(messages.get("verify.integrity_receipts_mismatch"));
+                    }
+
+                    for (String issue : integrityResult.issues()) {
+                        sender.sendMessage(messages.formatRaw("verify.issue_prefix",
+                                Map.of("issue", issue)));
                     }
                 } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Failed to verify poll inclusion: " + e.getMessage());
+                    sender.sendMessage(messages.format("verify.failed",
+                            Map.of("reason", e.getMessage())));
                 }
                 return true;
             }
             case "testvote" -> {
                 if (!sender.hasPermission("modnvote.testvote")) {
-                    sender.sendMessage(ChatColor.RED + "You do not have permission.");
+                    sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
                 if (!(sender instanceof Player player)) {
-                    sender.sendMessage(ChatColor.RED + "Only players can use this command.");
+                    sender.sendMessage(messages.get("general.players_only"));
                     return true;
                 }
                 if (args.length < 3) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /" + label + " testvote <pollId> <optionId1> <optionId2> ...");
+                    sender.sendMessage(messages.format("testvote.usage", Map.of("label", label)));
                     return true;
                 }
 
@@ -211,14 +275,14 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         try {
                             rankedOptionIds.add(Long.parseLong(args[i]));
                         } catch (NumberFormatException e) {
-                            sender.sendMessage(ChatColor.RED + "Option ids must be whole numbers.");
+                            sender.sendMessage(messages.get("general.invalid_option_id"));
                             return true;
                         }
                     }
 
                     String ipHash = hashPlayerIp(player);
                     if (ipHash == null) {
-                        sender.sendMessage(ChatColor.RED + "Unable to determine your network address for duplicate-prevention checks.");
+                        sender.sendMessage(messages.get("testvote.ip_unavailable"));
                         return true;
                     }
 
@@ -235,16 +299,19 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                             bypassIpDuplicateCheck
                     );
 
-                    sender.sendMessage(ChatColor.GREEN + "Vote submitted successfully.");
-                    sender.sendMessage(ChatColor.YELLOW + "- Ballot hash: " + result.ballotHash());
-                    sender.sendMessage(ChatColor.YELLOW + "- Receipt hash: " + result.receiptHash());
+                    sender.sendMessage(messages.get("testvote.success"));
+                    sender.sendMessage(messages.formatRaw("testvote.ballot_hash",
+                            Map.of("ballot_hash", result.ballotHash())));
+                    sender.sendMessage(messages.formatRaw("testvote.receipt_hash",
+                            Map.of("receipt_hash", result.receiptHash())));
 
                     if (bypassIpDuplicateCheck) {
-                        sender.sendMessage(ChatColor.YELLOW + "- IP duplicate check bypass was active for your account.");
+                        sender.sendMessage(messages.get("testvote.bypass_used"));
                     }
 
                 } catch (PollServiceException e) {
-                    sender.sendMessage(ChatColor.RED + "Vote submission failed: " + e.getMessage());
+                    sender.sendMessage(messages.format("testvote.failed",
+                            Map.of("reason", e.getMessage())));
                 }
 
                 return true;
@@ -257,22 +324,30 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelp(CommandSender sender, String label) {
-        sender.sendMessage(ChatColor.GOLD + "ModNVote 2.0 Commands");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " status");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " reload");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " list");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " seedbreed");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " open <pollId>");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " close <pollId>");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " verify <pollId>");
-        sender.sendMessage(ChatColor.YELLOW + "/" + label + " testvote <pollId> <optionIds...>");
+        sender.sendMessage(messages.getRaw("help.header"));
+        sender.sendMessage(messages.formatRaw("help.status", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.reload", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.list", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.seedbreed", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.open", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.close", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.verify", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.testvote", Map.of("label", label)));
+    }
+
+    private Poll requirePoll(long pollId) throws PollServiceException {
+        Poll poll = pollService.findPollById(pollId);
+        if (poll == null) {
+            throw new PollServiceException("Poll #" + pollId + " does not exist.");
+        }
+        return poll;
     }
 
     private long parsePollId(String raw) throws PollServiceException {
         try {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
-            throw new PollServiceException("Poll id must be a whole number.");
+            throw new PollServiceException("Poll IDs must be whole numbers.");
         }
     }
 

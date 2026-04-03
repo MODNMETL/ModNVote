@@ -1,0 +1,85 @@
+# ============================================================
+# ModNVote 2.0 Messages
+# ============================================================
+# These messages are intended to be friendly, clear, and
+# educational so players can better understand the voting
+# system they are participating in.
+# ============================================================
+
+prefix: "&6[ModNVote] "
+
+general:
+  no_permission: "&cYou do not have permission to do that."
+  players_only: "&cOnly players can use that command."
+  unknown_error: "&cSomething went wrong while processing that request."
+
+reload:
+  success: "&aModNVote configuration and messages have been reloaded."
+
+status:
+  header: "&6ModNVote 2.0"
+  poll_service: "&e- {value}"
+  ballot_service: "&e- {value}"
+  integrity_service: "&e- {value}"
+  database: "&e- Database: {path}"
+
+help:
+  header: "&6ModNVote 2.0 Commands"
+  status: "&e/{label} status"
+  reload: "&e/{label} reload"
+  list: "&e/{label} list"
+  seedbreed: "&e/{label} seedbreed"
+  open: "&e/{label} open <pollId>"
+  close: "&e/{label} close <pollId>"
+  verify: "&e/{label} verify <pollId>"
+  testvote: "&e/{label} testvote <pollId> <optionId1> <optionId2> ..."
+
+usage:
+  open: "&cUsage: /{label} open <pollId>"
+  close: "&cUsage: /{label} close <pollId>"
+  verify: "&cUsage: /{label} verify <pollId>"
+  testvote: "&cUsage: /{label} testvote <pollId> <optionId1> <optionId2> ..."
+
+poll:
+  list_header: "&6Stored polls:"
+  list_empty: "&eThere are currently no stored polls."
+  list_entry: "&e- #{poll_id} [{status}] {title} ({type})"
+  seedbreed_created: "&aCreated poll '&f{title}&a' with ID &f#{poll_id}&a."
+  opened: "&aPoll '&f{title}&a' (&f#{poll_id}&a) is now open."
+  closed: "&ePoll '&f{title}&e' (&f#{poll_id}&e) is now closed."
+  not_found: "&cPoll #{poll_id} does not exist."
+  invalid_id: "&cPoll IDs must be whole numbers."
+
+vote:
+  submit_success: "&aThanks — your vote has been safely recorded."
+  ballot_hash: "&7Ballot reference: &f{ballot_hash}"
+  receipt_hash: "&7Receipt reference: &f{receipt_hash}"
+  bypass_used: "&eA same-network duplicate check was bypassed for this vote because your account has the configured bypass permission."
+  duplicate_identity: "&cYou have already voted in this poll."
+  duplicate_ip: "&cA vote from your location has already been recorded for this poll."
+  failed: "&cYour vote could not be recorded: {reason}"
+
+  education_privacy: "&bYour vote choice is stored separately from your identity to help protect ballot privacy."
+  education_verification: "&bYou can later use verification to check that your participation was included."
+
+verify:
+  header: "&6Verification for '&f{title}&6' (&f#{poll_id}&6):"
+  included: "&aYour participation is recorded in this poll."
+  not_included: "&cNo recorded participation from you was found in this poll."
+  receipt_backed: "&aYour participation record is backed by an anonymous ballot."
+  receipt_missing: "&cYour participation record is not backed by an anonymous ballot."
+  audit_valid: "&aThe audit chain for this poll is currently valid."
+  audit_invalid: "&cThe audit chain for this poll is INVALID."
+  ballot_integrity_valid: "&aStored ballots for this poll passed integrity verification."
+  ballot_integrity_invalid: "&cStored ballots for this poll FAILED integrity verification."
+  overall_valid: "&aThis poll currently passes the available integrity checks."
+  overall_invalid: "&cThis poll currently FAILS one or more integrity checks."
+  failed: "&cVerification could not be completed: {reason}"
+
+errors:
+  list_failed: "&cFailed to list polls: {reason}"
+  create_failed: "&cFailed to create the poll: {reason}"
+  open_failed: "&cFailed to open the poll: {reason}"
+  close_failed: "&cFailed to close the poll: {reason}"
+  verify_failed: "&cFailed to verify this poll: {reason}"
+  vote_failed: "&cVote submission failed: {reason}"

@@ -155,4 +155,26 @@ public final class ParticipationRecordDao {
 
         return null;
     }
+
+    public java.util.List<String> findReceiptHashesByPollId(long pollId) throws SQLException {
+        String sql = """
+            SELECT receipt_hash
+            FROM participation_records
+            WHERE poll_id = ?
+            ORDER BY participation_id ASC
+            """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                java.util.List<String> out = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    out.add(rs.getString("receipt_hash"));
+                }
+                return out;
+            }
+        }
+    }
 }

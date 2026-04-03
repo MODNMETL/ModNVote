@@ -23,8 +23,14 @@ Fields:
 - submitted_at
 - receipt_hash
 - client_platform
-- ip_hash (optional)
+- ip_hash (optional; used only for duplicate-prevention heuristics)
 - floodgate_id (optional)
+
+Notes:
+
+- This table is identity-adjacent participation data, not vote content.
+- `ip_hash` exists only to support anti-abuse / duplicate-prevention checks.
+- This table must never be used to reveal ballot selections.
 
 ---
 
@@ -37,6 +43,7 @@ Fields:
 - anonymous_ballot_id
 - poll_id
 - ballot_hash
+- receipt_hash
 - submitted_at
 
 ---
@@ -75,3 +82,4 @@ This model still supports:
 - audit chains
 - checkpoint hashing
 - external publication
+- inclusion verification via receipt binding

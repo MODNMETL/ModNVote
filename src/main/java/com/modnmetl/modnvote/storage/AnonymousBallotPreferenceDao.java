@@ -5,6 +5,7 @@ import com.modnmetl.modnvote.domain.BallotPreference;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,5 +43,39 @@ public final class AnonymousBallotPreferenceDao {
             }
             ps.executeBatch();
         }
+    }
+
+    public java.util.List<StoredAnonymousBallotPreference> findPreferencesByAnonymousBallotId(long anonymousBallotId)
+            throws SQLException {
+        String sql = """
+            SELECT
+                option_id,
+                rank_position
+            FROM anonymous_ballot_preferences
+            WHERE anonymous_ballot_id = ?
+            ORDER BY rank_position ASC
+            """;
+
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, anonymousBallotId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                java.util.List<StoredAnonymousBallotPreference> out = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    out.add(new StoredAnonymousBallotPreference(
+                            rs.getLong("option_id"),
+                            rs.getInt("rank_position")
+                    ));
+                }
+                return out;
+            }
+        }
+    }
+
+    public record StoredAnonymousBallotPreference(
+            long optionId,
+            int rankPosition
+    ) {
     }
 }
