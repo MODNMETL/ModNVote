@@ -52,8 +52,8 @@ poll:
 
 vote:
   submit_success: "&aThanks — your vote has been safely recorded."
-  ballot_hash: "&7Ballot reference: &f{ballot_hash}"
-  receipt_hash: "&7Receipt reference: &f{receipt_hash}"
+  ballot_hash: "&7Ballot integrity reference: &f{ballot_hash}"
+  receipt_hash: "&7Receipt reference for inclusion checking: &f{receipt_hash}"
   bypass_used: "&eA same-network duplicate check was bypassed for this vote because your account has the configured bypass permission."
   duplicate_identity: "&cYou have already voted in this poll."
   duplicate_ip: "&cA vote from your location has already been recorded for this poll."

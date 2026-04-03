@@ -1,6 +1,8 @@
 package com.modnmetl.modnvote;
 
 import com.modnmetl.modnvote.commands.PollCommand;
+import com.modnmetl.modnvote.config.MessageService;
+import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.platform.PaperPlatformAdapter;
 import com.modnmetl.modnvote.service.BallotService;
@@ -28,8 +30,8 @@ public final class ModNVotePlugin extends JavaPlugin {
     private SchemaInitializer schemaInitializer;
     private PollService pollService;
     private BallotService ballotService;
-    private com.modnmetl.modnvote.config.MessageService messageService;
-    private com.modnmetl.modnvote.service.IntegrityVerificationService integrityVerificationService;
+    private MessageService messageService;
+    private IntegrityVerificationService integrityVerificationService;
 
     @Override
     public void onEnable() {
@@ -47,8 +49,8 @@ public final class ModNVotePlugin extends JavaPlugin {
 
             this.pollService = new PollService(databaseManager, platformAdapter, getLogger());
             this.ballotService = new BallotService(databaseManager, platformAdapter, getLogger());
-            this.messageService = new com.modnmetl.modnvote.config.MessageService(this);
-            this.integrityVerificationService = new com.modnmetl.modnvote.service.IntegrityVerificationService(
+            this.messageService = new MessageService(this);
+            this.integrityVerificationService = new IntegrityVerificationService(
                     databaseManager,
                     platformAdapter,
                     getLogger()
@@ -86,6 +88,13 @@ public final class ModNVotePlugin extends JavaPlugin {
         command.setTabCompleter(executor);
     }
 
+    public void reloadPluginConfiguration() {
+        reloadConfig();
+        if (messageService != null) {
+            messageService.reload();
+        }
+    }
+
     public PlatformAdapter getPlatformAdapter() {
         return Objects.requireNonNull(platformAdapter, "platformAdapter");
     }
@@ -102,11 +111,11 @@ public final class ModNVotePlugin extends JavaPlugin {
         return Objects.requireNonNull(ballotService, "ballotService");
     }
 
-    public com.modnmetl.modnvote.config.MessageService getMessageService() {
+    public MessageService getMessageService() {
         return Objects.requireNonNull(messageService, "messageService");
     }
 
-    public com.modnmetl.modnvote.service.IntegrityVerificationService getIntegrityVerificationService() {
+    public IntegrityVerificationService getIntegrityVerificationService() {
         return Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
     }
 }

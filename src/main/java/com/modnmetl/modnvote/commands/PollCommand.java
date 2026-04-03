@@ -7,7 +7,6 @@ import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -26,6 +25,11 @@ import java.util.Objects;
 
 /**
  * Temporary 2.0 root command scaffold.
+ *
+ * This command layer is intentionally thin:
+ * - user/admin-facing messaging is sourced from messages.yml
+ * - business rules remain in the service layer
+ * - integrity reporting combines inclusion checks with deeper ballot verification
  */
 public final class PollCommand implements CommandExecutor, TabCompleter {
 
@@ -66,7 +70,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(messages.formatRaw("status.integrity_service",
                         Map.of("value", integrityVerificationService.getStatusSummary())));
                 sender.sendMessage(messages.formatRaw("status.database",
-                        Map.of("value", plugin.getDatabaseManager().getDatabasePath().toAbsolutePath().toString())));
+                        Map.of("path", plugin.getDatabaseManager().getDatabasePath().toAbsolutePath().toString())));
                 return true;
             }
             case "reload" -> {
@@ -88,22 +92,21 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 try {
                     List<Poll> polls = pollService.listPolls();
                     if (polls.isEmpty()) {
-                        sender.sendMessage(messages.get("list.empty"));
+                        sender.sendMessage(messages.get("poll.list_empty"));
                         return true;
                     }
 
-                    sender.sendMessage(messages.getRaw("list.header"));
+                    sender.sendMessage(messages.getRaw("poll.list_header"));
                     for (Poll poll : polls) {
-                        sender.sendMessage(messages.formatRaw("list.entry", Map.of(
+                        sender.sendMessage(messages.formatRaw("poll.list_entry", Map.of(
                                 "poll_id", String.valueOf(poll.pollId()),
                                 "status", poll.status().name(),
-                                "slug", poll.slug(),
                                 "title", poll.title(),
                                 "type", poll.pollType().name()
                         )));
                     }
                 } catch (PollServiceException e) {
-                    sender.sendMessage(messages.format("list.failed",
+                    sender.sendMessage(messages.format("errors.list_failed",
                             Map.of("reason", e.getMessage())));
                 }
                 return true;
@@ -120,12 +123,12 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                     String title = poll != null ? poll.title() : "Seed Breed Poll";
 
-                    sender.sendMessage(messages.format("seedbreed.success", Map.of(
+                    sender.sendMessage(messages.format("poll.seedbreed_created", Map.of(
                             "poll_id", String.valueOf(pollId),
                             "title", title
                     )));
                 } catch (PollServiceException e) {
-                    sender.sendMessage(messages.format("seedbreed.failed",
+                    sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
                 }
                 return true;
@@ -136,7 +139,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(messages.format("open.usage", Map.of("label", label)));
+                    sender.sendMessage(messages.format("usage.open", Map.of("label", label)));
                     return true;
                 }
 
@@ -146,12 +149,12 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                     pollService.openPoll(pollId, sender.getName());
 
-                    sender.sendMessage(messages.format("open.success", Map.of(
+                    sender.sendMessage(messages.format("poll.opened", Map.of(
                             "poll_id", String.valueOf(pollId),
                             "title", poll.title()
                     )));
                 } catch (PollServiceException e) {
-                    sender.sendMessage(messages.format("open.failed",
+                    sender.sendMessage(messages.format("errors.open_failed",
                             Map.of("reason", e.getMessage())));
                 }
                 return true;
@@ -162,7 +165,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(messages.format("close.usage", Map.of("label", label)));
+                    sender.sendMessage(messages.format("usage.close", Map.of("label", label)));
                     return true;
                 }
 
@@ -172,12 +175,12 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                     pollService.closePoll(pollId, sender.getName());
 
-                    sender.sendMessage(messages.format("close.success", Map.of(
+                    sender.sendMessage(messages.format("poll.closed", Map.of(
                             "poll_id", String.valueOf(pollId),
                             "title", poll.title()
                     )));
                 } catch (PollServiceException e) {
-                    sender.sendMessage(messages.format("close.failed",
+                    sender.sendMessage(messages.format("errors.close_failed",
                             Map.of("reason", e.getMessage())));
                 }
                 return true;
@@ -192,7 +195,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(messages.format("verify.usage", Map.of("label", label)));
+                    sender.sendMessage(messages.format("usage.verify", Map.of("label", label)));
                     return true;
                 }
 
@@ -232,23 +235,19 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     }
 
                     if (integrityResult.ballotHashesValid()) {
-                        sender.sendMessage(messages.get("verify.integrity_valid"));
+                        sender.sendMessage(messages.get("verify.ballot_integrity_valid"));
                     } else {
-                        sender.sendMessage(messages.get("verify.integrity_invalid"));
+                        sender.sendMessage(messages.get("verify.ballot_integrity_invalid"));
                     }
 
-                    if (integrityResult.receiptSetsMatch()) {
-                        sender.sendMessage(messages.get("verify.integrity_receipts_match"));
+                    if (integrityResult.overallValid()) {
+                        sender.sendMessage(messages.get("verify.overall_valid"));
                     } else {
-                        sender.sendMessage(messages.get("verify.integrity_receipts_mismatch"));
+                        sender.sendMessage(messages.get("verify.overall_invalid"));
                     }
 
-                    for (String issue : integrityResult.issues()) {
-                        sender.sendMessage(messages.formatRaw("verify.issue_prefix",
-                                Map.of("issue", issue)));
-                    }
                 } catch (PollServiceException e) {
-                    sender.sendMessage(messages.format("verify.failed",
+                    sender.sendMessage(messages.format("errors.verify_failed",
                             Map.of("reason", e.getMessage())));
                 }
                 return true;
@@ -263,7 +262,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 3) {
-                    sender.sendMessage(messages.format("testvote.usage", Map.of("label", label)));
+                    sender.sendMessage(messages.format("usage.testvote", Map.of("label", label)));
                     return true;
                 }
 
@@ -275,15 +274,13 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         try {
                             rankedOptionIds.add(Long.parseLong(args[i]));
                         } catch (NumberFormatException e) {
-                            sender.sendMessage(messages.get("general.invalid_option_id"));
-                            return true;
+                            throw new PollServiceException("Option IDs must be whole numbers.");
                         }
                     }
 
                     String ipHash = hashPlayerIp(player);
                     if (ipHash == null) {
-                        sender.sendMessage(messages.get("testvote.ip_unavailable"));
-                        return true;
+                        throw new PollServiceException("We could not confirm your network address for duplicate-protection checks.");
                     }
 
                     String bypassNode = plugin.getConfig().getString("permissions.bypass_node", "modnvote.bypass");
@@ -299,18 +296,20 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                             bypassIpDuplicateCheck
                     );
 
-                    sender.sendMessage(messages.get("testvote.success"));
-                    sender.sendMessage(messages.formatRaw("testvote.ballot_hash",
+                    sender.sendMessage(messages.get("vote.submit_success"));
+                    sender.sendMessage(messages.get("vote.education_privacy"));
+                    sender.sendMessage(messages.get("vote.education_verification"));
+                    sender.sendMessage(messages.formatRaw("vote.ballot_hash",
                             Map.of("ballot_hash", result.ballotHash())));
-                    sender.sendMessage(messages.formatRaw("testvote.receipt_hash",
+                    sender.sendMessage(messages.formatRaw("vote.receipt_hash",
                             Map.of("receipt_hash", result.receiptHash())));
 
                     if (bypassIpDuplicateCheck) {
-                        sender.sendMessage(messages.get("testvote.bypass_used"));
+                        sender.sendMessage(messages.get("vote.bypass_used"));
                     }
 
                 } catch (PollServiceException e) {
-                    sender.sendMessage(messages.format("testvote.failed",
+                    sender.sendMessage(messages.format("errors.vote_failed",
                             Map.of("reason", e.getMessage())));
                 }
 
