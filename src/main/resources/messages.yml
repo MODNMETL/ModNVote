@@ -12,6 +12,7 @@ general:
   no_permission: "&cYou do not have permission to do that."
   players_only: "&cOnly players can use that command."
   unknown_error: "&cSomething went wrong while processing that request."
+  invalid_option_id: "&cOption IDs must be whole numbers."
 
 reload:
   success: "&aModNVote configuration and messages have been reloaded."
@@ -57,6 +58,7 @@ vote:
   bypass_used: "&eA same-network duplicate check was bypassed for this vote because your account has the configured bypass permission."
   duplicate_identity: "&cYou have already voted in this poll."
   duplicate_ip: "&cA vote from your location has already been recorded for this poll."
+  ip_unavailable: "&cWe could not confirm your network address for duplicate-protection checks."
   failed: "&cYour vote could not be recorded: {reason}"
 
   education_privacy: "&bYour vote choice is stored separately from your identity to help protect ballot privacy."

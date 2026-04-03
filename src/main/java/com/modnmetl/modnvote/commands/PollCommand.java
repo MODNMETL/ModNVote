@@ -274,13 +274,13 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         try {
                             rankedOptionIds.add(Long.parseLong(args[i]));
                         } catch (NumberFormatException e) {
-                            throw new PollServiceException("Option IDs must be whole numbers.");
+                            throw new PollServiceException(messages.getRaw("general.invalid_option_id"));
                         }
                     }
 
                     String ipHash = hashPlayerIp(player);
                     if (ipHash == null) {
-                        throw new PollServiceException("We could not confirm your network address for duplicate-protection checks.");
+                        throw new PollServiceException(messages.getRaw("vote.ip_unavailable"));
                     }
 
                     String bypassNode = plugin.getConfig().getString("permissions.bypass_node", "modnvote.bypass");
@@ -337,7 +337,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private Poll requirePoll(long pollId) throws PollServiceException {
         Poll poll = pollService.findPollById(pollId);
         if (poll == null) {
-            throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            throw new PollServiceException(
+                    messages.formatRaw("poll.not_found", Map.of("poll_id", String.valueOf(pollId)))
+            );
         }
         return poll;
     }
@@ -346,7 +348,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         try {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
-            throw new PollServiceException("Poll IDs must be whole numbers.");
+            throw new PollServiceException(messages.getRaw("poll.invalid_id"));
         }
     }
 

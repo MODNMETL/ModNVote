@@ -19,9 +19,18 @@ import java.util.logging.Level;
 /**
  * ModNVote 2.0 plugin bootstrap.
  *
- * This replaces the 1.x single-round yes/no runtime with a new ballot-first
- * platform skeleton. The current scaffold intentionally focuses on startup,
- * storage initialization, and service wiring before vote-engine logic is added.
+ * This replaces the 1.x single-round yes/no runtime with a ballot-first
+ * platform foundation for the 2.x architecture.
+ *
+ * At this stage the bootstrap is responsible for:
+ * - configuration and messages resource setup
+ * - database and schema initialization
+ * - core service wiring
+ * - integrity verification service wiring
+ * - command registration
+ *
+ * Vote-session GUI flows and broader vote-engine expansion are layered on top
+ * of this foundation in later development stages.
  */
 public final class ModNVotePlugin extends JavaPlugin {
 
