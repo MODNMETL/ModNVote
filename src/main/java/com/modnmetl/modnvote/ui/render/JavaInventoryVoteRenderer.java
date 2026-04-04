@@ -2,6 +2,7 @@ package com.modnmetl.modnvote.ui.render;
 
 import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
+import com.modnmetl.modnvote.ui.session.VoteScreen;
 import com.modnmetl.modnvote.ui.session.VoteSession;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -67,7 +68,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         VoteRenderer.requirePlayerAndSession(player, session);
 
         Inventory inventory = Bukkit.createInventory(
-                player,
+                new ModNVoteInventoryHolder(player.getUniqueId(), session.pollId(), VoteScreen.SELECTION),
                 SELECTION_SIZE,
                 buildSelectionTitle(session)
         );
@@ -81,7 +82,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         VoteRenderer.requirePlayerAndSession(player, session);
 
         Inventory inventory = Bukkit.createInventory(
-                player,
+                new ModNVoteInventoryHolder(player.getUniqueId(), session.pollId(), VoteScreen.CONFIRMATION),
                 CONFIRMATION_SIZE,
                 buildConfirmationTitle(session)
         );
@@ -134,6 +135,20 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
 
     public boolean isConfirmationCommitSlot(int rawSlot) {
         return rawSlot == CONFIRM_COMMIT_SLOT;
+    }
+
+    public boolean isManagedInventory(Inventory inventory) {
+        if (inventory == null) {
+            return false;
+        }
+        return inventory.getHolder() instanceof ModNVoteInventoryHolder;
+    }
+
+    public ModNVoteInventoryHolder requireManagedHolder(Inventory inventory) {
+        if (!(inventory.getHolder() instanceof ModNVoteInventoryHolder holder)) {
+            throw new IllegalArgumentException("Inventory is not managed by ModNVote.");
+        }
+        return holder;
     }
 
     public boolean isManagedSelectionTitle(String title) {
