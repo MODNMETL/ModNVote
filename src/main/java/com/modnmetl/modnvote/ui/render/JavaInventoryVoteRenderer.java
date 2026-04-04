@@ -19,6 +19,8 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
 
     private static final int SELECTION_SIZE = 54;
     private static final int CONFIRMATION_SIZE = 27;
+    private static final String SELECTION_TITLE_PREFIX = "Vote: ";
+    private static final String CONFIRMATION_TITLE_PREFIX = "Confirm Vote: ";
 
     private final BallotSummaryFormatter ballotSummaryFormatter;
 
@@ -67,17 +69,17 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     }
 
     private String buildSelectionTitle(VoteSession session) {
-        return truncateTitle("Vote: " + session.poll().title());
+        return truncateTitle(SELECTION_TITLE_PREFIX + session.poll().title());
     }
 
     private String buildConfirmationTitle(VoteSession session) {
-        return truncateTitle("Confirm Vote: " + session.poll().title());
+        return truncateTitle(CONFIRMATION_TITLE_PREFIX + session.poll().title());
     }
 
     private String truncateTitle(String rawTitle) {
         Objects.requireNonNull(rawTitle, "rawTitle");
 
-        final int maxLength = 32;
+        final int maxLength = 32; // Bukkit inventory title practical limit
         if (rawTitle.length() <= maxLength) {
             return rawTitle;
         }
