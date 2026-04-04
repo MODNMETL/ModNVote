@@ -79,6 +79,10 @@ public final class VoteGuiListener implements Listener {
 
         int rawSlot = event.getRawSlot();
 
+        if (rawSlot < 0 || rawSlot >= event.getView().getTopInventory().getSize()) {
+            return;
+        }
+
         if (session.isInSelectionScreen()) {
             handleSelectionClick(player, session, rawSlot);
             return;
