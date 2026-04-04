@@ -9,6 +9,7 @@ import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.SchemaInitializer;
+import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
 import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.VoteGuiListener;
@@ -44,6 +45,7 @@ public final class ModNVotePlugin extends JavaPlugin {
     private VoteSessionManager voteSessionManager;
     private BallotSummaryFormatter ballotSummaryFormatter;
     private VoteGuiText voteGuiText;
+    private VoteSoundService voteSoundService;
     private JavaInventoryVoteRenderer javaInventoryVoteRenderer;
     private VoteSubmissionCoordinator voteSubmissionCoordinator;
 
@@ -74,6 +76,7 @@ public final class ModNVotePlugin extends JavaPlugin {
             this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
             this.ballotSummaryFormatter = new BallotSummaryFormatter();
             this.voteGuiText = new VoteGuiText(messageService, ballotSummaryFormatter);
+            this.voteSoundService = new VoteSoundService(this);
             this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(this, voteGuiText);
             this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
 
@@ -123,6 +126,7 @@ public final class ModNVotePlugin extends JavaPlugin {
                         voteSessionManager,
                         javaInventoryVoteRenderer,
                         voteSubmissionCoordinator,
+                        voteSoundService,
                         messageService
                 ),
                 this

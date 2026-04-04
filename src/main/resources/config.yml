@@ -24,10 +24,46 @@ integrity:
 ui:
   require_confirmation: true
 
+  sounds:
+    enabled: false
+
+    selection_assigned:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.8
+      pitch: 1.2
+
+    selection_removed:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.8
+      pitch: 0.8
+
+    reset:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.9
+      pitch: 0.6
+
+    review_advance:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.9
+      pitch: 1.0
+
+    return_to_selection:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.9
+      pitch: 0.85
+
+    submit_success:
+      sound: "ENTITY_EXPERIENCE_ORB_PICKUP"
+      volume: 1.0
+      pitch: 1.1
+
+    submit_failure:
+      sound: "ENTITY_VILLAGER_NO"
+      volume: 0.9
+      pitch: 1.0
+
 messages:
   prefix: "&6[ModNVote] "
-  reloaded: "&aConfiguration reloaded."
-
 permissions:
   # Grant this node only where you intentionally want a player to bypass
   # IP-based duplicate prevention, such as approved same-household cases.

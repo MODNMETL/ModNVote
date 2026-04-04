@@ -13,7 +13,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Responsibilities:
  * - build selection and confirmation inventories
  * - render option, summary, and control items
+ * - own slot mapping for ranked option rendering
  * - track managed reopen transitions so session cleanup listeners can
  *   distinguish renderer refreshes from genuine user closure
  *
@@ -113,22 +116,15 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         openSelection(player, session);
     }
 
-    public boolean isSelectionOptionSlot(int rawSlot) {
-        for (int optionSlot : OPTION_SLOTS) {
-            if (optionSlot == rawSlot) {
-                return true;
-            }
-        }
-        return false;
-    }
+    public Optional<Long> selectionOptionIdAtSlot(VoteSession session, int rawSlot) {
+        Objects.requireNonNull(session, "session");
 
-    public int optionIndexForSlot(int rawSlot) {
-        for (int i = 0; i < OPTION_SLOTS.length; i++) {
-            if (OPTION_SLOTS[i] == rawSlot) {
-                return i;
-            }
+        int optionIndex = optionIndexForSlot(rawSlot);
+        if (optionIndex < 0 || optionIndex >= session.options().size()) {
+            return Optional.empty();
         }
-        return -1;
+
+        return Optional.of(session.options().get(optionIndex).optionId());
     }
 
     public boolean isResetSlot(int rawSlot) {
@@ -170,9 +166,13 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         return playersWithManagedReopenInProgress.contains(playerUuid);
     }
 
-    public void clearManagedReopenFlag(UUID playerUuid) {
-        Objects.requireNonNull(playerUuid, "playerUuid");
-        playersWithManagedReopenInProgress.remove(playerUuid);
+    private int optionIndexForSlot(int rawSlot) {
+        for (int i = 0; i < OPTION_SLOTS.length; i++) {
+            if (OPTION_SLOTS[i] == rawSlot) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private String buildSelectionTitle(VoteSession session) {
@@ -302,7 +302,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         return createItem(Material.LIME_CONCRETE, text.title(), text.lore());
     }
 
-    private ItemStack createItem(Material material, String displayName, java.util.List<String> lore) {
+    private ItemStack createItem(Material material, String displayName, List<String> lore) {
         Objects.requireNonNull(material, "material");
         Objects.requireNonNull(displayName, "displayName");
         Objects.requireNonNull(lore, "lore");
