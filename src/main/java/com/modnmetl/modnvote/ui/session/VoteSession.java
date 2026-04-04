@@ -65,9 +65,6 @@ public final class VoteSession {
             );
         }
 
-        if (this.options.isEmpty()) {
-            throw new IllegalArgumentException("options must not be empty");
-        }
     }
 
     private List<PollOption> validateAndCopyOptions(List<PollOption> input) {
@@ -111,6 +108,10 @@ public final class VoteSession {
 
     public Poll poll() {
         return poll;
+    }
+
+    public long pollId() {
+        return poll.pollId();
     }
 
     public VoteScreen currentScreen() {
