@@ -88,3 +88,80 @@ errors:
   close_failed: "&cFailed to close the poll: {reason}"
   verify_failed: "&cFailed to verify this poll: {reason}"
   vote_failed: "&cVote submission failed: {reason}"
+  vote_not_open: "&cThis poll is not currently open for voting."
+
+gui:
+  titles:
+    selection: "&8Vote: &f{poll_title}"
+    confirmation: "&8Confirm: &f{poll_title}"
+
+  selection:
+    info:
+      title: "&ePoll Information"
+      lore:
+        - "&7Review the poll details before ranking."
+        - " "
+        - "&fPoll: &e{poll_title}"
+        - "&fType: &e{poll_type}"
+        - "&fMaximum rankings: &e{max_rankings}"
+        - "&fPartial ranking: &e{partial_ranking}"
+
+    option:
+      title:
+        selected: "&a#{rank} &f- {option_name}"
+        unselected: "&f{option_name}"
+      lore:
+        selected:
+          - "&7{description}"
+          - " "
+          - "&aCurrently ranked: #{rank}"
+          - "&eClick to remove this option from your ranking."
+        unselected_available:
+          - "&7{description}"
+          - " "
+          - "&7Not currently ranked."
+          - "&aClick to assign this as rank #{next_rank}."
+        unselected_full:
+          - "&7{description}"
+          - " "
+          - "&7Not currently ranked."
+          - "&cYou have reached the maximum number of rankings."
+
+    summary:
+      title: "&bCurrent Ranking"
+      lore_intro:
+        - "&7Your current ballot preview:"
+
+    reset:
+      title: "&cReset Ranking"
+      lore:
+        - "&7Clear all current selections"
+        - "&7and begin ranking again."
+
+    cast:
+      title_valid: "&aReview Vote"
+      title_invalid: "&cReview Vote (Unavailable)"
+      lore_valid:
+        - "&aClick to continue to the confirmation screen."
+      lore_invalid:
+        - "&cCreate a valid ranking before continuing."
+
+  confirmation:
+    summary:
+      title: "&eConfirm Your Vote"
+      lore_intro:
+        - "&7Please review this ranking carefully."
+        - "&7Your vote will only be submitted after confirmation."
+        - " "
+
+    back:
+      title: "&cGo Back"
+      lore:
+        - "&7Return to the ranking screen"
+        - "&7without submitting your vote."
+
+    commit:
+      title: "&aSubmit Vote Now"
+      lore:
+        - "&7Submit this confirmed ranking"
+        - "&7to the authoritative voting service."

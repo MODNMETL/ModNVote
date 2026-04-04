@@ -1,9 +1,9 @@
 package com.modnmetl.modnvote.ui.render;
 
 import com.modnmetl.modnvote.domain.PollOption;
-import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.session.VoteScreen;
 import com.modnmetl.modnvote.ui.session.VoteSession;
+import com.modnmetl.modnvote.ui.text.VoteGuiText;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -11,32 +11,31 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Initial Java inventory renderer for ranked voting sessions.
+ * Java inventory renderer for ranked voting sessions.
  *
- * This renderer now establishes a fixed first-pass layout for:
- * - selection screen
- * - confirmation screen
- * - option placement
- * - summary item
- * - reset/cast controls
+ * Responsibilities:
+ * - build selection and confirmation inventories
+ * - render option, summary, and control items
+ * - track managed reopen transitions so session cleanup listeners can
+ *   distinguish renderer refreshes from genuine user closure
  *
- * Click handling is intentionally not part of this class and will be added
- * through a dedicated listener in the next phase, using this renderer's slot
- * mapping as the single source of truth.
+ * Non-responsibilities:
+ * - no click handling
+ * - no session persistence
+ * - no ballot submission logic
  */
 public final class JavaInventoryVoteRenderer implements VoteRenderer {
 
     private static final int SELECTION_SIZE = 54;
     private static final int CONFIRMATION_SIZE = 27;
-
-    private static final String SELECTION_TITLE_PREFIX = "Vote: ";
-    private static final String CONFIRMATION_TITLE_PREFIX = "Confirm Vote: ";
 
     private static final int INFO_SLOT = 4;
     private static final int SUMMARY_SLOT = 49;
@@ -48,8 +47,8 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     private static final int CONFIRM_COMMIT_SLOT = 15;
 
     /**
-     * First-pass option grid for ranked voting.
-     * This gives us up to 21 option positions in a stable visual layout.
+     * Fixed option grid for ranked voting.
+     * This currently supports up to 21 visible options in a stable layout.
      */
     private static final int[] OPTION_SLOTS = {
             10, 11, 12, 13, 14, 15, 16,
@@ -57,10 +56,21 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
             28, 29, 30, 31, 32, 33, 34
     };
 
-    private final BallotSummaryFormatter ballotSummaryFormatter;
+    private final JavaPlugin plugin;
+    private final VoteGuiText voteGuiText;
 
-    public JavaInventoryVoteRenderer(BallotSummaryFormatter ballotSummaryFormatter) {
-        this.ballotSummaryFormatter = Objects.requireNonNull(ballotSummaryFormatter, "ballotSummaryFormatter");
+    /**
+     * Tracks players whose vote GUI is being intentionally reopened by the plugin.
+     *
+     * This prevents InventoryCloseEvent cleanup logic from treating refresh/open
+     * transitions as if the player manually abandoned the session.
+     */
+    private final Set<UUID> playersWithManagedReopenInProgress = ConcurrentHashMap.newKeySet();
+
+    public JavaInventoryVoteRenderer(JavaPlugin plugin,
+                                     VoteGuiText voteGuiText) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.voteGuiText = Objects.requireNonNull(voteGuiText, "voteGuiText");
     }
 
     @Override
@@ -74,7 +84,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         );
 
         populateSelectionInventory(inventory, session);
-        player.openInventory(inventory);
+        openManagedInventory(player, inventory);
     }
 
     @Override
@@ -88,7 +98,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         );
 
         populateConfirmationInventory(inventory, session);
-        player.openInventory(inventory);
+        openManagedInventory(player, inventory);
     }
 
     @Override
@@ -138,10 +148,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     }
 
     public boolean isManagedInventory(Inventory inventory) {
-        if (inventory == null) {
-            return false;
-        }
-        return inventory.getHolder() instanceof ModNVoteInventoryHolder;
+        return inventory != null && inventory.getHolder() instanceof ModNVoteInventoryHolder;
     }
 
     public ModNVoteInventoryHolder requireManagedHolder(Inventory inventory) {
@@ -158,31 +165,45 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         return holder.screen() == session.currentScreen();
     }
 
-    public boolean isManagedSelectionTitle(String title) {
-        return title != null && title.startsWith(SELECTION_TITLE_PREFIX);
+    public boolean isManagedReopenInProgress(UUID playerUuid) {
+        Objects.requireNonNull(playerUuid, "playerUuid");
+        return playersWithManagedReopenInProgress.contains(playerUuid);
     }
 
-    public boolean isManagedConfirmationTitle(String title) {
-        return title != null && title.startsWith(CONFIRMATION_TITLE_PREFIX);
+    public void clearManagedReopenFlag(UUID playerUuid) {
+        Objects.requireNonNull(playerUuid, "playerUuid");
+        playersWithManagedReopenInProgress.remove(playerUuid);
     }
 
     private String buildSelectionTitle(VoteSession session) {
-        return truncateTitle(SELECTION_TITLE_PREFIX + session.poll().title());
+        return truncateTitle(voteGuiText.selectionTitle(session));
     }
 
     private String buildConfirmationTitle(VoteSession session) {
-        return truncateTitle(CONFIRMATION_TITLE_PREFIX + session.poll().title());
+        return truncateTitle(voteGuiText.confirmationTitle(session));
     }
 
     private String truncateTitle(String rawTitle) {
         Objects.requireNonNull(rawTitle, "rawTitle");
 
-        final int maxLength = 32; // Bukkit inventory title practical limit
+        final int maxLength = 32;
         if (rawTitle.length() <= maxLength) {
             return rawTitle;
         }
 
         return rawTitle.substring(0, maxLength - 3) + "...";
+    }
+
+    private void openManagedInventory(Player player, Inventory inventory) {
+        UUID playerUuid = player.getUniqueId();
+        playersWithManagedReopenInProgress.add(playerUuid);
+        player.openInventory(inventory);
+
+        Bukkit.getScheduler().runTaskLater(
+                plugin,
+                () -> playersWithManagedReopenInProgress.remove(playerUuid),
+                1L
+        );
     }
 
     private void populateSelectionInventory(Inventory inventory, VoteSession session) {
@@ -193,11 +214,10 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         inventory.setItem(RESET_SLOT, buildResetItem());
         inventory.setItem(CAST_SLOT, buildCastItem(session));
 
-        List<PollOption> options = session.options();
-        int renderCount = Math.min(options.size(), OPTION_SLOTS.length);
+        int renderCount = Math.min(session.options().size(), OPTION_SLOTS.length);
 
         for (int i = 0; i < renderCount; i++) {
-            PollOption option = options.get(i);
+            PollOption option = session.options().get(i);
             int slot = OPTION_SLOTS[i];
             inventory.setItem(slot, buildOptionItem(session, option));
         }
@@ -228,125 +248,61 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     }
 
     private ItemStack buildPollInfoItem(VoteSession session) {
-        List<String> lore = new ArrayList<>();
-        lore.add(" ");
-        lore.add("Poll: " + session.poll().title());
-        lore.add("Type: " + readablePollType(session));
-        lore.add("Max rankings: " + session.maxSelectableOptions());
-        lore.add("Partial ranking: " + (session.poll().allowPartialRanking() ? "Allowed" : "Not allowed"));
-
-        return createItem(
-                Material.BOOK,
-                "Poll Information",
-                lore
-        );
+        VoteGuiText.ItemText text = voteGuiText.pollInfo(session);
+        return createItem(Material.BOOK, text.title(), text.lore());
     }
 
     private ItemStack buildOptionItem(VoteSession session, PollOption option) {
         Integer rank = session.assignedRank(option.optionId());
+        VoteGuiText.ItemText text = voteGuiText.option(session, option);
 
-        List<String> lore = new ArrayList<>();
-        lore.add(option.description());
-        lore.add(" ");
-
+        Material material;
         if (rank != null) {
-            lore.add("Currently ranked: #" + rank);
-            lore.add("Click to remove this option.");
+            material = Material.LIME_DYE;
         } else if (session.canAssignAnotherRank()) {
-            lore.add("Not currently ranked.");
-            lore.add("Click to assign the next rank.");
+            material = Material.PAPER;
         } else {
-            lore.add("Not currently ranked.");
-            lore.add("You have reached the ranking limit.");
+            material = Material.GRAY_DYE;
         }
 
-        Material material = rank != null ? Material.LIME_DYE : Material.PAPER;
-        String title = rank != null
-                ? "#" + rank + " - " + option.displayName()
-                : option.displayName();
-
-        return createItem(material, title, lore);
+        return createItem(material, text.title(), text.lore());
     }
 
     private ItemStack buildSelectionSummaryItem(VoteSession session) {
-        return createItem(
-                Material.WRITABLE_BOOK,
-                "Current Ranking",
-                splitLines(ballotSummaryFormatter.formatSelectionSummary(session))
-        );
+        VoteGuiText.ItemText text = voteGuiText.selectionSummary(session);
+        return createItem(Material.WRITABLE_BOOK, text.title(), text.lore());
     }
 
     private ItemStack buildConfirmationSummaryItem(VoteSession session) {
-        return createItem(
-                Material.BOOK,
-                "Confirm Your Vote",
-                splitLines(ballotSummaryFormatter.formatConfirmationSummary(session))
-        );
+        VoteGuiText.ItemText text = voteGuiText.confirmationSummary(session);
+        return createItem(Material.BOOK, text.title(), text.lore());
     }
 
     private ItemStack buildResetItem() {
-        return createItem(
-                Material.BARRIER,
-                "Reset Ranking",
-                List.of(
-                        "Clear all current selections",
-                        "and start again."
-                )
-        );
+        VoteGuiText.ItemText text = voteGuiText.resetButton();
+        return createItem(Material.BARRIER, text.title(), text.lore());
     }
 
     private ItemStack buildCastItem(VoteSession session) {
-        boolean valid = session.isValidSelection();
-
-        List<String> lore = new ArrayList<>(splitLines(ballotSummaryFormatter.formatCastButtonSummary(session)));
-        lore.add(" ");
-        lore.add(valid ? "Click to continue to confirmation." : "Make a valid ranking to continue.");
-
+        VoteGuiText.ItemText text = voteGuiText.reviewButton(session);
         return createItem(
-                valid ? Material.LIME_CONCRETE : Material.RED_CONCRETE,
-                valid ? "Cast Your Vote" : "Cast Your Vote (Unavailable)",
-                lore
+                session.isValidSelection() ? Material.LIME_CONCRETE : Material.RED_CONCRETE,
+                text.title(),
+                text.lore()
         );
     }
 
     private ItemStack buildBackItem() {
-        return createItem(
-                Material.RED_CONCRETE,
-                "Go Back",
-                List.of(
-                        "Return to the ranking screen",
-                        "without submitting your vote."
-                )
-        );
+        VoteGuiText.ItemText text = voteGuiText.backButton();
+        return createItem(Material.RED_CONCRETE, text.title(), text.lore());
     }
 
     private ItemStack buildCommitItem() {
-        return createItem(
-                Material.LIME_CONCRETE,
-                "Yes, Commit My Vote",
-                List.of(
-                        "Submit this ranking",
-                        "to the voting service."
-                )
-        );
+        VoteGuiText.ItemText text = voteGuiText.commitButton();
+        return createItem(Material.LIME_CONCRETE, text.title(), text.lore());
     }
 
-    private List<String> splitLines(String text) {
-        Objects.requireNonNull(text, "text");
-        return List.of(text.split("\\R"));
-    }
-
-    private String readablePollType(VoteSession session) {
-        return switch (session.poll().pollType()) {
-            case RANKED_SINGLE_WINNER -> "Ranked Choice";
-            case YES_NO -> "Yes / No";
-            case SINGLE_CHOICE -> "Single Choice";
-            case RANKED_MULTI_WINNER_STV -> "STV";
-            case COMBINED_EXECUTIVE_AND_COUNCIL -> "Executive + Council";
-        };
-    }
-
-    private ItemStack createItem(Material material, String displayName, List<String> lore) {
+    private ItemStack createItem(Material material, String displayName, java.util.List<String> lore) {
         Objects.requireNonNull(material, "material");
         Objects.requireNonNull(displayName, "displayName");
         Objects.requireNonNull(lore, "lore");

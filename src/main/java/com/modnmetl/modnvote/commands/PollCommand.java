@@ -276,7 +276,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     Poll poll = requirePoll(pollId);
 
                     if (poll.status() != PollStatus.OPEN) {
-                        throw new PollServiceException("This poll is not currently open for voting.");
+                        throw new PollServiceException(messages.getRaw("errors.vote_not_open"));
                     }
 
                     List<PollOption> options = pollOptionDao.findOptionsByPollId(pollId);
@@ -284,10 +284,12 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         throw new PollServiceException("Poll #" + pollId + " has no selectable options.");
                     }
 
-                    VoteSessionManager manager = voteSessionManager;
-                    manager.createOrReplaceSession(player.getUniqueId(), poll, options);
+                    voteSessionManager.createOrReplaceSession(player.getUniqueId(), poll, options);
 
-                    voteRenderer.openSelection(player, manager.getRequiredSession(player.getUniqueId()));
+                    player.sendMessage(messages.format("vote.gui_opening", Map.of(
+                            "title", poll.title()
+                    )));
+                    voteRenderer.openSelection(player, voteSessionManager.getRequiredSession(player.getUniqueId()));
 
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.vote_failed",

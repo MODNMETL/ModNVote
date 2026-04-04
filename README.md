@@ -114,6 +114,10 @@ Voting is a **trust interface**, not just a mechanic.
 - Audit event chain (hash-linked)
 - Player inclusion verification
 - IP-based duplicate-prevention heuristics with bypass support
+- Ranked Java GUI voting flow with mandatory confirmation
+- In-memory vote session model and session manager
+- GUI-backed ranked ballot submission through the authoritative ballot service
+- Session cleanup on quit and genuine GUI close
 
 ### Verification and duplicate prevention
 
@@ -139,6 +143,7 @@ Current testing builds also apply duplicate-prevention heuristics by:
 /modnvote close <pollId>  
 /modnvote verify <pollId>  
 /modnvote testvote <pollId> <optionId1> <optionId2> ...
+/modnvote vote <pollId>
 ```
 
 ---
@@ -161,10 +166,11 @@ Current testing builds also apply duplicate-prevention heuristics by:
 ## 🧭 Roadmap
 
 ### 2.0.0
-- Demo Ranked horse-breed poll
+- Demo ranked horse-breed poll
 - Ballot submission system
 - Audit chain foundation
-- GUI voting system
+- Ranked Java GUI voting system
+- Verification and ballot-reference flow
 
 ### 2.1.x
 - Elections (Mayor + Council)

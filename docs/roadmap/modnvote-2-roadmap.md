@@ -2,9 +2,10 @@
 
 ## Current branch goal
 
-Build the 2.0 foundation cleanly and deliberately rather than extending the old 1.x single-round yes/no code.
+Build ModNVote 2.0 as a ballot-first, auditable voting platform with clean poll-type-specific UX paths rather than extending the old 1.x single-round yes/no code.
 
 ## Milestone 1 — Foundation
+Status: COMPLETE
 
 - Create 2.0 architecture docs
 - Create core enums and domain model
@@ -14,49 +15,64 @@ Build the 2.0 foundation cleanly and deliberately rather than extending the old 
 - Keep 1.x files present until 2.0 bootstrap is ready
 
 ## Milestone 2 — Horse breed ranked poll
+Status: LARGELY COMPLETE
 
-- Implement ranked single-winner ballot model
-- Implement poll/options storage
-- Implement ballot submission transaction flow
-- Implement recount logic for ranked single-winner polls
-- Implement audit event chain
-- Implement Discord checkpoint publishing
-- Implement Java GUI draft + confirmation flow
-- Test with real “breed of the month” use case
+Completed:
+- ranked single-winner ballot model
+- poll/options storage
+- ballot submission transaction flow
+- recount logic for ranked single-winner polls
+- audit event chain
+- Java ranked GUI session flow
+- Java ranked confirmation flow
+- end-to-end ranked GUI submission flow
+- real “breed of the month” ranked poll foundation
 
-## Milestone 3 — Election foundation
+Still to finish within this milestone:
+- Discord checkpoint publication
+- ranked GUI polish/stabilisation pass
+- configurable GUI message externalisation
+- further UX refinement/testing
 
-- Add candidate-centric option metadata
-- Add richer result reporting
-- Add election package concept
-- Add single-winner executive contest support
-- Add multi-winner STV foundation
+## Milestone 3 — Legacy poll compatibility + election foundation
+Status: NEXT
+
+Planned:
+- add legacy-style `YES_NO` poll type with dedicated UI/session flow
+- preserve intuitive/simple legacy UX for yes/no polls
+- add candidate-centric option metadata
+- add richer result reporting
+- add election package concept
+- add single-winner executive contest support
+- add multi-winner STV foundation
 
 ## Milestone 4 — Mayor + Council election
+Status: LATER
 
-- Implement combined election package
-- Finalize sequencing rules
-- Add round-by-round reporting
-- Add recount/export/reporting for civic elections
+- implement combined election package
+- finalize sequencing rules
+- add round-by-round reporting
+- add recount/export/reporting for civic elections
 
 ## Release strategy
 
 ### 2.0.0
-- Horse-breed ranked poll ready
-- New architecture in place
-- Audit/checkpoint foundation in place
+- horse-breed ranked poll ready
+- new architecture in place
+- audit/checkpoint foundation in place
+- ranked Java GUI voting flow
+- privacy-preserving verification flow
 
 ### 2.1.x
+- legacy-style yes/no support in 2.0 architecture
 - Mayor + Council election package
-- Multi-winner STV
+- multi-winner STV
 - richer reporting and election-specific UX
 
 ## Current priority order
 
-1. Architecture and documentation
-2. Core source scaffold
-3. Ballot-first schema design
-4. Ranked single-winner poll support
-5. Audit + external witness publication
-6. GUI/session model
-7. Advanced election package
+1. Ranked GUI polish / stabilisation
+2. GUI message/config polish
+3. Legacy-style `YES_NO` poll support
+4. Audit + external witness publication
+5. STV / executive / combined election package

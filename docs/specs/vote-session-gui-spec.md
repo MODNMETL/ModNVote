@@ -19,6 +19,39 @@ It ensures:
 
 ---
 
+## Current implementation status
+
+The ranked Java GUI flow described in this spec is now partially implemented in the live 2.0 codebase.
+
+Implemented:
+- `VoteSession`
+- `VoteScreen`
+- `VoteSessionManager`
+- `BallotSummaryFormatter`
+- `VoteRenderer`
+- `JavaInventoryVoteRenderer`
+- `ModNVoteInventoryHolder`
+- `VoteGuiListener`
+- `VoteSubmissionCoordinator`
+- session cleanup on player quit
+- session cleanup on genuine manual GUI close
+- protection against session cleanup during managed GUI refresh/reopen transitions
+
+Implemented flow:
+1. `/modnvote vote <pollId>` opens the ranked selection GUI for an OPEN poll
+2. player builds ranked selections
+3. player can reset selections
+4. player moves to confirmation
+5. player confirms submission
+6. submission is delegated through `VoteSubmissionCoordinator`
+7. final commit is performed by `BallotService.submitRankedBallot(...)`
+
+Still deferred:
+- GUI message/config externalisation for item titles/lore
+- Bedrock renderer path
+- dedicated Yes/No GUI/session flow
+- STV / combined election flows
+
 ## Core Design Principles
 
 ### 1. Anonymous Ballots are the source of truth for vote content with participation tracked separately.
@@ -132,17 +165,17 @@ On confirmation:
 
 Represents one active voting interaction.
 
-#### Fields
+#### Current ranked implementation fields
 
 * `UUID playerUuid`
-* `long pollId`
-* `PollType pollType`
+* `Poll poll`
 * `VoteScreen currentScreen`
-* `List<VoteOptionView> options`
+* `List<PollOption> options`
 * `List<Long> rankedOptionIds`
-* `Long singleSelectedOptionId`
 * `Instant createdAt`
 * `Instant lastInteractionAt`
+
+Note: the current implementation is intentionally ranked-focused and does not yet include separate Yes/No or single-choice session state.
 
 #### Responsibilities
 
@@ -180,6 +213,7 @@ Fields:
 * `Integer assignedRank`
 * `OptionIcon optionIcon`
 
+Note: `VoteOptionView` remains a useful conceptual renderer model, but the current ranked Java implementation renders directly from `PollOption` + ranked selection state rather than a dedicated `VoteOptionView` class.
 ---
 
 ### `OptionIcon`
@@ -462,6 +496,15 @@ End-to-end testing
 * no draggable GUI items
 * session model before renderer
 * consistent behaviour across platforms
+
+---
+## Next extension rule
+
+The current ranked Java GUI/session path should be treated as one poll-type-specific implementation.
+
+Legacy-style `YES_NO` support should be added as a separate dedicated session/renderer path rather than forcing Yes/No into ranked GUI assumptions.
+
+This is important both for preserving legacy UX quality and for keeping poll-type behaviour clean as the system expands.
 
 ---
 

@@ -6,6 +6,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -41,6 +43,35 @@ public final class MessageService {
         return color(raw);
     }
 
+    public List<String> getList(String path) {
+        String prefix = messagesConfig.getString("prefix", "&6[ModNVote] ");
+        List<String> raw = messagesConfig.getStringList(path);
+
+        if (raw.isEmpty()) {
+            return List.of(color(prefix + "&cMissing message list: " + path));
+        }
+
+        List<String> out = new ArrayList<>(raw.size());
+        for (String line : raw) {
+            out.add(color(prefix + line));
+        }
+        return List.copyOf(out);
+    }
+
+    public List<String> getRawList(String path) {
+        List<String> raw = messagesConfig.getStringList(path);
+
+        if (raw.isEmpty()) {
+            return List.of(color("&cMissing message list: " + path));
+        }
+
+        List<String> out = new ArrayList<>(raw.size());
+        for (String line : raw) {
+            out.add(color(line));
+        }
+        return List.copyOf(out);
+    }
+
     public String format(String path, Map<String, String> placeholders) {
         String message = get(path);
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
@@ -55,6 +86,36 @@ public final class MessageService {
             message = message.replace("{" + entry.getKey() + "}", entry.getValue());
         }
         return message;
+    }
+
+    public List<String> formatList(String path, Map<String, String> placeholders) {
+        List<String> lines = getList(path);
+        List<String> out = new ArrayList<>(lines.size());
+
+        for (String line : lines) {
+            String formatted = line;
+            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+                formatted = formatted.replace("{" + entry.getKey() + "}", entry.getValue());
+            }
+            out.add(formatted);
+        }
+
+        return List.copyOf(out);
+    }
+
+    public List<String> formatRawList(String path, Map<String, String> placeholders) {
+        List<String> lines = getRawList(path);
+        List<String> out = new ArrayList<>(lines.size());
+
+        for (String line : lines) {
+            String formatted = line;
+            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+                formatted = formatted.replace("{" + entry.getKey() + "}", entry.getValue());
+            }
+            out.add(formatted);
+        }
+
+        return List.copyOf(out);
     }
 
     private String color(String input) {

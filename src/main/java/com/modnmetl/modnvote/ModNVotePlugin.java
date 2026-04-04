@@ -13,8 +13,10 @@ import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.VoteGuiListener;
 import com.modnmetl.modnvote.ui.session.VoteSessionCleanupListener;
+import com.modnmetl.modnvote.ui.session.VoteSessionCloseCleanupListener;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
 import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
+import com.modnmetl.modnvote.ui.text.VoteGuiText;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -28,17 +30,6 @@ import java.util.logging.Level;
  *
  * This replaces the 1.x single-round yes/no runtime with a ballot-first
  * platform foundation for the 2.x architecture.
- *
- * At this stage the bootstrap is responsible for:
- * - configuration and messages resource setup
- * - database and schema initialization
- * - core service wiring
- * - integrity verification service wiring
- * - vote-session and renderer wiring
- * - command and listener registration
- *
- * Vote-session GUI flows are now active for ranked voting, with broader
- * vote-engine expansion layered on top in later development stages.
  */
 public final class ModNVotePlugin extends JavaPlugin {
 
@@ -52,6 +43,7 @@ public final class ModNVotePlugin extends JavaPlugin {
 
     private VoteSessionManager voteSessionManager;
     private BallotSummaryFormatter ballotSummaryFormatter;
+    private VoteGuiText voteGuiText;
     private JavaInventoryVoteRenderer javaInventoryVoteRenderer;
     private VoteSubmissionCoordinator voteSubmissionCoordinator;
 
@@ -81,7 +73,8 @@ public final class ModNVotePlugin extends JavaPlugin {
 
             this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
             this.ballotSummaryFormatter = new BallotSummaryFormatter();
-            this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(ballotSummaryFormatter);
+            this.voteGuiText = new VoteGuiText(messageService, ballotSummaryFormatter);
+            this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(this, voteGuiText);
             this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
 
             registerCommands();
@@ -136,6 +129,14 @@ public final class ModNVotePlugin extends JavaPlugin {
         );
         getServer().getPluginManager().registerEvents(
                 new VoteSessionCleanupListener(voteSessionManager),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new VoteSessionCloseCleanupListener(
+                        this,
+                        voteSessionManager,
+                        javaInventoryVoteRenderer
+                ),
                 this
         );
     }

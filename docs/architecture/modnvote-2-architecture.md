@@ -83,6 +83,49 @@ See: `privacy-model.md`
 - `counting` — vote engine implementations
 - `commands` — admin and player command entrypoints
 
+## Current ranked Java GUI architecture
+
+The ranked Java voting path is now implemented as the following layered flow:
+
+- `PollCommand`
+    - opens vote GUI sessions for OPEN polls
+
+- `VoteSession`
+    - in-memory per-player ranked ballot state
+
+- `VoteSessionManager`
+    - temporary session lifecycle management
+
+- `BallotSummaryFormatter`
+    - consistent ranked summary formatting for renderer surfaces
+
+- `JavaInventoryVoteRenderer`
+    - Java inventory presentation of ranked voting state
+
+- `ModNVoteInventoryHolder`
+    - safe identification of ModNVote-managed inventories
+
+- `VoteGuiListener`
+    - handles local GUI interaction and state transitions
+
+- `VoteSubmissionCoordinator`
+    - bridges confirmed GUI state into the authoritative backend
+
+- `BallotService`
+    - final authoritative validation and persistence path
+
+This preserves the intended architecture:
+- GUI/session layer does not write directly to the database
+- service layer remains authoritative
+- anonymous ballot persistence remains separated from identity-aware participation tracking
+
+### Architectural note
+
+The current ranked Java GUI flow should be treated as one poll-type-specific implementation, not as the universal UI model for all future poll types.
+
+Legacy-style `YES_NO` should be introduced as a separate session/renderer flow rather than forcing all poll types through ranked GUI assumptions.
+
+
 ## Initial delivery target
 
 ModNVote 2.0.0 should ship with:
@@ -94,6 +137,8 @@ ModNVote 2.0.0 should ship with:
 - Discord checkpoint publication foundation
 - Java GUI draft + confirmation flow
 - recount and verification commands
+
+This now includes a working ranked Java GUI session/confirmation/submission path.
 
 ## Folia direction
 
