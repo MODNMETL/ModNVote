@@ -80,6 +80,28 @@ public final class VoteSessionManager {
         return sessionsByPlayerId.remove(playerUuid) != null;
     }
 
+    public Optional<VoteSession> findSession(UUID playerUuid, long pollId) {
+        Objects.requireNonNull(playerUuid, "playerUuid");
+
+        VoteSession session = sessionsByPlayerId.get(playerUuid);
+        if (session == null || session.pollId() != pollId) {
+            return Optional.empty();
+        }
+
+        return Optional.of(session);
+    }
+
+    public boolean removeSession(UUID playerUuid, long pollId) {
+        Objects.requireNonNull(playerUuid, "playerUuid");
+
+        VoteSession session = sessionsByPlayerId.get(playerUuid);
+        if (session == null || session.pollId() != pollId) {
+            return false;
+        }
+
+        return sessionsByPlayerId.remove(playerUuid, session);
+    }
+
     public int activeSessionCount() {
         return sessionsByPlayerId.size();
     }
