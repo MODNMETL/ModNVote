@@ -13,11 +13,17 @@ import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
 import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.VoteGuiListener;
+import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.render.YesNoVoteGuiListener;
 import com.modnmetl.modnvote.ui.session.VoteSessionCleanupListener;
 import com.modnmetl.modnvote.ui.session.VoteSessionCloseCleanupListener;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionCleanupListener;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionCloseCleanupListener;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionManager;
 import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
 import com.modnmetl.modnvote.ui.text.VoteGuiText;
+import com.modnmetl.modnvote.ui.text.YesNoGuiText;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -43,10 +49,13 @@ public final class ModNVotePlugin extends JavaPlugin {
     private IntegrityVerificationService integrityVerificationService;
 
     private VoteSessionManager voteSessionManager;
+    private YesNoVoteSessionManager yesNoVoteSessionManager;
     private BallotSummaryFormatter ballotSummaryFormatter;
     private VoteGuiText voteGuiText;
+    private YesNoGuiText yesNoGuiText;
     private VoteSoundService voteSoundService;
     private JavaInventoryVoteRenderer javaInventoryVoteRenderer;
+    private YesNoInventoryVoteRenderer yesNoInventoryVoteRenderer;
     private VoteSubmissionCoordinator voteSubmissionCoordinator;
 
     @Override
@@ -74,10 +83,13 @@ public final class ModNVotePlugin extends JavaPlugin {
             );
 
             this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
+            this.yesNoVoteSessionManager = new YesNoVoteSessionManager(Duration.ofMinutes(10));
             this.ballotSummaryFormatter = new BallotSummaryFormatter();
             this.voteGuiText = new VoteGuiText(messageService, ballotSummaryFormatter);
+            this.yesNoGuiText = new YesNoGuiText(messageService, ballotSummaryFormatter);
             this.voteSoundService = new VoteSoundService(this);
             this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(this, voteGuiText);
+            this.yesNoInventoryVoteRenderer = new YesNoInventoryVoteRenderer(this, yesNoGuiText);
             this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
 
             registerCommands();
@@ -94,6 +106,9 @@ public final class ModNVotePlugin extends JavaPlugin {
     public void onDisable() {
         if (voteSessionManager != null) {
             voteSessionManager.clearAllSessions();
+        }
+        if (yesNoVoteSessionManager != null) {
+            yesNoVoteSessionManager.clearAllSessions();
         }
 
         if (databaseManager != null) {
@@ -114,7 +129,9 @@ public final class ModNVotePlugin extends JavaPlugin {
                 integrityVerificationService,
                 messageService,
                 voteSessionManager,
-                javaInventoryVoteRenderer
+                yesNoVoteSessionManager,
+                javaInventoryVoteRenderer,
+                yesNoInventoryVoteRenderer
         );
         command.setExecutor(executor);
         command.setTabCompleter(executor);
@@ -132,7 +149,21 @@ public final class ModNVotePlugin extends JavaPlugin {
                 this
         );
         getServer().getPluginManager().registerEvents(
+                new YesNoVoteGuiListener(
+                        yesNoVoteSessionManager,
+                        yesNoInventoryVoteRenderer,
+                        voteSubmissionCoordinator,
+                        voteSoundService,
+                        messageService
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
                 new VoteSessionCleanupListener(voteSessionManager),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new YesNoVoteSessionCleanupListener(yesNoVoteSessionManager),
                 this
         );
         getServer().getPluginManager().registerEvents(
@@ -140,6 +171,14 @@ public final class ModNVotePlugin extends JavaPlugin {
                         this,
                         voteSessionManager,
                         javaInventoryVoteRenderer
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new YesNoVoteSessionCloseCleanupListener(
+                        this,
+                        yesNoVoteSessionManager,
+                        yesNoInventoryVoteRenderer
                 ),
                 this
         );
@@ -180,7 +219,15 @@ public final class ModNVotePlugin extends JavaPlugin {
         return Objects.requireNonNull(voteSessionManager, "voteSessionManager");
     }
 
+    public YesNoVoteSessionManager getYesNoVoteSessionManager() {
+        return Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
+    }
+
     public JavaInventoryVoteRenderer getJavaInventoryVoteRenderer() {
         return Objects.requireNonNull(javaInventoryVoteRenderer, "javaInventoryVoteRenderer");
+    }
+
+    public YesNoInventoryVoteRenderer getYesNoInventoryVoteRenderer() {
+        return Objects.requireNonNull(yesNoInventoryVoteRenderer, "yesNoInventoryVoteRenderer");
     }
 }

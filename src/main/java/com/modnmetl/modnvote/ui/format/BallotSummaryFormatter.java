@@ -5,10 +5,10 @@ import com.modnmetl.modnvote.ui.session.VoteSession;
 import java.util.Objects;
 
 /**
- * Produces stable, renderer-friendly ballot summary text from a vote session.
+ * Produces stable, renderer-friendly ballot summary text.
  *
  * This formatter exists so that summary phrasing is not hardcoded into
- * renderers or mixed too deeply into the session model.
+ * renderers or mixed too deeply into session models.
  */
 public final class BallotSummaryFormatter {
 
@@ -64,5 +64,26 @@ public final class BallotSummaryFormatter {
         }
 
         return formatSelectionSummary(session);
+    }
+
+    public String formatYesNoSelectionSummary(String selectedDisplayName) {
+        if (selectedDisplayName == null || selectedDisplayName.isBlank()) {
+            return "No choice selected yet.";
+        }
+        return "Your vote: " + selectedDisplayName;
+    }
+
+    public String formatYesNoConfirmationSummary(String selectedDisplayName) {
+        if (selectedDisplayName == null || selectedDisplayName.isBlank()) {
+            return "No choice selected yet.";
+        }
+        return "Please confirm your vote: " + selectedDisplayName;
+    }
+
+    public String formatYesNoCastButtonSummary(String selectedDisplayName) {
+        if (selectedDisplayName == null || selectedDisplayName.isBlank()) {
+            return "Choose Yes or No to continue.";
+        }
+        return formatYesNoSelectionSummary(selectedDisplayName);
     }
 }

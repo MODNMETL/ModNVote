@@ -3,6 +3,7 @@ package com.modnmetl.modnvote.ui.submit;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.ui.session.VoteSession;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSession;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -16,7 +17,7 @@ import java.util.Objects;
  * Bridges in-memory vote sessions to the authoritative ballot submission service.
  *
  * Responsibilities:
- * - extract ranked selections from a VoteSession
+ * - extract temporary UI selections from session models
  * - derive submission context from the player
  * - apply configured bypass permission checks
  * - submit through BallotService
@@ -29,7 +30,8 @@ import java.util.Objects;
 public final class VoteSubmissionCoordinator {
 
     private static final String DEFAULT_BYPASS_NODE = "modnvote.bypass";
-    private static final String CLIENT_PLATFORM = "JAVA_GUI";
+    private static final String CLIENT_PLATFORM_RANKED = "JAVA_GUI";
+    private static final String CLIENT_PLATFORM_YES_NO = "JAVA_GUI_YES_NO";
 
     private final JavaPlugin plugin;
     private final BallotService ballotService;
@@ -45,18 +47,13 @@ public final class VoteSubmissionCoordinator {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(session, "session");
 
-        String ipHash = hashPlayerIp(player);
-        if (ipHash == null) {
-            throw new PollServiceException("We could not confirm your network address for duplicate-protection checks.");
-        }
-
-        String bypassNode = plugin.getConfig().getString("permissions.bypass_node", DEFAULT_BYPASS_NODE);
-        boolean bypassIpDuplicateCheck = player.hasPermission(bypassNode);
+        String ipHash = requirePlayerIpHash(player);
+        boolean bypassIpDuplicateCheck = hasBypassPermission(player);
 
         BallotService.SubmissionResult result = ballotService.submitRankedBallot(
                 session.pollId(),
                 player.getUniqueId().toString(),
-                CLIENT_PLATFORM,
+                CLIENT_PLATFORM_RANKED,
                 session.rankedOptionIds(),
                 ipHash,
                 null,
@@ -64,6 +61,45 @@ public final class VoteSubmissionCoordinator {
         );
 
         return new SubmissionOutcome(result, bypassIpDuplicateCheck);
+    }
+
+    public SubmissionOutcome submitYesNoVote(Player player,
+                                             YesNoVoteSession session) throws PollServiceException {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(session, "session");
+
+        Long selectedOptionId = session.selectedOptionId();
+        if (selectedOptionId == null) {
+            throw new PollServiceException("A yes/no choice must be selected before submission.");
+        }
+
+        String ipHash = requirePlayerIpHash(player);
+        boolean bypassIpDuplicateCheck = hasBypassPermission(player);
+
+        BallotService.SubmissionResult result = ballotService.submitYesNoBallot(
+                session.pollId(),
+                player.getUniqueId().toString(),
+                CLIENT_PLATFORM_YES_NO,
+                selectedOptionId,
+                ipHash,
+                null,
+                bypassIpDuplicateCheck
+        );
+
+        return new SubmissionOutcome(result, bypassIpDuplicateCheck);
+    }
+
+    private boolean hasBypassPermission(Player player) {
+        String bypassNode = plugin.getConfig().getString("permissions.bypass_node", DEFAULT_BYPASS_NODE);
+        return player.hasPermission(bypassNode);
+    }
+
+    private String requirePlayerIpHash(Player player) throws PollServiceException {
+        String ipHash = hashPlayerIp(player);
+        if (ipHash == null) {
+            throw new PollServiceException("We could not confirm your network address for duplicate-protection checks.");
+        }
+        return ipHash;
     }
 
     private String hashPlayerIp(Player player) {

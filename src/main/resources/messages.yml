@@ -165,3 +165,71 @@ gui:
       lore:
         - "&7Submit this confirmed ranking"
         - "&7to the authoritative voting service."
+
+gui_yes_no:
+  titles:
+    selection: "&8Vote: &f{poll_title}"
+    confirmation: "&8Confirm: &f{poll_title}"
+
+  selection:
+    info:
+      title: "&ePoll Information"
+      lore:
+        - "&7Choose one clear answer below."
+        - " "
+        - "&fPoll: &e{poll_title}"
+        - "&fType: &eYes / No"
+
+    option:
+      title:
+        selected: "&aSelected: {option_name}"
+        unselected: "&f{option_name}"
+      lore:
+        selected:
+          - "&7{description}"
+          - " "
+          - "&aThis is your current choice."
+          - "&eClick again to clear it."
+        unselected:
+          - "&7{description}"
+          - " "
+          - "&aClick to choose this answer."
+
+    summary:
+      title: "&bCurrent Choice"
+      lore_intro:
+        - "&7Your current ballot preview:"
+
+    clear:
+      title: "&cClear Choice"
+      lore:
+        - "&7Remove your current answer"
+        - "&7and choose again."
+
+    cast:
+      title_valid: "&aReview Vote"
+      title_invalid: "&cReview Vote (Unavailable)"
+      lore_valid:
+        - "&aClick to continue to the confirmation screen."
+      lore_invalid:
+        - "&cChoose Yes or No before continuing."
+
+  confirmation:
+    summary:
+      title: "&eConfirm Your Vote"
+      lore_intro:
+        - "&7Please review this choice carefully."
+        - "&7Your vote will only be submitted after confirmation."
+        - " "
+
+    back:
+      title: "&cGo Back"
+      lore:
+        - "&7Return to the yes/no screen"
+        - "&7without submitting your vote."
+
+    commit:
+      title: "&aSubmit Vote Now"
+      lore:
+        - "&7Submit this confirmed choice"
+        - "&7to the authoritative voting service."

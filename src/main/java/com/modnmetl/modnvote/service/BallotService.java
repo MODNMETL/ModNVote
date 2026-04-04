@@ -90,107 +90,58 @@ public final class BallotService {
         }
 
         try {
-            Poll poll = pollDao.findPollById(pollId);
-            if (poll == null) {
-                throw new PollServiceException("Poll #" + pollId + " does not exist.");
-            }
-            if (poll.status() != PollStatus.OPEN) {
-                throw new PollServiceException("Poll #" + pollId + " is not OPEN.");
-            }
-            if (poll.pollType() != PollType.RANKED_SINGLE_WINNER) {
-                throw new PollServiceException("Poll #" + pollId + " is not a ranked single-winner poll.");
-            }
-
-            List<PollOption> availableOptions = pollOptionDao.findOptionsByPollId(pollId);
-            if (availableOptions.isEmpty()) {
-                throw new PollServiceException("Poll #" + pollId + " has no selectable options.");
-            }
+            Poll poll = requireOpenPollOfType(pollId, PollType.RANKED_SINGLE_WINNER);
+            List<PollOption> availableOptions = requireSelectableOptions(pollId);
 
             validateRankedSelection(poll, availableOptions, rankedOptionIds);
 
-            Instant submittedAt = Instant.now();
-            String participationTokenHash = deriveParticipationTokenHash(poll, identityKey);
-            List<BallotPreference> preferences = toPreferences(rankedOptionIds);
-
-            String canonicalAnonymousBallotPayload = buildCanonicalAnonymousBallotPayload(
+            return submitOrderedBallot(
                     poll,
+                    identityKey,
+                    clientPlatform,
                     rankedOptionIds,
-                    submittedAt
+                    ipHash,
+                    floodgateId,
+                    bypassIpDuplicateCheck
             );
-            String ballotHash = sha256(canonicalAnonymousBallotPayload);
-            String receiptHash = sha256(participationTokenHash + "\n" + ballotHash + "\n" + submittedAt.toEpochMilli());
-
-            try (Connection connection = databaseManager.getConnection()) {
-                connection.setAutoCommit(false);
-                try {
-                    if (participationRecordDao.existsParticipationForPollAndTokenHash(
-                            connection,
-                            pollId,
-                            participationTokenHash
-                    )) {
-                        throw new PollServiceException("A vote has already been recorded for this participant in poll #" + pollId + ".");
-                    }
-
-                    if (!bypassIpDuplicateCheck && ipHash != null
-                            && participationRecordDao.existsParticipationForPollAndIpHash(connection, pollId, ipHash)) {
-                        throw new PollServiceException("A vote from your location has already been recorded for poll #" + pollId + ".");
-                    }
-
-                    participationRecordDao.insertParticipationRecord(
-                            connection,
-                            pollId,
-                            participationTokenHash,
-                            submittedAt,
-                            receiptHash,
-                            clientPlatform,
-                            ipHash,
-                            floodgateId
-                    );
-
-                    long anonymousBallotId = anonymousBallotDao.insertAnonymousBallot(
-                            connection,
-                            pollId,
-                            ballotHash,
-                            receiptHash,
-                            submittedAt
-                    );
-
-                    anonymousBallotPreferenceDao.insertPreferences(connection, anonymousBallotId, preferences);
-
-                    auditEventDao.insertPollEvent(
-                            connection,
-                            pollId,
-                            "BALLOT_SUBMITTED",
-                            buildAuditPayload(
-                                    pollId,
-                                    anonymousBallotId,
-                                    participationTokenHash,
-                                    ballotHash,
-                                    receiptHash,
-                                    submittedAt
-                            )
-                    );
-
-                    connection.commit();
-
-                    return new SubmissionResult(
-                            anonymousBallotId,
-                            ballotHash,
-                            receiptHash,
-                            submittedAt
-                    );
-                } catch (Exception e) {
-                    connection.rollback();
-                    throw e;
-                } finally {
-                    connection.setAutoCommit(true);
-                }
-            }
         } catch (PollServiceException e) {
             throw e;
         } catch (Exception e) {
             logger.warning("Failed to submit ranked ballot for poll #" + pollId + ": " + e.getMessage());
             throw new PollServiceException("Failed to submit ranked ballot for poll #" + pollId, e);
+        }
+    }
+
+    public SubmissionResult submitYesNoBallot(long pollId,
+                                              String identityKey,
+                                              String clientPlatform,
+                                              long selectedOptionId,
+                                              String ipHash,
+                                              String floodgateId,
+                                              boolean bypassIpDuplicateCheck) throws PollServiceException {
+        requireNonBlank(identityKey, "identityKey");
+        requireNonBlank(clientPlatform, "clientPlatform");
+
+        try {
+            Poll poll = requireOpenPollOfType(pollId, PollType.YES_NO);
+            List<PollOption> availableOptions = requireSelectableOptions(pollId);
+
+            validateYesNoSelection(poll, availableOptions, selectedOptionId);
+
+            return submitOrderedBallot(
+                    poll,
+                    identityKey,
+                    clientPlatform,
+                    List.of(selectedOptionId),
+                    ipHash,
+                    floodgateId,
+                    bypassIpDuplicateCheck
+            );
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warning("Failed to submit yes/no ballot for poll #" + pollId + ": " + e.getMessage());
+            throw new PollServiceException("Failed to submit yes/no ballot for poll #" + pollId, e);
         }
     }
 
@@ -222,6 +173,127 @@ public final class BallotService {
         } catch (Exception e) {
             logger.warning("Failed to verify voter inclusion for poll #" + pollId + ": " + e.getMessage());
             throw new PollServiceException("Failed to verify voter inclusion for poll #" + pollId, e);
+        }
+    }
+
+    private Poll requireOpenPollOfType(long pollId, PollType expectedType) throws PollServiceException {
+        try {
+            Poll poll = pollDao.findPollById(pollId);
+            if (poll == null) {
+                throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            }
+            if (poll.status() != PollStatus.OPEN) {
+                throw new PollServiceException("Poll #" + pollId + " is not OPEN.");
+            }
+            if (poll.pollType() != expectedType) {
+                throw new PollServiceException("Poll #" + pollId + " is not a " + expectedType.name() + " poll.");
+            }
+            return poll;
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to load poll #" + pollId, e);
+        }
+    }
+
+    private List<PollOption> requireSelectableOptions(long pollId) throws PollServiceException {
+        try {
+            List<PollOption> availableOptions = pollOptionDao.findOptionsByPollId(pollId);
+            if (availableOptions.isEmpty()) {
+                throw new PollServiceException("Poll #" + pollId + " has no selectable options.");
+            }
+            return availableOptions;
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to load options for poll #" + pollId, e);
+        }
+    }
+
+    private SubmissionResult submitOrderedBallot(Poll poll,
+                                                 String identityKey,
+                                                 String clientPlatform,
+                                                 List<Long> orderedOptionIds,
+                                                 String ipHash,
+                                                 String floodgateId,
+                                                 boolean bypassIpDuplicateCheck) throws Exception {
+        Instant submittedAt = Instant.now();
+        String participationTokenHash = deriveParticipationTokenHash(poll, identityKey);
+        List<BallotPreference> preferences = toPreferences(orderedOptionIds);
+
+        String canonicalAnonymousBallotPayload = buildCanonicalAnonymousBallotPayload(
+                poll,
+                orderedOptionIds,
+                submittedAt
+        );
+        String ballotHash = sha256(canonicalAnonymousBallotPayload);
+        String receiptHash = sha256(participationTokenHash + "\n" + ballotHash + "\n" + submittedAt.toEpochMilli());
+
+        try (Connection connection = databaseManager.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (participationRecordDao.existsParticipationForPollAndTokenHash(
+                        connection,
+                        poll.pollId(),
+                        participationTokenHash
+                )) {
+                    throw new PollServiceException("A vote has already been recorded for this participant in poll #" + poll.pollId() + ".");
+                }
+
+                if (!bypassIpDuplicateCheck && ipHash != null
+                        && participationRecordDao.existsParticipationForPollAndIpHash(connection, poll.pollId(), ipHash)) {
+                    throw new PollServiceException("A vote from your location has already been recorded for poll #" + poll.pollId() + ".");
+                }
+
+                participationRecordDao.insertParticipationRecord(
+                        connection,
+                        poll.pollId(),
+                        participationTokenHash,
+                        submittedAt,
+                        receiptHash,
+                        clientPlatform,
+                        ipHash,
+                        floodgateId
+                );
+
+                long anonymousBallotId = anonymousBallotDao.insertAnonymousBallot(
+                        connection,
+                        poll.pollId(),
+                        ballotHash,
+                        receiptHash,
+                        submittedAt
+                );
+
+                anonymousBallotPreferenceDao.insertPreferences(connection, anonymousBallotId, preferences);
+
+                auditEventDao.insertPollEvent(
+                        connection,
+                        poll.pollId(),
+                        "BALLOT_SUBMITTED",
+                        buildAuditPayload(
+                                poll.pollId(),
+                                anonymousBallotId,
+                                participationTokenHash,
+                                ballotHash,
+                                receiptHash,
+                                submittedAt
+                        )
+                );
+
+                connection.commit();
+
+                return new SubmissionResult(
+                        anonymousBallotId,
+                        ballotHash,
+                        receiptHash,
+                        submittedAt
+                );
+            } catch (Exception e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
         }
     }
 
@@ -264,10 +336,30 @@ public final class BallotService {
         }
     }
 
-    private List<BallotPreference> toPreferences(List<Long> rankedOptionIds) {
+    private void validateYesNoSelection(Poll poll,
+                                        List<PollOption> availableOptions,
+                                        long selectedOptionId) throws PollServiceException {
+        if (availableOptions.size() != 2) {
+            throw new PollServiceException("YES_NO poll #" + poll.pollId() + " must have exactly 2 selectable options.");
+        }
+
+        boolean valid = false;
+        for (PollOption option : availableOptions) {
+            if (option.optionId() == selectedOptionId) {
+                valid = true;
+                break;
+            }
+        }
+
+        if (!valid) {
+            throw new PollServiceException("Option #" + selectedOptionId + " does not belong to poll #" + poll.pollId() + ".");
+        }
+    }
+
+    private List<BallotPreference> toPreferences(List<Long> orderedOptionIds) {
         List<BallotPreference> preferences = new ArrayList<>();
-        for (int i = 0; i < rankedOptionIds.size(); i++) {
-            preferences.add(new BallotPreference(i + 1, rankedOptionIds.get(i)));
+        for (int i = 0; i < orderedOptionIds.size(); i++) {
+            preferences.add(new BallotPreference(i + 1, orderedOptionIds.get(i)));
         }
         return preferences;
     }
@@ -289,7 +381,7 @@ public final class BallotService {
     }
 
     private String buildCanonicalAnonymousBallotPayload(Poll poll,
-                                                        List<Long> rankedOptionIds,
+                                                        List<Long> orderedOptionIds,
                                                         Instant submittedAt) {
         StringBuilder sb = new StringBuilder();
         sb.append("poll_id=").append(poll.pollId()).append('\n');
@@ -298,7 +390,7 @@ public final class BallotService {
         sb.append("rule_snapshot_version=v1").append('\n');
         sb.append("max_rankings=").append(poll.maxRankings()).append('\n');
         sb.append("allow_partial_ranking=").append(poll.allowPartialRanking()).append('\n');
-        sb.append("ordered_option_ids=").append(joinOptionIds(rankedOptionIds));
+        sb.append("ordered_option_ids=").append(joinOptionIds(orderedOptionIds));
         return sb.toString();
     }
 
@@ -318,13 +410,13 @@ public final class BallotService {
         return sb.toString();
     }
 
-    private String joinOptionIds(List<Long> rankedOptionIds) {
+    private String joinOptionIds(List<Long> orderedOptionIds) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < rankedOptionIds.size(); i++) {
+        for (int i = 0; i < orderedOptionIds.size(); i++) {
             if (i > 0) {
                 sb.append(',');
             }
-            sb.append(rankedOptionIds.get(i));
+            sb.append(orderedOptionIds.get(i));
         }
         return sb.toString();
     }

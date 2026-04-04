@@ -2,6 +2,7 @@ package com.modnmetl.modnvote.commands;
 
 import com.modnmetl.modnvote.ModNVotePlugin;
 import com.modnmetl.modnvote.api.PollStatus;
+import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
@@ -11,7 +12,9 @@ import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.storage.PollOptionDao;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -31,7 +34,7 @@ import java.util.Objects;
  * - user/admin-facing messaging is sourced from messages.yml
  * - business rules remain in the service layer
  * - integrity reporting combines inclusion checks with deeper ballot verification
- * - vote GUI opening is delegated to the session manager and renderer
+ * - vote GUI opening is delegated to poll-type-specific session managers and renderers
  */
 public final class PollCommand implements CommandExecutor, TabCompleter {
 
@@ -41,7 +44,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private final IntegrityVerificationService integrityVerificationService;
     private final MessageService messages;
     private final VoteSessionManager voteSessionManager;
-    private final JavaInventoryVoteRenderer voteRenderer;
+    private final YesNoVoteSessionManager yesNoVoteSessionManager;
+    private final JavaInventoryVoteRenderer rankedVoteRenderer;
+    private final YesNoInventoryVoteRenderer yesNoVoteRenderer;
     private final PollOptionDao pollOptionDao;
 
     public PollCommand(ModNVotePlugin plugin,
@@ -50,14 +55,18 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                        IntegrityVerificationService integrityVerificationService,
                        MessageService messages,
                        VoteSessionManager voteSessionManager,
-                       JavaInventoryVoteRenderer voteRenderer) {
+                       YesNoVoteSessionManager yesNoVoteSessionManager,
+                       JavaInventoryVoteRenderer rankedVoteRenderer,
+                       YesNoInventoryVoteRenderer yesNoVoteRenderer) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.pollService = Objects.requireNonNull(pollService, "pollService");
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
         this.integrityVerificationService = Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.voteSessionManager = Objects.requireNonNull(voteSessionManager, "voteSessionManager");
-        this.voteRenderer = Objects.requireNonNull(voteRenderer, "voteRenderer");
+        this.yesNoVoteSessionManager = Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
+        this.rankedVoteRenderer = Objects.requireNonNull(rankedVoteRenderer, "rankedVoteRenderer");
+        this.yesNoVoteRenderer = Objects.requireNonNull(yesNoVoteRenderer, "yesNoVoteRenderer");
         this.pollOptionDao = new PollOptionDao(plugin.getDatabaseManager());
     }
 
@@ -284,13 +293,26 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         throw new PollServiceException("Poll #" + pollId + " has no selectable options.");
                     }
 
-                    voteSessionManager.createOrReplaceSession(player.getUniqueId(), poll, options);
+                    voteSessionManager.removeSession(player.getUniqueId());
+                    yesNoVoteSessionManager.removeSession(player.getUniqueId());
 
                     player.sendMessage(messages.format("vote.gui_opening", Map.of(
                             "title", poll.title()
                     )));
-                    voteRenderer.openSelection(player, voteSessionManager.getRequiredSession(player.getUniqueId()));
 
+                    if (poll.pollType() == PollType.RANKED_SINGLE_WINNER) {
+                        voteSessionManager.createOrReplaceSession(player.getUniqueId(), poll, options);
+                        rankedVoteRenderer.openSelection(player, voteSessionManager.getRequiredSession(player.getUniqueId()));
+                        return true;
+                    }
+
+                    if (poll.pollType() == PollType.YES_NO) {
+                        yesNoVoteSessionManager.createOrReplaceSession(player.getUniqueId(), poll, options);
+                        yesNoVoteRenderer.openSelection(player, yesNoVoteSessionManager.getRequiredSession(player.getUniqueId()));
+                        return true;
+                    }
+
+                    throw new PollServiceException("Poll type " + poll.pollType().name() + " is not yet supported by the Java voting GUI.");
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.vote_failed",
                             Map.of("reason", e.getMessage())));

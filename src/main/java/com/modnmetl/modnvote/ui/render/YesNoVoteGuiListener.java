@@ -3,8 +3,8 @@ package com.modnmetl.modnvote.ui.render;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
-import com.modnmetl.modnvote.ui.session.VoteSession;
-import com.modnmetl.modnvote.ui.session.VoteSessionManager;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSession;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionManager;
 import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -20,23 +20,23 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Handles interaction safety and local session-state transitions for ranked ModNVote GUIs.
+ * Handles interaction safety and local state transitions for yes/no vote GUIs.
  */
-public final class VoteGuiListener implements Listener {
+public final class YesNoVoteGuiListener implements Listener {
 
-    private final VoteSessionManager voteSessionManager;
-    private final JavaInventoryVoteRenderer voteRenderer;
+    private final YesNoVoteSessionManager yesNoVoteSessionManager;
+    private final YesNoInventoryVoteRenderer yesNoRenderer;
     private final VoteSubmissionCoordinator voteSubmissionCoordinator;
     private final VoteSoundService voteSoundService;
     private final MessageService messages;
 
-    public VoteGuiListener(VoteSessionManager voteSessionManager,
-                           JavaInventoryVoteRenderer voteRenderer,
-                           VoteSubmissionCoordinator voteSubmissionCoordinator,
-                           VoteSoundService voteSoundService,
-                           MessageService messages) {
-        this.voteSessionManager = Objects.requireNonNull(voteSessionManager, "voteSessionManager");
-        this.voteRenderer = Objects.requireNonNull(voteRenderer, "voteRenderer");
+    public YesNoVoteGuiListener(YesNoVoteSessionManager yesNoVoteSessionManager,
+                                YesNoInventoryVoteRenderer yesNoRenderer,
+                                VoteSubmissionCoordinator voteSubmissionCoordinator,
+                                VoteSoundService voteSoundService,
+                                MessageService messages) {
+        this.yesNoVoteSessionManager = Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
+        this.yesNoRenderer = Objects.requireNonNull(yesNoRenderer, "yesNoRenderer");
         this.voteSubmissionCoordinator = Objects.requireNonNull(voteSubmissionCoordinator, "voteSubmissionCoordinator");
         this.voteSoundService = Objects.requireNonNull(voteSoundService, "voteSoundService");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -48,7 +48,7 @@ public final class VoteGuiListener implements Listener {
             return;
         }
 
-        if (!voteRenderer.isManagedInventory(event.getView().getTopInventory())) {
+        if (!yesNoRenderer.isManagedInventory(event.getView().getTopInventory())) {
             return;
         }
 
@@ -68,7 +68,7 @@ public final class VoteGuiListener implements Listener {
             return;
         }
 
-        VoteSession session = resolution.session();
+        YesNoVoteSession session = resolution.session();
         if (session == null) {
             player.closeInventory();
             return;
@@ -90,13 +90,13 @@ public final class VoteGuiListener implements Listener {
                 handleConfirmationClick(player, session, rawSlot);
             }
         } catch (IllegalStateException | IllegalArgumentException ex) {
-            voteRenderer.refresh(player, session);
+            yesNoRenderer.refresh(player, session);
         }
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onInventoryDrag(InventoryDragEvent event) {
-        if (!voteRenderer.isManagedInventory(event.getView().getTopInventory())) {
+        if (!yesNoRenderer.isManagedInventory(event.getView().getTopInventory())) {
             return;
         }
 
@@ -108,35 +108,35 @@ public final class VoteGuiListener implements Listener {
     }
 
     private SessionResolution resolveSession(Player player, InventoryClickEvent event) {
-        ModNVoteInventoryHolder holder = voteRenderer.requireManagedHolder(event.getView().getTopInventory());
+        ModNVoteInventoryHolder holder = yesNoRenderer.requireManagedHolder(event.getView().getTopInventory());
 
-        Optional<VoteSession> optionalSession =
-                voteSessionManager.findSession(player.getUniqueId(), holder.pollId());
+        Optional<YesNoVoteSession> optionalSession =
+                yesNoVoteSessionManager.findSession(player.getUniqueId(), holder.pollId());
 
         if (optionalSession.isEmpty()) {
             return SessionResolution.closeInventory();
         }
 
-        VoteSession session = optionalSession.get();
+        YesNoVoteSession session = optionalSession.get();
 
         if (!session.playerUuid().equals(holder.playerUuid())) {
             return SessionResolution.closeInventory();
         }
 
-        if (!voteRenderer.holderMatchesSessionScreen(holder, session)) {
-            voteRenderer.refresh(player, session);
+        if (!yesNoRenderer.holderMatchesSessionScreen(holder, session)) {
+            yesNoRenderer.refresh(player, session);
             return SessionResolution.refreshed();
         }
 
         return SessionResolution.continueWith(session);
     }
 
-    private void handleSelectionClick(Player player, VoteSession session, int rawSlot) {
-        Optional<Long> optionalOptionId = voteRenderer.selectionOptionIdAtSlot(session, rawSlot);
+    private void handleSelectionClick(Player player, YesNoVoteSession session, int rawSlot) {
+        Optional<Long> optionalOptionId = yesNoRenderer.optionIdAtSlot(session, rawSlot);
         if (optionalOptionId.isPresent()) {
             long optionId = optionalOptionId.get();
             boolean previouslySelected = session.isSelected(optionId);
-            boolean changed = session.toggleRankedSelection(optionId);
+            boolean changed = session.toggleSelection(optionId);
 
             if (changed) {
                 if (previouslySelected) {
@@ -144,48 +144,46 @@ public final class VoteGuiListener implements Listener {
                 } else {
                     voteSoundService.playSelectionAssigned(player);
                 }
-                voteRenderer.refresh(player, session);
+                yesNoRenderer.refresh(player, session);
             }
             return;
         }
 
-        if (voteRenderer.isResetSlot(rawSlot)) {
-            boolean hadSelections = session.hasSelections();
-            session.clearSelections();
-
-            if (hadSelections) {
+        if (yesNoRenderer.isClearSlot(rawSlot)) {
+            boolean cleared = session.clearSelection();
+            if (cleared) {
                 voteSoundService.playReset(player);
-                voteRenderer.refresh(player, session);
+                yesNoRenderer.refresh(player, session);
             }
             return;
         }
 
-        if (voteRenderer.isCastSlot(rawSlot) && session.isValidSelection()) {
+        if (yesNoRenderer.isCastSlot(rawSlot) && session.isValidSelection()) {
             session.moveToConfirmation();
             voteSoundService.playReviewAdvance(player);
-            voteRenderer.refresh(player, session);
+            yesNoRenderer.refresh(player, session);
         }
     }
 
-    private void handleConfirmationClick(Player player, VoteSession session, int rawSlot) {
-        if (voteRenderer.isConfirmationBackSlot(rawSlot)) {
+    private void handleConfirmationClick(Player player, YesNoVoteSession session, int rawSlot) {
+        if (yesNoRenderer.isConfirmationBackSlot(rawSlot)) {
             session.returnToSelection();
             voteSoundService.playReturnToSelection(player);
-            voteRenderer.refresh(player, session);
+            yesNoRenderer.refresh(player, session);
             return;
         }
 
-        if (voteRenderer.isConfirmationCommitSlot(rawSlot)) {
+        if (yesNoRenderer.isConfirmationCommitSlot(rawSlot)) {
             submitConfirmedVote(player, session);
         }
     }
 
-    private void submitConfirmedVote(Player player, VoteSession session) {
+    private void submitConfirmedVote(Player player, YesNoVoteSession session) {
         try {
             VoteSubmissionCoordinator.SubmissionOutcome outcome =
-                    voteSubmissionCoordinator.submitRankedVote(player, session);
+                    voteSubmissionCoordinator.submitYesNoVote(player, session);
 
-            voteSessionManager.removeSession(player.getUniqueId(), session.pollId());
+            yesNoVoteSessionManager.removeSession(player.getUniqueId(), session.pollId());
             player.closeInventory();
 
             voteSoundService.playSubmitSuccess(player);
@@ -206,7 +204,7 @@ public final class VoteGuiListener implements Listener {
                 player.sendMessage(messages.get("vote.bypass_used"));
             }
         } catch (PollServiceException e) {
-            voteSessionManager.removeSession(player.getUniqueId(), session.pollId());
+            yesNoVoteSessionManager.removeSession(player.getUniqueId(), session.pollId());
             player.closeInventory();
 
             voteSoundService.playSubmitFailure(player);
@@ -223,9 +221,9 @@ public final class VoteGuiListener implements Listener {
 
     private record SessionResolution(
             SessionResolutionOutcome outcome,
-            VoteSession session
+            YesNoVoteSession session
     ) {
-        private static SessionResolution continueWith(VoteSession session) {
+        private static SessionResolution continueWith(YesNoVoteSession session) {
             return new SessionResolution(SessionResolutionOutcome.CONTINUE, session);
         }
 
