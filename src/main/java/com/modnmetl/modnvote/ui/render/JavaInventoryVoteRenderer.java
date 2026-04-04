@@ -151,6 +151,13 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         return holder;
     }
 
+    public boolean holderMatchesSessionScreen(ModNVoteInventoryHolder holder, VoteSession session) {
+        Objects.requireNonNull(holder, "holder");
+        Objects.requireNonNull(session, "session");
+
+        return holder.screen() == session.currentScreen();
+    }
+
     public boolean isManagedSelectionTitle(String title) {
         return title != null && title.startsWith(SELECTION_TITLE_PREFIX);
     }

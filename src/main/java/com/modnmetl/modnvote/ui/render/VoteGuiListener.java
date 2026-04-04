@@ -72,6 +72,11 @@ public final class VoteGuiListener implements Listener {
             return;
         }
 
+        if (!voteRenderer.holderMatchesSessionScreen(holder, session)) {
+            voteRenderer.refresh(player, session);
+            return;
+        }
+
         int rawSlot = event.getRawSlot();
 
         if (session.isInSelectionScreen()) {
