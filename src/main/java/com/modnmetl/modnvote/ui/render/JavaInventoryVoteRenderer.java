@@ -12,7 +12,7 @@ import java.util.Objects;
  * Initial Java inventory renderer skeleton for ranked voting sessions.
  *
  * This class currently establishes the rendering contract and inventory-opening
- * flow, while keeping layout/details intentionally light until slot mapping and
+ * flow, while keeping layout, title handling, and slot details intentionally light until slot mapping and
  * click-handling are added in the next phase.
  */
 public final class JavaInventoryVoteRenderer implements VoteRenderer {
@@ -67,11 +67,22 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     }
 
     private String buildSelectionTitle(VoteSession session) {
-        return "Vote: " + session.poll().title();
+        return truncateTitle("Vote: " + session.poll().title());
     }
 
     private String buildConfirmationTitle(VoteSession session) {
-        return "Confirm Vote: " + session.poll().title();
+        return truncateTitle("Confirm Vote: " + session.poll().title());
+    }
+
+    private String truncateTitle(String rawTitle) {
+        Objects.requireNonNull(rawTitle, "rawTitle");
+
+        final int maxLength = 32;
+        if (rawTitle.length() <= maxLength) {
+            return rawTitle;
+        }
+
+        return rawTitle.substring(0, maxLength - 3) + "...";
     }
 
     private void populateSelectionInventory(Inventory inventory, VoteSession session) {
