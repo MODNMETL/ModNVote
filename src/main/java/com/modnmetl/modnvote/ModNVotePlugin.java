@@ -12,6 +12,7 @@ import com.modnmetl.modnvote.storage.SchemaInitializer;
 import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.VoteGuiListener;
+import com.modnmetl.modnvote.ui.session.VoteSessionCleanupListener;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
 import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
 import org.bukkit.command.PluginCommand;
@@ -131,6 +132,10 @@ public final class ModNVotePlugin extends JavaPlugin {
                         voteSubmissionCoordinator,
                         messageService
                 ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new VoteSessionCleanupListener(voteSessionManager),
                 this
         );
     }

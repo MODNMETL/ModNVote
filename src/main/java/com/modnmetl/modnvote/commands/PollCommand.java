@@ -1,6 +1,7 @@
 package com.modnmetl.modnvote.commands;
 
 import com.modnmetl.modnvote.ModNVotePlugin;
+import com.modnmetl.modnvote.api.PollStatus;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
@@ -155,7 +156,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 try {
                     long pollId = parsePollId(args[1]);
                     Poll poll = requirePoll(pollId);
-
                     pollService.openPoll(pollId, sender.getName());
 
                     sender.sendMessage(messages.format("poll.opened", Map.of(
@@ -274,6 +274,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 try {
                     long pollId = parsePollId(args[1]);
                     Poll poll = requirePoll(pollId);
+
+                    if (poll.status() != PollStatus.OPEN) {
+                        throw new PollServiceException("This poll is not currently open for voting.");
+                    }
 
                     List<PollOption> options = pollOptionDao.findOptionsByPollId(pollId);
                     if (options.isEmpty()) {
