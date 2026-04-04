@@ -3,21 +3,21 @@ package com.modnmetl.modnvote.commands;
 import com.modnmetl.modnvote.ModNVotePlugin;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
+import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
+import com.modnmetl.modnvote.storage.PollOptionDao;
+import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.session.VoteSessionManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -30,6 +30,7 @@ import java.util.Objects;
  * - user/admin-facing messaging is sourced from messages.yml
  * - business rules remain in the service layer
  * - integrity reporting combines inclusion checks with deeper ballot verification
+ * - vote GUI opening is delegated to the session manager and renderer
  */
 public final class PollCommand implements CommandExecutor, TabCompleter {
 
@@ -38,17 +39,25 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private final BallotService ballotService;
     private final IntegrityVerificationService integrityVerificationService;
     private final MessageService messages;
+    private final VoteSessionManager voteSessionManager;
+    private final JavaInventoryVoteRenderer voteRenderer;
+    private final PollOptionDao pollOptionDao;
 
     public PollCommand(ModNVotePlugin plugin,
                        PollService pollService,
                        BallotService ballotService,
                        IntegrityVerificationService integrityVerificationService,
-                       MessageService messages) {
+                       MessageService messages,
+                       VoteSessionManager voteSessionManager,
+                       JavaInventoryVoteRenderer voteRenderer) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.pollService = Objects.requireNonNull(pollService, "pollService");
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
         this.integrityVerificationService = Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
         this.messages = Objects.requireNonNull(messages, "messages");
+        this.voteSessionManager = Objects.requireNonNull(voteSessionManager, "voteSessionManager");
+        this.voteRenderer = Objects.requireNonNull(voteRenderer, "voteRenderer");
+        this.pollOptionDao = new PollOptionDao(plugin.getDatabaseManager());
     }
 
     @Override
@@ -252,67 +261,37 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
-            case "testvote" -> {
-                if (!sender.hasPermission("modnvote.testvote")) {
-                    sender.sendMessage(messages.get("general.no_permission"));
-                    return true;
-                }
+            case "vote" -> {
                 if (!(sender instanceof Player player)) {
                     sender.sendMessage(messages.get("general.players_only"));
                     return true;
                 }
-                if (args.length < 3) {
-                    sender.sendMessage(messages.format("usage.testvote", Map.of("label", label)));
+                if (args.length < 2) {
+                    sender.sendMessage(messages.format("usage.vote", Map.of("label", label)));
                     return true;
                 }
 
                 try {
                     long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
 
-                    List<Long> rankedOptionIds = new ArrayList<>();
-                    for (int i = 2; i < args.length; i++) {
-                        try {
-                            rankedOptionIds.add(Long.parseLong(args[i]));
-                        } catch (NumberFormatException e) {
-                            throw new PollServiceException(messages.getRaw("general.invalid_option_id"));
-                        }
+                    List<PollOption> options = pollOptionDao.findOptionsByPollId(pollId);
+                    if (options.isEmpty()) {
+                        throw new PollServiceException("Poll #" + pollId + " has no selectable options.");
                     }
 
-                    String ipHash = hashPlayerIp(player);
-                    if (ipHash == null) {
-                        throw new PollServiceException(messages.getRaw("vote.ip_unavailable"));
-                    }
+                    VoteSessionManager manager = voteSessionManager;
+                    manager.createOrReplaceSession(player.getUniqueId(), poll, options);
 
-                    String bypassNode = plugin.getConfig().getString("permissions.bypass_node", "modnvote.bypass");
-                    boolean bypassIpDuplicateCheck = player.hasPermission(bypassNode);
-
-                    BallotService.SubmissionResult result = ballotService.submitRankedBallot(
-                            pollId,
-                            player.getUniqueId().toString(),
-                            "TEST_COMMAND",
-                            rankedOptionIds,
-                            ipHash,
-                            null,
-                            bypassIpDuplicateCheck
-                    );
-
-                    sender.sendMessage(messages.get("vote.submit_success"));
-                    sender.sendMessage(messages.get("vote.education_privacy"));
-                    sender.sendMessage(messages.get("vote.education_verification"));
-                    sender.sendMessage(messages.formatRaw("vote.ballot_hash",
-                            Map.of("ballot_hash", result.ballotHash())));
-                    sender.sendMessage(messages.formatRaw("vote.receipt_hash",
-                            Map.of("receipt_hash", result.receiptHash())));
-
-                    if (bypassIpDuplicateCheck) {
-                        sender.sendMessage(messages.get("vote.bypass_used"));
-                    }
+                    voteRenderer.openSelection(player, manager.getRequiredSession(player.getUniqueId()));
 
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.vote_failed",
                             Map.of("reason", e.getMessage())));
+                } catch (Exception e) {
+                    sender.sendMessage(messages.format("errors.vote_failed",
+                            Map.of("reason", e.getMessage() == null ? "Unexpected error." : e.getMessage())));
                 }
-
                 return true;
             }
             default -> {
@@ -331,6 +310,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(messages.formatRaw("help.open", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.close", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.verify", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.vote", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.testvote", Map.of("label", label)));
     }
 
@@ -349,22 +329,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
             throw new PollServiceException(messages.getRaw("poll.invalid_id"));
-        }
-    }
-
-    private String hashPlayerIp(Player player) {
-        try {
-            InetSocketAddress address = player.getAddress();
-            if (address == null || address.getAddress() == null) {
-                return null;
-            }
-
-            String hostAddress = address.getAddress().getHostAddress();
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(hostAddress.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (Exception e) {
-            return null;
         }
     }
 
@@ -393,6 +357,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("modnvote.verify")) {
                 completions.add("verify");
             }
+
+            completions.add("vote");
+
             if (sender.hasPermission("modnvote.testvote")) {
                 completions.add("testvote");
             }

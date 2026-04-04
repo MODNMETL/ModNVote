@@ -1,7 +1,10 @@
 package com.modnmetl.modnvote.ui.render;
 
+import com.modnmetl.modnvote.config.MessageService;
+import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.ui.session.VoteSession;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
+import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -9,30 +12,36 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 /**
  * Handles interaction safety and local session-state transitions for ModNVote GUIs.
  *
- * This first listener phase supports:
+ * This listener now supports:
  * - blocking unsafe inventory interactions
  * - ranked option selection/removal
  * - reset button
  * - move to confirmation
  * - back from confirmation
- *
- * Ballot submission is intentionally not handled here yet.
+ * - confirmed ballot submission through the submission coordinator
  */
 public final class VoteGuiListener implements Listener {
 
     private final VoteSessionManager voteSessionManager;
     private final JavaInventoryVoteRenderer voteRenderer;
+    private final VoteSubmissionCoordinator voteSubmissionCoordinator;
+    private final MessageService messages;
 
     public VoteGuiListener(VoteSessionManager voteSessionManager,
-                           JavaInventoryVoteRenderer voteRenderer) {
+                           JavaInventoryVoteRenderer voteRenderer,
+                           VoteSubmissionCoordinator voteSubmissionCoordinator,
+                           MessageService messages) {
         this.voteSessionManager = Objects.requireNonNull(voteSessionManager, "voteSessionManager");
         this.voteRenderer = Objects.requireNonNull(voteRenderer, "voteRenderer");
+        this.voteSubmissionCoordinator = Objects.requireNonNull(voteSubmissionCoordinator, "voteSubmissionCoordinator");
+        this.messages = Objects.requireNonNull(messages, "messages");
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -133,7 +142,39 @@ public final class VoteGuiListener implements Listener {
         }
 
         if (voteRenderer.isConfirmationCommitSlot(rawSlot)) {
-            // Submission wiring intentionally deferred to the next phase.
+            submitConfirmedVote(player, session);
+        }
+    }
+
+    private void submitConfirmedVote(Player player, VoteSession session) {
+        try {
+            VoteSubmissionCoordinator.SubmissionOutcome outcome =
+                    voteSubmissionCoordinator.submitRankedVote(player, session);
+
+            voteSessionManager.removeSession(player.getUniqueId(), session.pollId());
+            player.closeInventory();
+
+            player.sendMessage(messages.get("vote.submit_success"));
+            player.sendMessage(messages.get("vote.education_privacy"));
+            player.sendMessage(messages.get("vote.education_verification"));
+            player.sendMessage(messages.formatRaw(
+                    "vote.ballot_hash",
+                    Map.of("ballot_hash", outcome.submissionResult().ballotHash())
+            ));
+            player.sendMessage(messages.formatRaw(
+                    "vote.receipt_hash",
+                    Map.of("receipt_hash", outcome.submissionResult().receiptHash())
+            ));
+
+            if (outcome.bypassIpDuplicateCheck()) {
+                player.sendMessage(messages.get("vote.bypass_used"));
+            }
+        } catch (PollServiceException e) {
+            player.sendMessage(messages.format(
+                    "errors.vote_failed",
+                    Map.of("reason", e.getMessage())
+            ));
+            voteRenderer.refresh(player, session);
         }
     }
 }

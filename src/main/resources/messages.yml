@@ -34,12 +34,14 @@ help:
   close: "&e/{label} close <pollId>"
   verify: "&e/{label} verify <pollId>"
   testvote: "&e/{label} testvote <pollId> <optionId1> <optionId2> ..."
+  vote: "&e/{label} vote <pollId>"
 
 usage:
   open: "&cUsage: /{label} open <pollId>"
   close: "&cUsage: /{label} close <pollId>"
   verify: "&cUsage: /{label} verify <pollId>"
   testvote: "&cUsage: /{label} testvote <pollId> <optionId1> <optionId2> ..."
+  vote: "&cUsage: /{label} vote <pollId>"
 
 poll:
   list_header: "&6Stored polls:"
@@ -60,6 +62,7 @@ vote:
   duplicate_ip: "&cA vote from your location has already been recorded for this poll."
   ip_unavailable: "&cWe could not confirm your network address for duplicate-protection checks."
   failed: "&cYour vote could not be recorded: {reason}"
+  gui_opening: "&aOpening the voting screen for '&f{title}&a'."
 
   education_privacy: "&bYour vote choice is stored separately from your identity to help protect ballot privacy."
   education_verification: "&bYou can later use verification to check that your participation was included."

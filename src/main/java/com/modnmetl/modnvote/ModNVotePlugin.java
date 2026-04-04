@@ -2,17 +2,23 @@ package com.modnmetl.modnvote;
 
 import com.modnmetl.modnvote.commands.PollCommand;
 import com.modnmetl.modnvote.config.MessageService;
-import com.modnmetl.modnvote.service.IntegrityVerificationService;
-import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.platform.PaperPlatformAdapter;
+import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.service.BallotService;
+import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.SchemaInitializer;
+import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
+import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.render.VoteGuiListener;
+import com.modnmetl.modnvote.ui.session.VoteSessionManager;
+import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.logging.Level;
 
@@ -27,10 +33,11 @@ import java.util.logging.Level;
  * - database and schema initialization
  * - core service wiring
  * - integrity verification service wiring
- * - command registration
+ * - vote-session and renderer wiring
+ * - command and listener registration
  *
- * Vote-session GUI flows and broader vote-engine expansion are layered on top
- * of this foundation in later development stages.
+ * Vote-session GUI flows are now active for ranked voting, with broader
+ * vote-engine expansion layered on top in later development stages.
  */
 public final class ModNVotePlugin extends JavaPlugin {
 
@@ -42,10 +49,16 @@ public final class ModNVotePlugin extends JavaPlugin {
     private MessageService messageService;
     private IntegrityVerificationService integrityVerificationService;
 
+    private VoteSessionManager voteSessionManager;
+    private BallotSummaryFormatter ballotSummaryFormatter;
+    private JavaInventoryVoteRenderer javaInventoryVoteRenderer;
+    private VoteSubmissionCoordinator voteSubmissionCoordinator;
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
         saveResource("messages.yml", false);
+
         try {
             this.platformAdapter = new PaperPlatformAdapter(this);
 
@@ -64,7 +77,14 @@ public final class ModNVotePlugin extends JavaPlugin {
                     platformAdapter,
                     getLogger()
             );
+
+            this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
+            this.ballotSummaryFormatter = new BallotSummaryFormatter();
+            this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(ballotSummaryFormatter);
+            this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
+
             registerCommands();
+            registerListeners();
 
             getLogger().info("ModNVote 2.0 bootstrap enabled successfully.");
         } catch (Exception e) {
@@ -75,6 +95,10 @@ public final class ModNVotePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (voteSessionManager != null) {
+            voteSessionManager.clearAllSessions();
+        }
+
         if (databaseManager != null) {
             databaseManager.close();
         }
@@ -91,10 +115,24 @@ public final class ModNVotePlugin extends JavaPlugin {
                 pollService,
                 ballotService,
                 integrityVerificationService,
-                messageService
+                messageService,
+                voteSessionManager,
+                javaInventoryVoteRenderer
         );
         command.setExecutor(executor);
         command.setTabCompleter(executor);
+    }
+
+    private void registerListeners() {
+        getServer().getPluginManager().registerEvents(
+                new VoteGuiListener(
+                        voteSessionManager,
+                        javaInventoryVoteRenderer,
+                        voteSubmissionCoordinator,
+                        messageService
+                ),
+                this
+        );
     }
 
     public void reloadPluginConfiguration() {
@@ -126,5 +164,13 @@ public final class ModNVotePlugin extends JavaPlugin {
 
     public IntegrityVerificationService getIntegrityVerificationService() {
         return Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
+    }
+
+    public VoteSessionManager getVoteSessionManager() {
+        return Objects.requireNonNull(voteSessionManager, "voteSessionManager");
+    }
+
+    public JavaInventoryVoteRenderer getJavaInventoryVoteRenderer() {
+        return Objects.requireNonNull(javaInventoryVoteRenderer, "javaInventoryVoteRenderer");
     }
 }
