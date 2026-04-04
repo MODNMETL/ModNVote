@@ -26,7 +26,8 @@ import java.util.Objects;
  * - reset/cast controls
  *
  * Click handling is intentionally not part of this class and will be added
- * through a dedicated listener in the next phase.
+ * through a dedicated listener in the next phase, using this renderer's slot
+ * mapping as the single source of truth.
  */
 public final class JavaInventoryVoteRenderer implements VoteRenderer {
 
@@ -99,6 +100,48 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         }
 
         openSelection(player, session);
+    }
+
+    public boolean isSelectionOptionSlot(int rawSlot) {
+        for (int optionSlot : OPTION_SLOTS) {
+            if (optionSlot == rawSlot) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public int optionIndexForSlot(int rawSlot) {
+        for (int i = 0; i < OPTION_SLOTS.length; i++) {
+            if (OPTION_SLOTS[i] == rawSlot) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public boolean isResetSlot(int rawSlot) {
+        return rawSlot == RESET_SLOT;
+    }
+
+    public boolean isCastSlot(int rawSlot) {
+        return rawSlot == CAST_SLOT;
+    }
+
+    public boolean isConfirmationBackSlot(int rawSlot) {
+        return rawSlot == CONFIRM_BACK_SLOT;
+    }
+
+    public boolean isConfirmationCommitSlot(int rawSlot) {
+        return rawSlot == CONFIRM_COMMIT_SLOT;
+    }
+
+    public boolean isManagedSelectionTitle(String title) {
+        return title != null && title.startsWith(SELECTION_TITLE_PREFIX);
+    }
+
+    public boolean isManagedConfirmationTitle(String title) {
+        return title != null && title.startsWith(CONFIRMATION_TITLE_PREFIX);
     }
 
     private String buildSelectionTitle(VoteSession session) {
