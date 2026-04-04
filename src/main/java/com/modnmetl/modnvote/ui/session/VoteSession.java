@@ -24,7 +24,7 @@ import java.util.UUID;
  * - track the player and poll bound to the session
  * - maintain temporary ranked selection state
  * - provide renderer-friendly access to option/rank state
- * - generate a clear player-facing summary of the current ballot
+ * - provide structured ranked-selection data for renderers and formatters
  * - expose lightweight UI/session validity checks
  *
  * Non-responsibilities:
@@ -289,30 +289,6 @@ public final class VoteSession {
     public Duration idleTimeAt(Instant now) {
         Objects.requireNonNull(now, "now");
         return Duration.between(lastInteractionAt, now);
-    }
-
-    /**
-     * Builds a stable, readable player-facing summary of the current ranking.
-     */
-    public String ballotSummary() {
-        if (rankedOptionIds.isEmpty()) {
-            return "No selections made yet.";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Your ranking:");
-
-        for (int i = 0; i < rankedOptionIds.size(); i++) {
-            long optionId = rankedOptionIds.get(i);
-            PollOption option = optionsById.get(optionId);
-
-            sb.append('\n')
-                    .append(i + 1)
-                    .append(". ")
-                    .append(option.displayName());
-        }
-
-        return sb.toString();
     }
 
     /**
