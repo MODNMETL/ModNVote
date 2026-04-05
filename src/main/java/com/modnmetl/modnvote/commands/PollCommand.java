@@ -23,6 +23,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -680,6 +681,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
         }
     }
+
     private void handleValidate(CommandSender sender, long pollId) throws PollServiceException {
         PollService.PollValidationResult result = pollService.validatePollDefinition(pollId);
 
@@ -954,6 +956,82 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         return new String[] {displayName, description};
     }
 
+    private boolean isPollIdArgumentPosition(String[] args, int index, CommandSender sender) {
+        if (args.length <= index) {
+            return false;
+        }
+
+        String root = args[0].toLowerCase(Locale.ROOT);
+
+        if ("show".equals(root) || "validate".equals(root) || "ready".equals(root)
+                || "open".equals(root) || "close".equals(root)
+                || "result".equals(root) || "vote".equals(root)) {
+            return index == 1;
+        }
+
+        if ("verify".equals(root) && sender.hasPermission("modnvote.verify")) {
+            if (args.length == 2) {
+                return index == 1;
+            }
+            if (args.length >= 3 && "participation".equalsIgnoreCase(args[1])) {
+                return index == 2;
+            }
+        }
+
+        return false;
+    }
+
+    private List<String> loadPollIdCompletions() {
+        try {
+            List<Poll> polls = pollService.listPolls();
+            List<String> out = new ArrayList<>(polls.size());
+
+            for (Poll poll : polls) {
+                out.add(String.valueOf(poll.pollId()));
+            }
+
+            return out;
+        } catch (PollServiceException e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<String> loadOptionIdCompletions(long pollId) {
+        try {
+            List<PollOption> options = pollOptionDao.findOptionsByPollId(pollId);
+            List<String> out = new ArrayList<>(options.size());
+
+            for (PollOption option : options) {
+                out.add(String.valueOf(option.optionId()));
+            }
+
+            return out;
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private long tryParsePollId(String raw) {
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            return -1L;
+        }
+    }
+
+    private List<String> filterCompletions(List<String> candidates, String token) {
+        String normalized = token == null ? "" : token.toLowerCase(Locale.ROOT);
+        List<String> out = new ArrayList<>();
+
+        for (String candidate : candidates) {
+            if (candidate.toLowerCase(Locale.ROOT).startsWith(normalized)) {
+                out.add(candidate);
+            }
+        }
+
+        return out;
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> completions = new ArrayList<>();
@@ -982,7 +1060,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("modnvote.admin.poll.close")) {
                 completions.add("close");
             }
+
             completions.add("result");
+
             if (sender.hasPermission("modnvote.verify")) {
                 completions.add("mypolls");
                 completions.add("verify");
@@ -993,39 +1073,106 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("modnvote.testvote")) {
                 completions.add("testvote");
             }
-        } else if (args.length == 2) {
+
+            return filterCompletions(completions, args[0]);
+        }
+
+        if (args.length == 2) {
             if (args[0].equalsIgnoreCase("verify") && sender.hasPermission("modnvote.verify")) {
                 completions.add("participation");
                 completions.add("ballot");
+                return filterCompletions(completions, args[1]);
             }
+
             if (args[0].equalsIgnoreCase("create") && sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("yes_no");
                 completions.add("ranked_single_winner");
+                return filterCompletions(completions, args[1]);
             }
-            if (args[0].equalsIgnoreCase("poll") && sender.hasPermission("modnvote.admin.poll.create")) {
-                completions.add("<pollId>");
-            }
+
             if (args[0].equalsIgnoreCase("option") && sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("add");
                 completions.add("edit");
                 completions.add("move");
                 completions.add("remove");
+                return filterCompletions(completions, args[1]);
             }
-        } else if (args.length == 3
-                && args[0].equalsIgnoreCase("poll")
-                && sender.hasPermission("modnvote.admin.poll.create")) {
-            completions.add("title");
-            completions.add("description");
-            completions.add("maxrankings");
-            completions.add("allowpartial");
-        } else if (args.length == 5
-                && args[0].equalsIgnoreCase("option")
-                && "edit".equalsIgnoreCase(args[1])
-                && sender.hasPermission("modnvote.admin.poll.create")) {
-            completions.add("name");
-            completions.add("description");
+
+            if (isPollIdArgumentPosition(args, 1, sender)) {
+                return filterCompletions(loadPollIdCompletions(), args[1]);
+            }
+
+            return Collections.emptyList();
         }
 
-        return completions;
+        if (args.length == 3) {
+            if (args[0].equalsIgnoreCase("poll") && sender.hasPermission("modnvote.admin.poll.create")) {
+                completions.add("title");
+                completions.add("description");
+                completions.add("maxrankings");
+                completions.add("allowpartial");
+                return filterCompletions(completions, args[2]);
+            }
+
+            if (args[0].equalsIgnoreCase("option")
+                    && sender.hasPermission("modnvote.admin.poll.create")
+                    && ("edit".equalsIgnoreCase(args[1])
+                    || "move".equalsIgnoreCase(args[1])
+                    || "remove".equalsIgnoreCase(args[1])
+                    || "add".equalsIgnoreCase(args[1]))) {
+                return filterCompletions(loadPollIdCompletions(), args[2]);
+            }
+
+            if (args[0].equalsIgnoreCase("verify")
+                    && "participation".equalsIgnoreCase(args[1])
+                    && sender.hasPermission("modnvote.verify")) {
+                return filterCompletions(loadPollIdCompletions(), args[2]);
+            }
+
+            if (args[0].equalsIgnoreCase("vote")) {
+                return filterCompletions(loadPollIdCompletions(), args[1]);
+            }
+
+            if (args[0].equalsIgnoreCase("result")) {
+                return filterCompletions(loadPollIdCompletions(), args[1]);
+            }
+
+            return Collections.emptyList();
+        }
+
+        if (args.length == 4) {
+            if (args[0].equalsIgnoreCase("verify")
+                    && "ballot".equalsIgnoreCase(args[1])
+                    && sender.hasPermission("modnvote.verify")) {
+                return filterCompletions(loadPollIdCompletions(), args[2]);
+            }
+
+            if (args[0].equalsIgnoreCase("option")
+                    && sender.hasPermission("modnvote.admin.poll.create")) {
+                if ("edit".equalsIgnoreCase(args[1])
+                        || "move".equalsIgnoreCase(args[1])
+                        || "remove".equalsIgnoreCase(args[1])) {
+                    long pollId = tryParsePollId(args[2]);
+                    if (pollId > 0) {
+                        return filterCompletions(loadOptionIdCompletions(pollId), args[3]);
+                    }
+                }
+            }
+
+            return Collections.emptyList();
+        }
+
+        if (args.length == 5) {
+            if (args[0].equalsIgnoreCase("option")
+                    && "edit".equalsIgnoreCase(args[1])
+                    && sender.hasPermission("modnvote.admin.poll.create")) {
+                completions.add("name");
+                completions.add("description");
+                return filterCompletions(completions, args[4]);
+            }
+            return Collections.emptyList();
+        }
+
+        return Collections.emptyList();
     }
 }
