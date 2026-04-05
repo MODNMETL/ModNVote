@@ -168,22 +168,19 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
-            case "seedbreed" -> {
+            case "rankedpolldemo" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.create")) {
                     sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
 
                 try {
-                    long pollId = pollService.createSeedBreedPoll(sender.getName());
+                    long pollId = pollService.createRankedPollDemo(sender.getName());
                     Poll poll = pollService.findPollById(pollId);
 
-                    String title = poll != null ? poll.title() : "Seed Breed Poll";
+                    String title = poll != null ? poll.title() : "Ranked Poll Demo";
 
-                    sender.sendMessage(messages.format("poll.seedbreed_created", Map.of(
-                            "poll_id", String.valueOf(pollId),
-                            "title", title
-                    )));
+                    sender.sendMessage("§aCreated ranked poll demo §f#" + pollId + "§a: §f" + title);
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
@@ -900,7 +897,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " reload");
         sender.sendMessage("§e/" + label + " list");
         sender.sendMessage("§e/" + label + " create <yes_no|ranked_single_winner>");
-        sender.sendMessage("§e/" + label + " seedbreed");
+        sender.sendMessage("§e/" + label + " rankedpolldemo");
         sender.sendMessage("§e/" + label + " show <pollId>");
         sender.sendMessage("§e/" + label + " set <pollId> <title|description|maxrankings|allowpartial> <value>");
         sender.sendMessage("§e/" + label + " delete <pollId>");
@@ -1139,7 +1136,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("create");
-                completions.add("seedbreed");
+                completions.add("rankedpolldemo");
                 completions.add("show");
                 completions.add("set");
                 completions.add("delete");

@@ -138,7 +138,7 @@ public final class PollService {
         }
     }
 
-    public long createSeedBreedPoll(String createdBy) throws PollServiceException {
+    public long createRankedPollDemo(String createdBy) throws PollServiceException {
         try {
             String slug = "breed-of-the-month-" + Instant.now().toEpochMilli();
 
@@ -195,7 +195,7 @@ public final class PollService {
                 }
             }
         } catch (Exception e) {
-            throw new PollServiceException("Failed to create seed breed poll", e);
+            throw new PollServiceException("Failed to create ranked poll demo", e);
         }
     }
 
