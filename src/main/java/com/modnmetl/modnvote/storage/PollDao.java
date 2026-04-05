@@ -221,6 +221,15 @@ public final class PollDao {
         }
     }
 
+    public void deletePoll(Connection connection, long pollId) throws SQLException {
+        String sql = "DELETE FROM polls WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, pollId);
+            ps.executeUpdate();
+        }
+    }
+
     private Poll mapRow(ResultSet rs) throws SQLException {
         Long opensAtMillis = getNullableLong(rs, "opens_at");
         Long closesAtMillis = getNullableLong(rs, "closes_at");

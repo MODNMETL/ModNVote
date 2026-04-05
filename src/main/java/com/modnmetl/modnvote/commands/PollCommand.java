@@ -94,8 +94,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         Map.of("value", ballotService.getStatusSummary())));
                 sender.sendMessage(messages.formatRaw("status.integrity_service",
                         Map.of("value", integrityVerificationService.getStatusSummary())));
-                sender.sendMessage(messages.formatRaw("status.database",
-                        Map.of("path", plugin.getDatabaseManager().getDatabasePath().toAbsolutePath().toString())));
                 return true;
             }
             case "reload" -> {
@@ -141,23 +139,29 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
-                if (args.length < 3) {
-                    sender.sendMessage(messages.format("usage.create", Map.of("label", label)));
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " create <yes_no|ranked_single_winner>");
                     return true;
                 }
 
                 try {
                     PollType pollType = parsePollType(args[1]);
-                    String slug = args[2];
 
-                    long pollId = pollService.createPoll(sender.getName(), pollType, slug);
+                    long pollId = pollService.createPoll(sender.getName(), pollType);
                     Poll poll = requirePoll(pollId);
 
-                    sender.sendMessage(messages.format("poll.created", Map.of(
-                            "poll_id", String.valueOf(pollId),
-                            "title", poll.title(),
-                            "type", poll.pollType().name()
-                    )));
+                    sender.sendMessage("§aCreated DRAFT poll §f#" + pollId + "§a (" + poll.pollType().name() + ").");
+                    sender.sendMessage("§7Default title: §f" + poll.title());
+                    sender.sendMessage("§7Next steps:");
+                    sender.sendMessage(" §8- §e/" + label + " set " + pollId + " title <your title>");
+                    sender.sendMessage(" §8- §e/" + label + " set " + pollId + " description <your description>");
+
+                    if (poll.pollType() == PollType.RANKED_SINGLE_WINNER) {
+                        sender.sendMessage(" §8- §e/" + label + " option add " + pollId + " <key> <displayName> | <description>");
+                    }
+
+                    sender.sendMessage(" §8- §e/" + label + " validate " + pollId);
+                    sender.sendMessage(" §8- §e/" + label + " ready " + pollId);
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
@@ -250,53 +254,42 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
-            case "poll" -> {
+            case "set" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.create")) {
                     sender.sendMessage(messages.get("general.no_permission"));
                     return true;
                 }
                 if (args.length < 4) {
-                    sender.sendMessage(messages.format("usage.poll_title", Map.of("label", label)));
+                    sender.sendMessage("§cUsage: /" + label + " set <pollId> <title|description|maxrankings|allowpartial> <value>");
                     return true;
                 }
 
                 try {
                     long pollId = parsePollId(args[1]);
-                    String action = args[2].toLowerCase(Locale.ROOT);
+                    String field = args[2].toLowerCase(Locale.ROOT);
 
-                    switch (action) {
+                    switch (field) {
                         case "title" -> {
                             String title = joinArgs(args, 3);
                             pollService.updatePollTitle(pollId, title, sender.getName());
-                            sender.sendMessage(messages.format("poll.updated_title", Map.of(
-                                    "poll_id", String.valueOf(pollId),
-                                    "title", title
-                            )));
+                            sender.sendMessage("§aUpdated title for poll §f#" + pollId + "§a to: §f" + title);
                         }
                         case "description" -> {
                             String description = joinArgs(args, 3);
                             pollService.updatePollDescription(pollId, description, sender.getName());
-                            sender.sendMessage(messages.format("poll.updated_description", Map.of(
-                                    "poll_id", String.valueOf(pollId)
-                            )));
+                            sender.sendMessage("§aUpdated description for poll §f#" + pollId + "§a.");
                         }
                         case "maxrankings" -> {
                             int maxRankings = Integer.parseInt(args[3]);
                             pollService.updatePollMaxRankings(pollId, maxRankings, sender.getName());
-                            sender.sendMessage(messages.format("poll.updated_max_rankings", Map.of(
-                                    "poll_id", String.valueOf(pollId),
-                                    "max_rankings", String.valueOf(maxRankings)
-                            )));
+                            sender.sendMessage("§aUpdated max rankings for poll §f#" + pollId + "§a to §f" + maxRankings + "§a.");
                         }
                         case "allowpartial" -> {
                             boolean allowPartial = parseBoolean(args[3], "allowpartial");
                             pollService.updatePollAllowPartialRanking(pollId, allowPartial, sender.getName());
-                            sender.sendMessage(messages.format("poll.updated_allow_partial", Map.of(
-                                    "poll_id", String.valueOf(pollId),
-                                    "allow_partial", String.valueOf(allowPartial)
-                            )));
+                            sender.sendMessage("§aUpdated allow-partial for poll §f#" + pollId + "§a to §f" + allowPartial + "§a.");
                         }
-                        default -> sender.sendMessage(messages.format("usage.poll_title", Map.of("label", label)));
+                        default -> sender.sendMessage("§cUsage: /" + label + " set <pollId> <title|description|maxrankings|allowpartial> <value>");
                     }
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.edit_failed",
@@ -304,6 +297,25 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 } catch (NumberFormatException e) {
                     sender.sendMessage(messages.format("errors.edit_failed",
                             Map.of("reason", "A numeric value was expected.")));
+                }
+                return true;
+            }
+            case "delete" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " delete <pollId>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    pollService.deletePoll(pollId, sender.getName());
+                    sender.sendMessage("§aDeleted poll §f#" + pollId + "§a.");
+                } catch (PollServiceException e) {
+                    sender.sendMessage("§cFailed to delete poll: §f" + e.getMessage());
                 }
                 return true;
             }
@@ -883,27 +895,30 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelp(CommandSender sender, String label) {
-        sender.sendMessage(messages.getRaw("help.header"));
-        sender.sendMessage(messages.formatRaw("help.status", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.reload", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.list", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.create", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.seedbreed", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.show", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.poll", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.option", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.validate", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.ready", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.open", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.close", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.result", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.mypolls", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.verify_participation", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.verify_ballot", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.vote", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.testvote", Map.of("label", label)));
+        sender.sendMessage("§6ModNVote 2.0 Commands");
+        sender.sendMessage("§e/" + label + " status");
+        sender.sendMessage("§e/" + label + " reload");
+        sender.sendMessage("§e/" + label + " list");
+        sender.sendMessage("§e/" + label + " create <yes_no|ranked_single_winner>");
+        sender.sendMessage("§e/" + label + " seedbreed");
+        sender.sendMessage("§e/" + label + " show <pollId>");
+        sender.sendMessage("§e/" + label + " set <pollId> <title|description|maxrankings|allowpartial> <value>");
+        sender.sendMessage("§e/" + label + " delete <pollId>");
+        sender.sendMessage("§e/" + label + " option add <pollId> <key> <displayName> | <description>");
+        sender.sendMessage("§e/" + label + " option edit <pollId> <optionId> <name|description> <value>");
+        sender.sendMessage("§e/" + label + " option move <pollId> <optionId> <displayOrder>");
+        sender.sendMessage("§e/" + label + " option remove <pollId> <optionId>");
+        sender.sendMessage("§e/" + label + " validate <pollId>");
+        sender.sendMessage("§e/" + label + " ready <pollId>");
+        sender.sendMessage("§e/" + label + " open <pollId>");
+        sender.sendMessage("§e/" + label + " close <pollId>");
+        sender.sendMessage("§e/" + label + " result <pollId>");
+        sender.sendMessage("§e/" + label + " mypolls");
+        sender.sendMessage("§e/" + label + " verify participation <pollId>");
+        sender.sendMessage("§e/" + label + " verify ballot <pollId> <proofPhrase>");
+        sender.sendMessage("§e/" + label + " vote <pollId>");
+        sender.sendMessage("§e/" + label + " testvote <pollId> <optionId1> <optionId2> ...");
     }
-
     private Poll requirePoll(long pollId) throws PollServiceException {
         Poll poll = pollService.findPollById(pollId);
         if (poll == null) {
@@ -997,7 +1012,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             return index == 1;
         }
 
-        if ("poll".equals(root) && sender.hasPermission("modnvote.admin.poll.create")) {
+        if (("set".equals(root) || "delete".equals(root)) && sender.hasPermission("modnvote.admin.poll.create")) {
             return index == 1;
         }
 
@@ -1021,7 +1036,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     }
 
     private List<String> loadPollIdCompletions() {
-        return loadPollIdCompletions(null);
+        return loadPollIdCompletions((PollStatus) null);
     }
 
     private List<String> loadPollIdCompletions(PollStatus requiredStatus) {
@@ -1041,6 +1056,23 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private List<String> loadPollIdCompletions(List<PollStatus> requiredStatuses) {
+        try {
+            List<Poll> polls = pollService.listPolls();
+            List<String> out = new ArrayList<>(polls.size());
+
+            for (Poll poll : polls) {
+                if (requiredStatuses.contains(poll.status())) {
+                    out.add(String.valueOf(poll.pollId()));
+                }
+            }
+
+            return out;
+        } catch (PollServiceException e) {
+            return Collections.emptyList();
+        }
+    }
+
     private List<String> loadPollIdCompletionsForRoot(String rootCommand) {
         String root = rootCommand.toLowerCase(Locale.ROOT);
 
@@ -1049,7 +1081,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             case "close" -> loadPollIdCompletions(PollStatus.OPEN);
             case "result" -> loadPollIdCompletions(PollStatus.CLOSED);
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
-            case "validate", "ready", "poll", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
+            case "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
+            case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
             case "show" -> loadPollIdCompletions();
             default -> loadPollIdCompletions();
         };
@@ -1108,7 +1141,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 completions.add("create");
                 completions.add("seedbreed");
                 completions.add("show");
-                completions.add("poll");
+                completions.add("set");
+                completions.add("delete");
                 completions.add("option");
                 completions.add("validate");
                 completions.add("ready");
@@ -1149,6 +1183,14 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 return filterCompletions(completions, args[1]);
             }
 
+            if (args[0].equalsIgnoreCase("set") && sender.hasPermission("modnvote.admin.poll.create")) {
+                return filterCompletions(loadPollIdCompletions(PollStatus.DRAFT), args[1]);
+            }
+
+            if (args[0].equalsIgnoreCase("delete") && sender.hasPermission("modnvote.admin.poll.create")) {
+                return filterCompletions(loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY)), args[1]);
+            }
+
             if (args[0].equalsIgnoreCase("option") && sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("add");
                 completions.add("edit");
@@ -1165,6 +1207,13 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 3) {
+            if (args[0].equalsIgnoreCase("set")
+                    && sender.hasPermission("modnvote.admin.poll.create")) {
+                return filterCompletions(
+                        List.of("title", "description", "maxrankings", "allowpartial"),
+                        args[2]
+                );
+            }
             if (args[0].equalsIgnoreCase("poll") && sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("title");
                 completions.add("description");

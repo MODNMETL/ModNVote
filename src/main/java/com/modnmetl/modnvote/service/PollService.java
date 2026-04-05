@@ -25,7 +25,8 @@ import java.util.logging.Logger;
 public final class PollService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
+    private static final int MAX_TITLE_LENGTH = 48;
+    private static final int MAX_DESCRIPTION_LENGTH = 240;
     private final DatabaseManager databaseManager;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
@@ -69,10 +70,8 @@ public final class PollService {
     }
 
     public long createPoll(String createdBy,
-                           PollType pollType,
-                           String slug) throws PollServiceException {
+                           PollType pollType) throws PollServiceException {
         requireNonBlank(createdBy, "createdBy");
-        requireNonBlank(slug, "slug");
         Objects.requireNonNull(pollType, "pollType");
 
         if (!isSupportedAuthoringType(pollType)) {
@@ -80,14 +79,12 @@ public final class PollService {
         }
 
         try {
-            if (pollDao.pollExistsBySlug(slug)) {
-                throw new PollServiceException("A poll with slug '" + slug + "' already exists.");
-            }
+            String slug = generateDraftSlug(pollType);
 
             Poll poll = new Poll(
                     0L,
                     slug,
-                    slug,
+                    defaultTitleFor(pollType),
                     "",
                     pollType,
                     PollStatus.DRAFT,
@@ -135,8 +132,6 @@ public final class PollService {
                     connection.setAutoCommit(true);
                 }
             }
-        } catch (PollServiceException e) {
-            throw e;
         } catch (Exception e) {
             throw new PollServiceException("Failed to create poll", e);
         }
@@ -206,6 +201,9 @@ public final class PollService {
     public void updatePollTitle(long pollId, String title, String actor) throws PollServiceException {
         requireNonBlank(title, "title");
         requireNonBlank(actor, "actor");
+        if (title.length() > MAX_TITLE_LENGTH) {
+            throw new PollServiceException("title must not exceed " + MAX_TITLE_LENGTH + " characters.");
+        }
 
         Poll poll = requireDraftPoll(pollId);
 
@@ -234,6 +232,9 @@ public final class PollService {
     public void updatePollDescription(long pollId, String description, String actor) throws PollServiceException {
         Objects.requireNonNull(description, "description");
         requireNonBlank(actor, "actor");
+        if (description.length() > MAX_DESCRIPTION_LENGTH) {
+            throw new PollServiceException("description must not exceed " + MAX_DESCRIPTION_LENGTH + " characters.");
+        }
 
         requireDraftPoll(pollId);
 
@@ -712,6 +713,37 @@ public final class PollService {
         }
     }
 
+    public void deletePoll(long pollId, String actor) throws PollServiceException {
+        requireNonBlank(actor, "actor");
+
+        Poll poll = requirePollExists(pollId);
+        if (poll.status() != PollStatus.DRAFT && poll.status() != PollStatus.READY) {
+            throw new PollServiceException("Poll #" + pollId + " can only be deleted while in DRAFT or READY state.");
+        }
+
+        try (Connection connection = databaseManager.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                auditEventDao.insertPollEvent(
+                        connection,
+                        pollId,
+                        "POLL_DELETED",
+                        "actor=" + actor + ";poll_id=" + pollId + ";from=" + poll.status().name()
+                );
+
+                pollDao.deletePoll(connection, pollId);
+                connection.commit();
+            } catch (Exception e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to delete poll #" + pollId, e);
+        }
+    }
+
     private Poll requirePollExists(long pollId) throws PollServiceException {
         try {
             Poll poll = pollDao.findPollById(pollId);
@@ -759,6 +791,24 @@ public final class PollService {
 
     private boolean isSupportedAuthoringType(PollType pollType) {
         return pollType == PollType.YES_NO || pollType == PollType.RANKED_SINGLE_WINNER;
+    }
+
+    private String defaultTitleFor(PollType pollType) {
+        return switch (pollType) {
+            case YES_NO -> "Untitled yes/no poll";
+            case RANKED_SINGLE_WINNER -> "Untitled ranked poll";
+            default -> "Untitled poll";
+        };
+    }
+
+    private String generateDraftSlug(PollType pollType) {
+        String prefix = switch (pollType) {
+            case YES_NO -> "yes-no-draft";
+            case RANKED_SINGLE_WINNER -> "ranked-draft";
+            default -> "poll-draft";
+        };
+
+        return prefix + "-" + Instant.now().toEpochMilli();
     }
 
     private String generateParticipationSecret() {
