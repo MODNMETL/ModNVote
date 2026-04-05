@@ -969,11 +969,22 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             return index == 1;
         }
 
+        if ("poll".equals(root) && sender.hasPermission("modnvote.admin.poll.create")) {
+            return index == 1;
+        }
+
+        if ("option".equals(root) && sender.hasPermission("modnvote.admin.poll.create")) {
+            return index == 2;
+        }
+
         if ("verify".equals(root) && sender.hasPermission("modnvote.verify")) {
             if (args.length == 2) {
                 return index == 1;
             }
             if (args.length >= 3 && "participation".equalsIgnoreCase(args[1])) {
+                return index == 2;
+            }
+            if (args.length >= 4 && "ballot".equalsIgnoreCase(args[1])) {
                 return index == 2;
             }
         }
@@ -982,18 +993,38 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     }
 
     private List<String> loadPollIdCompletions() {
+        return loadPollIdCompletions(null);
+    }
+
+    private List<String> loadPollIdCompletions(PollStatus requiredStatus) {
         try {
             List<Poll> polls = pollService.listPolls();
             List<String> out = new ArrayList<>(polls.size());
 
             for (Poll poll : polls) {
-                out.add(String.valueOf(poll.pollId()));
+                if (requiredStatus == null || poll.status() == requiredStatus) {
+                    out.add(String.valueOf(poll.pollId()));
+                }
             }
 
             return out;
         } catch (PollServiceException e) {
             return Collections.emptyList();
         }
+    }
+
+    private List<String> loadPollIdCompletionsForRoot(String rootCommand) {
+        String root = rootCommand.toLowerCase(Locale.ROOT);
+
+        return switch (root) {
+            case "open" -> loadPollIdCompletions(PollStatus.READY);
+            case "close" -> loadPollIdCompletions(PollStatus.OPEN);
+            case "result" -> loadPollIdCompletions(PollStatus.CLOSED);
+            case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
+            case "validate", "ready", "poll", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
+            case "show" -> loadPollIdCompletions();
+            default -> loadPollIdCompletions();
+        };
     }
 
     private List<String> loadOptionIdCompletions(long pollId) {
@@ -1099,7 +1130,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
 
             if (isPollIdArgumentPosition(args, 1, sender)) {
-                return filterCompletions(loadPollIdCompletions(), args[1]);
+                return filterCompletions(loadPollIdCompletionsForRoot(args[0]), args[1]);
             }
 
             return Collections.emptyList();
@@ -1120,7 +1151,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     || "move".equalsIgnoreCase(args[1])
                     || "remove".equalsIgnoreCase(args[1])
                     || "add".equalsIgnoreCase(args[1]))) {
-                return filterCompletions(loadPollIdCompletions(), args[2]);
+                return filterCompletions(loadPollIdCompletions(PollStatus.DRAFT), args[2]);
             }
 
             if (args[0].equalsIgnoreCase("verify")
@@ -1130,11 +1161,11 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
 
             if (args[0].equalsIgnoreCase("vote")) {
-                return filterCompletions(loadPollIdCompletions(), args[1]);
+                return filterCompletions(loadPollIdCompletions(PollStatus.OPEN), args[1]);
             }
 
             if (args[0].equalsIgnoreCase("result")) {
-                return filterCompletions(loadPollIdCompletions(), args[1]);
+                return filterCompletions(loadPollIdCompletions(PollStatus.CLOSED), args[1]);
             }
 
             return Collections.emptyList();
