@@ -4,6 +4,7 @@ import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.ui.session.VoteScreen;
 import com.modnmetl.modnvote.ui.session.YesNoVoteSession;
 import com.modnmetl.modnvote.ui.text.YesNoGuiText;
+import com.modnmetl.modnvote.util.TextWrapUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -245,7 +246,7 @@ public final class YesNoInventoryVoteRenderer {
     private ItemStack buildOptionItem(YesNoVoteSession session, PollOption option, Material baseMaterial) {
         YesNoGuiText.ItemText text = yesNoGuiText.option(session, option);
         Material material = session.isSelected(option.optionId()) ? Material.GLOWSTONE_DUST : baseMaterial;
-        return createItem(material, text.title(), text.lore());
+        return createItem(material, text.title(), wrapLore(text.lore()));
     }
 
     private ItemStack buildSummaryItem(YesNoVoteSession session) {
@@ -280,6 +281,36 @@ public final class YesNoInventoryVoteRenderer {
     private ItemStack buildCommitItem() {
         YesNoGuiText.ItemText text = yesNoGuiText.commitButton();
         return createItem(Material.LIME_CONCRETE, text.title(), text.lore());
+    }
+
+    private List<String> wrapLore(List<String> lore) {
+        Objects.requireNonNull(lore, "lore");
+
+        List<String> wrapped = new java.util.ArrayList<>();
+        for (String line : lore) {
+            if (line == null || line.isBlank()) {
+                wrapped.add(line == null ? "" : line);
+                continue;
+            }
+
+            String colourPrefix = line.startsWith("§") && line.length() >= 2
+                    ? line.substring(0, 2)
+                    : "";
+
+            String plainText = colourPrefix.isEmpty() ? line : line.substring(2);
+            List<String> wrappedLines = TextWrapUtil.wrap(plainText, 32);
+
+            if (wrappedLines.isEmpty()) {
+                wrapped.add(line);
+                continue;
+            }
+
+            for (String wrappedLine : wrappedLines) {
+                wrapped.add(colourPrefix + wrappedLine);
+            }
+        }
+
+        return wrapped;
     }
 
     private ItemStack createItem(Material material, String displayName, List<String> lore) {

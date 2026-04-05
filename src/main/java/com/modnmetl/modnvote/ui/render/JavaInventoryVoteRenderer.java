@@ -4,6 +4,7 @@ import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.ui.session.VoteScreen;
 import com.modnmetl.modnvote.ui.session.VoteSession;
 import com.modnmetl.modnvote.ui.text.VoteGuiText;
+import com.modnmetl.modnvote.util.TextWrapUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -284,7 +285,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
             material = Material.GRAY_DYE;
         }
 
-        return createItem(material, text.title(), text.lore());
+        return createItem(material, text.title(), wrapLore(text.lore()));
     }
 
     private ItemStack buildSelectionSummaryItem(VoteSession session) {
@@ -319,6 +320,36 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     private ItemStack buildCommitItem() {
         VoteGuiText.ItemText text = voteGuiText.commitButton();
         return createItem(Material.LIME_CONCRETE, text.title(), text.lore());
+    }
+
+    private List<String> wrapLore(List<String> lore) {
+        Objects.requireNonNull(lore, "lore");
+
+        List<String> wrapped = new java.util.ArrayList<>();
+        for (String line : lore) {
+            if (line == null || line.isBlank()) {
+                wrapped.add(line == null ? "" : line);
+                continue;
+            }
+
+            String colourPrefix = line.startsWith("§") && line.length() >= 2
+                    ? line.substring(0, 2)
+                    : "";
+
+            String plainText = colourPrefix.isEmpty() ? line : line.substring(2);
+            List<String> wrappedLines = TextWrapUtil.wrap(plainText, 32);
+
+            if (wrappedLines.isEmpty()) {
+                wrapped.add(line);
+                continue;
+            }
+
+            for (String wrappedLine : wrappedLines) {
+                wrapped.add(colourPrefix + wrappedLine);
+            }
+        }
+
+        return wrapped;
     }
 
     private ItemStack createItem(Material material, String displayName, List<String> lore) {
