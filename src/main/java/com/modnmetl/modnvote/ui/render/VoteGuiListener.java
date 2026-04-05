@@ -191,6 +191,13 @@ public final class VoteGuiListener implements Listener {
             voteSoundService.playSubmitSuccess(player);
 
             player.sendMessage(messages.get("vote.submit_success"));
+            player.sendMessage(messages.format(
+                    "vote.poll_context",
+                    Map.of(
+                            "poll_id", String.valueOf(session.pollId()),
+                            "title", session.poll().title()
+                    )
+            ));
             player.sendMessage(messages.get("vote.education_privacy"));
             player.sendMessage(messages.get("vote.education_verification"));
             player.sendMessage(messages.formatRaw(
@@ -198,9 +205,14 @@ public final class VoteGuiListener implements Listener {
                     Map.of("ballot_hash", outcome.submissionResult().ballotHash())
             ));
             player.sendMessage(messages.formatRaw(
-                    "vote.receipt_hash",
-                    Map.of("receipt_hash", outcome.submissionResult().receiptHash())
+                    "vote.participation_receipt",
+                    Map.of("participation_receipt", outcome.submissionResult().participationReceipt())
             ));
+            player.sendMessage(messages.formatRaw(
+                    "vote.ballot_proof_phrase",
+                    Map.of("ballot_proof_phrase", outcome.submissionResult().ballotProofPhrase())
+            ));
+            player.sendMessage(messages.get("vote.ballot_proof_warning"));
 
             if (outcome.bypassIpDuplicateCheck()) {
                 player.sendMessage(messages.get("vote.bypass_used"));

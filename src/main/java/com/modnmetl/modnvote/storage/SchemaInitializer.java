@@ -8,11 +8,19 @@ import java.util.Objects;
 /**
  * Initializes the ModNVote 2.0 schema.
  *
- * This privacy-preserving revision separates:
- * - participation records (identity-aware, no vote content)
- * - anonymous ballots (vote content, no identity)
+ * Privacy model (v2 hardened):
  *
- * This is a clean-break schema and does not attempt to migrate older layouts.
+ * - participation_records:
+ *     identity-aware, NO vote content
+ *
+ * - anonymous_ballots:
+ *     vote content, NO identity linkage
+ *
+ * - NO shared receipt linkage between the two layers
+ *
+ * - ballot proof system:
+ *     allows users to verify their exact ballot later without
+ *     enabling identity linkage in storage
  */
 public final class SchemaInitializer {
 
@@ -26,6 +34,9 @@ public final class SchemaInitializer {
         try (Connection connection = databaseManager.getConnection();
              Statement statement = connection.createStatement()) {
 
+            // ------------------------------------------------------------------
+            // POLLS
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS polls (
                         poll_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +59,9 @@ public final class SchemaInitializer {
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // POLL OPTIONS
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS poll_options (
                         option_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,13 +77,16 @@ public final class SchemaInitializer {
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // PARTICIPATION (IDENTITY-AWARE, NO BALLOT CONTENT)
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS participation_records (
                         participation_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         poll_id INTEGER NOT NULL,
                         participation_token_hash TEXT NOT NULL,
                         submitted_at INTEGER NOT NULL,
-                        receipt_hash TEXT NOT NULL,
+                        participation_receipt_hash TEXT NOT NULL,
                         client_platform TEXT NOT NULL,
                         ip_hash TEXT,
                         floodgate_id TEXT,
@@ -77,17 +94,24 @@ public final class SchemaInitializer {
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // ANONYMOUS BALLOTS (CONTENT, NO IDENTITY LINKAGE)
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS anonymous_ballots (
                         anonymous_ballot_id INTEGER PRIMARY KEY AUTOINCREMENT,
                         poll_id INTEGER NOT NULL,
                         ballot_hash TEXT NOT NULL,
-                        receipt_hash TEXT NOT NULL,
+                        ballot_proof_hash TEXT NOT NULL UNIQUE,
+                        ballot_commitment_hash TEXT NOT NULL,
                         submitted_at INTEGER NOT NULL,
                         FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // BALLOT PREFERENCES
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS anonymous_ballot_preferences (
                         anonymous_ballot_id INTEGER NOT NULL,
@@ -99,6 +123,9 @@ public final class SchemaInitializer {
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // AUDIT EVENTS
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS audit_events (
                         event_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +140,9 @@ public final class SchemaInitializer {
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // SEAL CHECKPOINTS (future external verification)
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS seal_checkpoints (
                         checkpoint_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,6 +156,9 @@ public final class SchemaInitializer {
                     )
                     """);
 
+            // ------------------------------------------------------------------
+            // EXTERNAL PUBLICATIONS
+            // ------------------------------------------------------------------
             statement.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS external_publications (
                         publication_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,6 +174,10 @@ public final class SchemaInitializer {
                         FOREIGN KEY (checkpoint_id) REFERENCES seal_checkpoints(checkpoint_id) ON DELETE SET NULL
                     )
                     """);
+
+            // ------------------------------------------------------------------
+            // INDEXES
+            // ------------------------------------------------------------------
 
             statement.executeUpdate("""
                     CREATE INDEX IF NOT EXISTS idx_poll_options_poll_id
@@ -165,6 +202,11 @@ public final class SchemaInitializer {
             statement.executeUpdate("""
                     CREATE UNIQUE INDEX IF NOT EXISTS idx_anonymous_ballots_ballot_hash
                     ON anonymous_ballots(ballot_hash)
+                    """);
+
+            statement.executeUpdate("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_anonymous_ballots_proof_hash
+                    ON anonymous_ballots(ballot_proof_hash)
                     """);
 
             statement.executeUpdate("""

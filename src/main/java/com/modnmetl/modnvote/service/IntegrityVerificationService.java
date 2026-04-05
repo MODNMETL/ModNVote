@@ -13,14 +13,11 @@ import com.modnmetl.modnvote.storage.PollOptionDao;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.sql.SQLException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -33,11 +30,11 @@ import java.util.stream.Collectors;
  * content and preferences so offline DB edits to ballot preferences cannot
  * silently pass as valid.
  *
- * Important:
- * - This significantly improves tamper detection for stored ballot content.
- * - It does NOT fully defeat a privileged hostile admin with complete offline
- *   control of the DB and local code/runtime.
- * - External witness publication is still required for stronger trust.
+ * Privacy-hardened model notes:
+ * - participation and anonymous ballot records are intentionally no longer
+ *   bridged via shared receipt linkage
+ * - integrity therefore checks aggregate record consistency, not cross-table
+ *   per-ballot linkage
  */
 public final class IntegrityVerificationService {
 
@@ -88,19 +85,35 @@ public final class IntegrityVerificationService {
             List<AnonymousBallotDao.StoredAnonymousBallot> ballots =
                     anonymousBallotDao.findAnonymousBallotsByPollId(pollId);
 
-            List<String> participationReceipts =
-                    participationRecordDao.findReceiptHashesByPollId(pollId);
-            List<String> ballotReceipts =
-                    anonymousBallotDao.findReceiptHashesByPollId(pollId);
+            int participationRecordCount =
+                    participationRecordDao.findParticipationReceiptHashesByPollId(pollId).size();
+            int anonymousBallotCount = ballots.size();
 
             boolean auditChainValid = auditEventDao.isPollAuditChainValid(pollId);
-            boolean receiptsMatch = new HashSet<>(participationReceipts).equals(new HashSet<>(ballotReceipts))
-                    && participationReceipts.size() == ballotReceipts.size();
+            boolean recordCountsMatch = participationRecordCount == anonymousBallotCount;
 
             List<String> issues = new ArrayList<>();
             boolean ballotHashesValid = true;
 
+            Set<String> seenBallotProofHashes = new HashSet<>();
+
             for (AnonymousBallotDao.StoredAnonymousBallot ballot : ballots) {
+                if (ballot.ballotProofHash() == null || ballot.ballotProofHash().isBlank()) {
+                    ballotHashesValid = false;
+                    issues.add("Anonymous ballot #" + ballot.anonymousBallotId() + " is missing ballot proof verifier material.");
+                    continue;
+                }
+
+                if (!seenBallotProofHashes.add(ballot.ballotProofHash())) {
+                    ballotHashesValid = false;
+                    issues.add("Anonymous ballot proof hash collision detected in poll #" + pollId + ".");
+                }
+
+                if (ballot.ballotCommitmentHash() == null || ballot.ballotCommitmentHash().isBlank()) {
+                    ballotHashesValid = false;
+                    issues.add("Anonymous ballot #" + ballot.anonymousBallotId() + " is missing ballot commitment material.");
+                }
+
                 List<AnonymousBallotPreferenceDao.StoredAnonymousBallotPreference> preferences =
                         anonymousBallotPreferenceDao.findPreferencesByAnonymousBallotId(ballot.anonymousBallotId());
 
@@ -168,17 +181,17 @@ public final class IntegrityVerificationService {
                 }
             }
 
-            if (!receiptsMatch) {
-                issues.add("Participation receipts and anonymous ballot receipts do not match.");
+            if (!recordCountsMatch) {
+                issues.add("Participation record count and anonymous ballot count do not match.");
             }
 
-            boolean overallValid = auditChainValid && ballotHashesValid && receiptsMatch;
+            boolean overallValid = auditChainValid && ballotHashesValid && recordCountsMatch;
 
             return new IntegrityVerificationResult(
                     pollId,
                     auditChainValid,
                     ballotHashesValid,
-                    receiptsMatch,
+                    recordCountsMatch,
                     overallValid,
                     List.copyOf(issues)
             );
@@ -192,12 +205,12 @@ public final class IntegrityVerificationService {
 
     private String buildCanonicalAnonymousBallotPayload(Poll poll,
                                                         List<Long> rankedOptionIds,
-                                                        Instant submittedAt) {
+                                                        java.time.Instant submittedAt) {
         StringBuilder sb = new StringBuilder();
         sb.append("poll_id=").append(poll.pollId()).append('\n');
         sb.append("poll_type=").append(poll.pollType().name()).append('\n');
         sb.append("submitted_at=").append(submittedAt.toEpochMilli()).append('\n');
-        sb.append("rule_snapshot_version=v1").append('\n');
+        sb.append("rule_snapshot_version=v2").append('\n');
         sb.append("max_rankings=").append(poll.maxRankings()).append('\n');
         sb.append("allow_partial_ranking=").append(poll.allowPartialRanking()).append('\n');
         sb.append("ordered_option_ids=").append(joinOptionIds(rankedOptionIds));
@@ -229,7 +242,7 @@ public final class IntegrityVerificationService {
             long pollId,
             boolean auditChainValid,
             boolean ballotHashesValid,
-            boolean receiptSetsMatch,
+            boolean recordCountsMatch,
             boolean overallValid,
             List<String> issues
     ) {

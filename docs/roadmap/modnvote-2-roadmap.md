@@ -15,7 +15,7 @@ Status: COMPLETE
 - Keep 1.x files present until 2.0 bootstrap is ready
 
 ## Milestone 2 — Horse breed ranked poll
-Status: LARGELY COMPLETE
+Status: COMPLETE ENOUGH TO MOVE ON
 
 Completed:
 - ranked single-winner ballot model
@@ -26,25 +26,42 @@ Completed:
 - Java ranked GUI session flow
 - Java ranked confirmation flow
 - end-to-end ranked GUI submission flow
+- ranked GUI text/config externalisation
+- optional GUI sound feedback
+- renderer/listener cleanup
+- pane-less inventory background approach for improved Java/Bedrock visual consistency
 - real “breed of the month” ranked poll foundation
 
-Still to finish within this milestone:
+Still later if needed:
+- further UI polish refinements
+- alternative Bedrock-specific rendering if future testing justifies it
 - Discord checkpoint publication
-- ranked GUI polish/stabilisation pass
-- configurable GUI message externalisation
-- further UX refinement/testing
 
 ## Milestone 3 — Legacy poll compatibility + election foundation
-Status: NEXT
+Status: IN PROGRESS
 
-Planned:
-- add legacy-style `YES_NO` poll type with dedicated UI/session flow
-- preserve intuitive/simple legacy UX for yes/no polls
-- add candidate-centric option metadata
-- add richer result reporting
-- add election package concept
-- add single-winner executive contest support
-- add multi-winner STV foundation
+Completed in this milestone:
+- dedicated legacy-style `YES_NO` poll type UI/session flow
+- separate yes/no session manager, renderer, listener, and GUI text layer
+- authoritative yes/no ballot submission path
+- poll-type-specific GUI ownership via `VoteUiFlow`
+
+Next within this milestone:
+- `/modnvote result <pollId>` closed-poll reporting
+- yes/no poll admin creation/seeding path
+- candidate-centric option metadata
+- richer result reporting
+- election package concept
+- single-winner executive contest support
+- multi-winner STV foundation
+
+## Current priority order
+
+1. `/modnvote result <pollId>` for CLOSED polls only
+2. yes/no poll admin creation / seeding support
+3. audit + external witness publication
+4. richer reporting
+5. STV / executive / combined election package
 
 ## Milestone 4 — Mayor + Council election
 Status: LATER
@@ -68,11 +85,3 @@ Status: LATER
 - Mayor + Council election package
 - multi-winner STV
 - richer reporting and election-specific UX
-
-## Current priority order
-
-1. Ranked GUI polish / stabilisation
-2. GUI message/config polish
-3. Legacy-style `YES_NO` poll support
-4. Audit + external witness publication
-5. STV / executive / combined election package

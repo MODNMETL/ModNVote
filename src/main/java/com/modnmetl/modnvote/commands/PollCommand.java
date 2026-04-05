@@ -10,6 +10,7 @@ import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
+import com.modnmetl.modnvote.service.ResultService;
 import com.modnmetl.modnvote.storage.PollOptionDao;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
@@ -22,6 +23,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,7 +35,7 @@ import java.util.Objects;
  * This command layer is intentionally thin:
  * - user/admin-facing messaging is sourced from messages.yml
  * - business rules remain in the service layer
- * - integrity reporting combines inclusion checks with deeper ballot verification
+ * - integrity reporting combines participation and ballot integrity checks
  * - vote GUI opening is delegated to poll-type-specific session managers and renderers
  */
 public final class PollCommand implements CommandExecutor, TabCompleter {
@@ -42,6 +44,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private final PollService pollService;
     private final BallotService ballotService;
     private final IntegrityVerificationService integrityVerificationService;
+    private final ResultService resultService;
     private final MessageService messages;
     private final VoteSessionManager voteSessionManager;
     private final YesNoVoteSessionManager yesNoVoteSessionManager;
@@ -53,6 +56,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                        PollService pollService,
                        BallotService ballotService,
                        IntegrityVerificationService integrityVerificationService,
+                       ResultService resultService,
                        MessageService messages,
                        VoteSessionManager voteSessionManager,
                        YesNoVoteSessionManager yesNoVoteSessionManager,
@@ -62,6 +66,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         this.pollService = Objects.requireNonNull(pollService, "pollService");
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
         this.integrityVerificationService = Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
+        this.resultService = Objects.requireNonNull(resultService, "resultService");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.voteSessionManager = Objects.requireNonNull(voteSessionManager, "voteSessionManager");
         this.yesNoVoteSessionManager = Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
@@ -130,6 +135,34 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+            case "create" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 3) {
+                    sender.sendMessage(messages.format("usage.create", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    PollType pollType = parsePollType(args[1]);
+                    String slug = args[2];
+
+                    long pollId = pollService.createPoll(sender.getName(), pollType, slug);
+                    Poll poll = requirePoll(pollId);
+
+                    sender.sendMessage(messages.format("poll.created", Map.of(
+                            "poll_id", String.valueOf(pollId),
+                            "title", poll.title(),
+                            "type", poll.pollType().name()
+                    )));
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.create_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
             case "seedbreed" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.create")) {
                     sender.sendMessage(messages.get("general.no_permission"));
@@ -149,6 +182,238 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "show" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(messages.format("usage.show", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    handleShow(sender, pollId);
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.show_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "validate" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(messages.format("usage.validate", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    handleValidate(sender, pollId);
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.validate_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "ready" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(messages.format("usage.ready", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
+
+                    pollService.readyPoll(pollId, sender.getName());
+
+                    sender.sendMessage(messages.format("poll.ready", Map.of(
+                            "poll_id", String.valueOf(pollId),
+                            "title", poll.title()
+                    )));
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.ready_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "poll" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 4) {
+                    sender.sendMessage(messages.format("usage.poll_title", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    String action = args[2].toLowerCase(Locale.ROOT);
+
+                    switch (action) {
+                        case "title" -> {
+                            String title = joinArgs(args, 3);
+                            pollService.updatePollTitle(pollId, title, sender.getName());
+                            sender.sendMessage(messages.format("poll.updated_title", Map.of(
+                                    "poll_id", String.valueOf(pollId),
+                                    "title", title
+                            )));
+                        }
+                        case "description" -> {
+                            String description = joinArgs(args, 3);
+                            pollService.updatePollDescription(pollId, description, sender.getName());
+                            sender.sendMessage(messages.format("poll.updated_description", Map.of(
+                                    "poll_id", String.valueOf(pollId)
+                            )));
+                        }
+                        case "maxrankings" -> {
+                            int maxRankings = Integer.parseInt(args[3]);
+                            pollService.updatePollMaxRankings(pollId, maxRankings, sender.getName());
+                            sender.sendMessage(messages.format("poll.updated_max_rankings", Map.of(
+                                    "poll_id", String.valueOf(pollId),
+                                    "max_rankings", String.valueOf(maxRankings)
+                            )));
+                        }
+                        case "allowpartial" -> {
+                            boolean allowPartial = parseBoolean(args[3], "allowpartial");
+                            pollService.updatePollAllowPartialRanking(pollId, allowPartial, sender.getName());
+                            sender.sendMessage(messages.format("poll.updated_allow_partial", Map.of(
+                                    "poll_id", String.valueOf(pollId),
+                                    "allow_partial", String.valueOf(allowPartial)
+                            )));
+                        }
+                        default -> sender.sendMessage(messages.format("usage.poll_title", Map.of("label", label)));
+                    }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.edit_failed",
+                            Map.of("reason", e.getMessage())));
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(messages.format("errors.edit_failed",
+                            Map.of("reason", "A numeric value was expected.")));
+                }
+                return true;
+            }
+            case "option" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(messages.format("usage.option_add", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    String action = args[1].toLowerCase(Locale.ROOT);
+
+                    switch (action) {
+                        case "add" -> {
+                            if (args.length < 5) {
+                                sender.sendMessage(messages.format("usage.option_add", Map.of("label", label)));
+                                return true;
+                            }
+
+                            long pollId = parsePollId(args[2]);
+                            String key = args[3];
+
+                            String[] parsed = splitNameAndDescription(joinArgs(args, 4));
+                            String displayName = parsed[0];
+                            String description = parsed[1];
+
+                            long optionId = pollService.addOption(pollId, key, displayName, description, sender.getName());
+
+                            sender.sendMessage(messages.format("poll.option_added", Map.of(
+                                    "poll_id", String.valueOf(pollId),
+                                    "option_id", String.valueOf(optionId),
+                                    "option_name", displayName
+                            )));
+                        }
+                        case "edit" -> {
+                            if (args.length < 6) {
+                                sender.sendMessage(messages.format("usage.option_edit_name", Map.of("label", label)));
+                                return true;
+                            }
+
+                            long pollId = parsePollId(args[2]);
+                            long optionId = Long.parseLong(args[3]);
+                            String field = args[4].toLowerCase(Locale.ROOT);
+
+                            if ("name".equals(field)) {
+                                String displayName = joinArgs(args, 5);
+                                pollService.updateOptionName(pollId, optionId, displayName, sender.getName());
+                                sender.sendMessage(messages.format("poll.option_updated_name", Map.of(
+                                        "poll_id", String.valueOf(pollId),
+                                        "option_id", String.valueOf(optionId),
+                                        "option_name", displayName
+                                )));
+                                return true;
+                            }
+
+                            if ("description".equals(field)) {
+                                String description = joinArgs(args, 5);
+                                pollService.updateOptionDescription(pollId, optionId, description, sender.getName());
+                                sender.sendMessage(messages.format("poll.option_updated_description", Map.of(
+                                        "poll_id", String.valueOf(pollId),
+                                        "option_id", String.valueOf(optionId)
+                                )));
+                                return true;
+                            }
+
+                            sender.sendMessage(messages.format("usage.option_edit_name", Map.of("label", label)));
+                        }
+                        case "move" -> {
+                            if (args.length < 5) {
+                                sender.sendMessage(messages.format("usage.option_move", Map.of("label", label)));
+                                return true;
+                            }
+
+                            long pollId = parsePollId(args[2]);
+                            long optionId = Long.parseLong(args[3]);
+                            int displayOrder = Integer.parseInt(args[4]);
+
+                            pollService.moveOption(pollId, optionId, displayOrder, sender.getName());
+                            sender.sendMessage(messages.format("poll.option_moved", Map.of(
+                                    "poll_id", String.valueOf(pollId),
+                                    "option_id", String.valueOf(optionId),
+                                    "display_order", String.valueOf(displayOrder)
+                            )));
+                        }
+                        case "remove" -> {
+                            if (args.length < 4) {
+                                sender.sendMessage(messages.format("usage.option_remove", Map.of("label", label)));
+                                return true;
+                            }
+
+                            long pollId = parsePollId(args[2]);
+                            long optionId = Long.parseLong(args[3]);
+
+                            pollService.removeOption(pollId, optionId, sender.getName());
+                            sender.sendMessage(messages.format("poll.option_removed", Map.of(
+                                    "poll_id", String.valueOf(pollId),
+                                    "option_id", String.valueOf(optionId)
+                            )));
+                        }
+                        default -> sender.sendMessage(messages.format("usage.option_add", Map.of("label", label)));
+                    }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.option_failed",
+                            Map.of("reason", e.getMessage())));
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(messages.format("errors.option_failed",
+                            Map.of("reason", "A numeric value was expected.")));
                 }
                 return true;
             }
@@ -203,6 +468,54 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+            case "result" -> {
+                if (args.length < 2) {
+                    sender.sendMessage(messages.format("usage.result", Map.of("label", label)));
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    handleResultDisplay(sender, pollId);
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.result_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "mypolls" -> {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(messages.get("general.players_only"));
+                    return true;
+                }
+                if (!sender.hasPermission("modnvote.verify")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+
+                try {
+                    List<BallotService.ParticipationSummary> summaries =
+                            ballotService.listParticipatedPolls(player.getUniqueId().toString());
+
+                    if (summaries.isEmpty()) {
+                        sender.sendMessage(messages.get("mypolls.empty"));
+                        return true;
+                    }
+
+                    sender.sendMessage(messages.getRaw("mypolls.header"));
+                    for (BallotService.ParticipationSummary summary : summaries) {
+                        sender.sendMessage(messages.formatRaw("mypolls.entry", Map.of(
+                                "poll_id", String.valueOf(summary.pollId()),
+                                "title", summary.pollTitle(),
+                                "status", summary.pollStatus()
+                        )));
+                    }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.verify_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
             case "verify" -> {
                 if (!sender.hasPermission("modnvote.verify")) {
                     sender.sendMessage(messages.get("general.no_permission"));
@@ -213,57 +526,43 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(messages.format("usage.verify", Map.of("label", label)));
+                    sender.sendMessage(messages.format("usage.verify_participation", Map.of("label", label)));
                     return true;
                 }
 
                 try {
-                    long pollId = parsePollId(args[1]);
-                    Poll poll = requirePoll(pollId);
-
-                    BallotService.VerificationResult inclusionResult = ballotService.verifyVoterInclusion(
-                            pollId,
-                            player.getUniqueId().toString()
-                    );
-
-                    IntegrityVerificationService.IntegrityVerificationResult integrityResult =
-                            integrityVerificationService.verifyPollIntegrity(pollId);
-
-                    sender.sendMessage(messages.formatRaw("verify.header", Map.of(
-                            "poll_id", String.valueOf(pollId),
-                            "title", poll.title()
-                    )));
-
-                    if (inclusionResult.included()) {
-                        sender.sendMessage(messages.get("verify.included"));
-                    } else {
-                        sender.sendMessage(messages.get("verify.not_included"));
+                    if (args.length == 2) {
+                        long pollId = parsePollId(args[1]);
+                        handleParticipationVerification(sender, player, pollId);
+                        return true;
                     }
 
-                    if (inclusionResult.receiptBackedByAnonymousBallot()) {
-                        sender.sendMessage(messages.get("verify.receipt_backed"));
-                    } else if (inclusionResult.included()) {
-                        sender.sendMessage(messages.get("verify.receipt_missing"));
+                    String verifyType = args[1].toLowerCase(Locale.ROOT);
+
+                    if ("participation".equals(verifyType)) {
+                        if (args.length < 3) {
+                            sender.sendMessage(messages.format("usage.verify_participation", Map.of("label", label)));
+                            return true;
+                        }
+
+                        long pollId = parsePollId(args[2]);
+                        handleParticipationVerification(sender, player, pollId);
+                        return true;
                     }
 
-                    if (inclusionResult.auditChainValid()) {
-                        sender.sendMessage(messages.get("verify.audit_valid"));
-                    } else {
-                        sender.sendMessage(messages.get("verify.audit_invalid"));
+                    if ("ballot".equals(verifyType)) {
+                        if (args.length < 4) {
+                            sender.sendMessage(messages.format("usage.verify_ballot", Map.of("label", label)));
+                            return true;
+                        }
+
+                        long pollId = parsePollId(args[2]);
+                        String ballotProofPhrase = args[3];
+                        handleBallotVerification(sender, pollId, ballotProofPhrase);
+                        return true;
                     }
 
-                    if (integrityResult.ballotHashesValid()) {
-                        sender.sendMessage(messages.get("verify.ballot_integrity_valid"));
-                    } else {
-                        sender.sendMessage(messages.get("verify.ballot_integrity_invalid"));
-                    }
-
-                    if (integrityResult.overallValid()) {
-                        sender.sendMessage(messages.get("verify.overall_valid"));
-                    } else {
-                        sender.sendMessage(messages.get("verify.overall_invalid"));
-                    }
-
+                    sender.sendMessage(messages.format("usage.verify_participation", Map.of("label", label)));
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.verify_failed",
                             Map.of("reason", e.getMessage())));
@@ -329,15 +628,251 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private void handleShow(CommandSender sender, long pollId) throws PollServiceException {
+        Poll poll = requirePoll(pollId);
+        List<PollOption> options = findOptions(pollId);
+
+        sender.sendMessage(messages.formatRaw("poll.show_header", Map.of(
+                "poll_id", String.valueOf(poll.pollId()),
+                "title", poll.title()
+        )));
+        sender.sendMessage(messages.formatRaw("poll.show_description", Map.of(
+                "description", poll.description().isBlank() ? "(blank)" : poll.description()
+        )));
+        sender.sendMessage(messages.formatRaw("poll.show_type", Map.of(
+                "type", poll.pollType().name()
+        )));
+        sender.sendMessage(messages.formatRaw("poll.show_status", Map.of(
+                "status", poll.status().name()
+        )));
+
+        sender.sendMessage(messages.getRaw("poll.show_rules_header"));
+        sender.sendMessage(messages.formatRaw("poll.show_rule_max_rankings", Map.of(
+                "max_rankings", poll.maxRankings() == 0 ? "ALL OPTIONS" : String.valueOf(poll.maxRankings())
+        )));
+        sender.sendMessage(messages.formatRaw("poll.show_rule_allow_partial", Map.of(
+                "allow_partial", String.valueOf(poll.allowPartialRanking())
+        )));
+
+        sender.sendMessage(messages.getRaw("poll.show_options_header"));
+        if (options.isEmpty()) {
+            sender.sendMessage(messages.get("poll.show_options_empty"));
+            return;
+        }
+
+        for (PollOption option : options) {
+            sender.sendMessage(messages.formatRaw("poll.show_option_entry", Map.of(
+                    "option_id", String.valueOf(option.optionId()),
+                    "option_key", option.key(),
+                    "option_name", option.displayName(),
+                    "description", option.description(),
+                    "display_order", String.valueOf(option.displayOrder())
+            )));
+        }
+    }
+
+    private void handleValidate(CommandSender sender, long pollId) throws PollServiceException {
+        PollService.PollValidationResult result = pollService.validatePollDefinition(pollId);
+
+        sender.sendMessage(messages.formatRaw("poll.validation_header", Map.of(
+                "poll_id", String.valueOf(result.pollId()),
+                "title", result.pollTitle()
+        )));
+
+        if (result.valid()) {
+            sender.sendMessage(messages.get("poll.validation_ok"));
+            return;
+        }
+
+        for (String issue : result.issues()) {
+            sender.sendMessage(messages.formatRaw("poll.validation_issue", Map.of(
+                    "issue", issue
+            )));
+        }
+    }
+
+    private void handleParticipationVerification(CommandSender sender,
+                                                 Player player,
+                                                 long pollId) throws PollServiceException {
+        Poll poll = requirePoll(pollId);
+
+        BallotService.VerificationResult inclusionResult = ballotService.verifyVoterInclusion(
+                pollId,
+                player.getUniqueId().toString()
+        );
+
+        IntegrityVerificationService.IntegrityVerificationResult integrityResult =
+                integrityVerificationService.verifyPollIntegrity(pollId);
+
+        sender.sendMessage(messages.formatRaw("verify.participation_header", Map.of(
+                "poll_id", String.valueOf(pollId),
+                "title", poll.title()
+        )));
+
+        if (inclusionResult.included()) {
+            sender.sendMessage(messages.get("verify.included"));
+        } else {
+            sender.sendMessage(messages.get("verify.not_included"));
+        }
+
+        if (integrityResult.auditChainValid()) {
+            sender.sendMessage(messages.get("verify.audit_valid"));
+        } else {
+            sender.sendMessage(messages.get("verify.audit_invalid"));
+        }
+
+        if (integrityResult.ballotHashesValid()) {
+            sender.sendMessage(messages.get("verify.ballot_integrity_valid"));
+        } else {
+            sender.sendMessage(messages.get("verify.ballot_integrity_invalid"));
+        }
+
+        if (integrityResult.overallValid()) {
+            sender.sendMessage(messages.get("verify.overall_valid"));
+        } else {
+            sender.sendMessage(messages.get("verify.overall_invalid"));
+        }
+    }
+
+    private void handleBallotVerification(CommandSender sender,
+                                          long pollId,
+                                          String ballotProofPhrase) throws PollServiceException {
+        Poll poll = requirePoll(pollId);
+
+        BallotService.BallotProofVerificationResult verificationResult =
+                ballotService.verifyBallotProof(pollId, ballotProofPhrase);
+
+        sender.sendMessage(messages.formatRaw("verify.ballot_header", Map.of(
+                "poll_id", String.valueOf(pollId),
+                "title", poll.title()
+        )));
+
+        if (!verificationResult.ballotFound()) {
+            sender.sendMessage(messages.get("verify.ballot_not_found"));
+            return;
+        }
+
+        if (verificationResult.ballotHashValid()) {
+            sender.sendMessage(messages.get("verify.ballot_hash_valid"));
+        } else {
+            sender.sendMessage(messages.get("verify.ballot_hash_invalid"));
+        }
+
+        if (verificationResult.commitmentValid()) {
+            sender.sendMessage(messages.get("verify.ballot_commitment_valid"));
+        } else {
+            sender.sendMessage(messages.get("verify.ballot_commitment_invalid"));
+        }
+
+        if (!verificationResult.overallValid()) {
+            return;
+        }
+
+        sender.sendMessage(messages.getRaw("verify.ballot_selection_header"));
+
+        Map<Long, String> optionNamesById = buildOptionNamesById(pollId);
+        List<Long> orderedOptionIds = verificationResult.orderedOptionIds();
+
+        for (int i = 0; i < orderedOptionIds.size(); i++) {
+            long optionId = orderedOptionIds.get(i);
+            String optionName = optionNamesById.getOrDefault(optionId, "Option #" + optionId);
+
+            sender.sendMessage(messages.formatRaw("verify.ballot_selection_entry", Map.of(
+                    "rank", String.valueOf(i + 1),
+                    "option_name", optionName
+            )));
+        }
+    }
+
+    private void handleResultDisplay(CommandSender sender,
+                                     long pollId) throws PollServiceException {
+        ResultService.PollResult result = resultService.getPollResult(pollId);
+
+        sender.sendMessage(messages.formatRaw("result.header", Map.of(
+                "poll_id", String.valueOf(result.pollId()),
+                "title", result.pollTitle()
+        )));
+        sender.sendMessage(messages.formatRaw("result.total_votes", Map.of(
+                "total_votes", String.valueOf(result.totalVotes())
+        )));
+
+        if (result.pollType() == PollType.YES_NO) {
+            Map<String, Integer> countsByName = new HashMap<>();
+            for (ResultService.OptionTally tally : result.tallies()) {
+                countsByName.put(tally.optionName().toLowerCase(Locale.ROOT), tally.votes());
+            }
+
+            int yesVotes = countsByName.getOrDefault("yes", 0);
+            int noVotes = countsByName.getOrDefault("no", 0);
+
+            sender.sendMessage(messages.formatRaw("result.yes_votes", Map.of(
+                    "yes_votes", String.valueOf(yesVotes)
+            )));
+            sender.sendMessage(messages.formatRaw("result.no_votes", Map.of(
+                    "no_votes", String.valueOf(noVotes)
+            )));
+            return;
+        }
+
+        if (result.pollType() == PollType.RANKED_SINGLE_WINNER) {
+            sender.sendMessage(messages.formatRaw("result.ranked_winner", Map.of(
+                    "winner", result.winnerName() == null ? "No winner determined" : result.winnerName()
+            )));
+            sender.sendMessage(messages.getRaw("result.first_preference_header"));
+
+            for (ResultService.OptionTally tally : result.tallies()) {
+                sender.sendMessage(messages.formatRaw("result.tally_entry", Map.of(
+                        "option_name", tally.optionName(),
+                        "votes", String.valueOf(tally.votes())
+                )));
+            }
+            return;
+        }
+
+        sender.sendMessage(messages.get("result.unsupported_type"));
+    }
+
+    private List<PollOption> findOptions(long pollId) throws PollServiceException {
+        try {
+            return pollOptionDao.findOptionsByPollId(pollId);
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to load options for poll #" + pollId + ".", e);
+        }
+    }
+
+    private Map<Long, String> buildOptionNamesById(long pollId) throws PollServiceException {
+        try {
+            List<PollOption> options = pollOptionDao.findOptionsByPollId(pollId);
+            Map<Long, String> names = new HashMap<>();
+
+            for (PollOption option : options) {
+                names.put(option.optionId(), option.displayName());
+            }
+
+            return Map.copyOf(names);
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to load options for poll #" + pollId + ".", e);
+        }
+    }
+
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage(messages.getRaw("help.header"));
         sender.sendMessage(messages.formatRaw("help.status", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.reload", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.list", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.create", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.seedbreed", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.show", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.poll", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.option", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.validate", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.ready", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.open", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.close", Map.of("label", label)));
-        sender.sendMessage(messages.formatRaw("help.verify", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.result", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.mypolls", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.verify_participation", Map.of("label", label)));
+        sender.sendMessage(messages.formatRaw("help.verify_ballot", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.vote", Map.of("label", label)));
         sender.sendMessage(messages.formatRaw("help.testvote", Map.of("label", label)));
     }
@@ -360,6 +895,56 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private PollType parsePollType(String raw) throws PollServiceException {
+        String normalized = raw.trim().toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+
+        try {
+            return PollType.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            throw new PollServiceException("Unsupported poll type '" + raw + "'. Use YES_NO or RANKED_SINGLE_WINNER.");
+        }
+    }
+
+    private boolean parseBoolean(String raw, String fieldName) throws PollServiceException {
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        if ("true".equals(normalized)) {
+            return true;
+        }
+        if ("false".equals(normalized)) {
+            return false;
+        }
+        throw new PollServiceException(fieldName + " must be true or false.");
+    }
+
+    private String joinArgs(String[] args, int startIndex) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = startIndex; i < args.length; i++) {
+            if (i > startIndex) {
+                sb.append(' ');
+            }
+            sb.append(args[i]);
+        }
+        return sb.toString();
+    }
+
+    private String[] splitNameAndDescription(String joined) throws PollServiceException {
+        int separator = joined.indexOf('|');
+        if (separator < 0) {
+            throw new PollServiceException("Option add requires '<displayName> | <description>'.");
+        }
+
+        String displayName = joined.substring(0, separator).trim();
+        String description = joined.substring(separator + 1).trim();
+
+        if (displayName.isBlank()) {
+            throw new PollServiceException("Option display name must not be blank.");
+        }
+
+        return new String[] {displayName, description};
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> completions = new ArrayList<>();
@@ -374,7 +959,13 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 completions.add("list");
             }
             if (sender.hasPermission("modnvote.admin.poll.create")) {
+                completions.add("create");
                 completions.add("seedbreed");
+                completions.add("show");
+                completions.add("poll");
+                completions.add("option");
+                completions.add("validate");
+                completions.add("ready");
             }
             if (sender.hasPermission("modnvote.admin.poll.open")) {
                 completions.add("open");
@@ -382,7 +973,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("modnvote.admin.poll.close")) {
                 completions.add("close");
             }
+            completions.add("result");
             if (sender.hasPermission("modnvote.verify")) {
+                completions.add("mypolls");
                 completions.add("verify");
             }
 
@@ -391,6 +984,37 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("modnvote.testvote")) {
                 completions.add("testvote");
             }
+        } else if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("verify") && sender.hasPermission("modnvote.verify")) {
+                completions.add("participation");
+                completions.add("ballot");
+            }
+            if (args[0].equalsIgnoreCase("create") && sender.hasPermission("modnvote.admin.poll.create")) {
+                completions.add("yes_no");
+                completions.add("ranked_single_winner");
+            }
+            if (args[0].equalsIgnoreCase("poll") && sender.hasPermission("modnvote.admin.poll.create")) {
+                completions.add("<pollId>");
+            }
+            if (args[0].equalsIgnoreCase("option") && sender.hasPermission("modnvote.admin.poll.create")) {
+                completions.add("add");
+                completions.add("edit");
+                completions.add("move");
+                completions.add("remove");
+            }
+        } else if (args.length == 3
+                && args[0].equalsIgnoreCase("poll")
+                && sender.hasPermission("modnvote.admin.poll.create")) {
+            completions.add("title");
+            completions.add("description");
+            completions.add("maxrankings");
+            completions.add("allowpartial");
+        } else if (args.length == 5
+                && args[0].equalsIgnoreCase("option")
+                && "edit".equalsIgnoreCase(args[1])
+                && sender.hasPermission("modnvote.admin.poll.create")) {
+            completions.add("name");
+            completions.add("description");
         }
 
         return completions;

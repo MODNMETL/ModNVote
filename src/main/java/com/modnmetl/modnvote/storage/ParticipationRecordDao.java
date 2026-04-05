@@ -29,14 +29,14 @@ public final class ParticipationRecordDao {
                                           long pollId,
                                           String participationTokenHash,
                                           Instant submittedAt,
-                                          String receiptHash,
+                                          String participationReceiptHash,
                                           String clientPlatform,
                                           String ipHash,
                                           String floodgateId) throws SQLException {
         Objects.requireNonNull(connection, "connection");
         Objects.requireNonNull(participationTokenHash, "participationTokenHash");
         Objects.requireNonNull(submittedAt, "submittedAt");
-        Objects.requireNonNull(receiptHash, "receiptHash");
+        Objects.requireNonNull(participationReceiptHash, "participationReceiptHash");
         Objects.requireNonNull(clientPlatform, "clientPlatform");
 
         String sql = """
@@ -44,7 +44,7 @@ public final class ParticipationRecordDao {
                     poll_id,
                     participation_token_hash,
                     submitted_at,
-                    receipt_hash,
+                    participation_receipt_hash,
                     client_platform,
                     ip_hash,
                     floodgate_id
@@ -55,7 +55,7 @@ public final class ParticipationRecordDao {
             ps.setLong(1, pollId);
             ps.setString(2, participationTokenHash);
             ps.setLong(3, submittedAt.toEpochMilli());
-            ps.setString(4, receiptHash);
+            ps.setString(4, participationReceiptHash);
             ps.setString(5, clientPlatform);
 
             if (ipHash != null) {
@@ -130,11 +130,11 @@ public final class ParticipationRecordDao {
         }
     }
 
-    public String findReceiptHashByPollAndTokenHash(long pollId, String participationTokenHash) throws SQLException {
+    public String findParticipationReceiptHashByPollAndTokenHash(long pollId, String participationTokenHash) throws SQLException {
         Objects.requireNonNull(participationTokenHash, "participationTokenHash");
 
         String sql = """
-                SELECT receipt_hash
+                SELECT participation_receipt_hash
                 FROM participation_records
                 WHERE poll_id = ?
                   AND participation_token_hash = ?
@@ -148,7 +148,7 @@ public final class ParticipationRecordDao {
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getString("receipt_hash");
+                    return rs.getString("participation_receipt_hash");
                 }
             }
         }
@@ -156,9 +156,9 @@ public final class ParticipationRecordDao {
         return null;
     }
 
-    public java.util.List<String> findReceiptHashesByPollId(long pollId) throws SQLException {
+    public java.util.List<String> findParticipationReceiptHashesByPollId(long pollId) throws SQLException {
         String sql = """
-            SELECT receipt_hash
+            SELECT participation_receipt_hash
             FROM participation_records
             WHERE poll_id = ?
             ORDER BY participation_id ASC
@@ -171,7 +171,7 @@ public final class ParticipationRecordDao {
             try (ResultSet rs = ps.executeQuery()) {
                 java.util.List<String> out = new java.util.ArrayList<>();
                 while (rs.next()) {
-                    out.add(rs.getString("receipt_hash"));
+                    out.add(rs.getString("participation_receipt_hash"));
                 }
                 return out;
             }

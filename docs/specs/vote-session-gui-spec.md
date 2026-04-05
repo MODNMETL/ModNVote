@@ -46,10 +46,25 @@ Implemented flow:
 6. submission is delegated through `VoteSubmissionCoordinator`
 7. final commit is performed by `BallotService.submitRankedBallot(...)`
 
+Implemented since the last milestone:
+- `VoteGuiText`
+- `YesNoGuiText`
+- `VoteSoundService`
+- dedicated `YES_NO` Java flow:
+    - `YesNoVoteSession`
+    - `YesNoVoteSessionManager`
+    - `YesNoInventoryVoteRenderer`
+    - `YesNoVoteGuiListener`
+    - `YesNoVoteSessionCleanupListener`
+    - `YesNoVoteSessionCloseCleanupListener`
+- `VoteUiFlow` ownership separation for managed inventories
+- confirmation-submit failure now closes the GUI and shows the failure reason clearly
+- current Java inventory backgrounds are intentionally pane-less for better cross-platform visual consistency
+
 Still deferred:
-- GUI message/config externalisation for item titles/lore
-- Bedrock renderer path
-- dedicated Yes/No GUI/session flow
+- `/modnvote result <pollId>` closed-poll reporting
+- yes/no admin creation/seeding path
+- Bedrock-specific renderer path (only if later testing justifies it)
 - STV / combined election flows
 
 ## Core Design Principles
@@ -175,7 +190,7 @@ Represents one active voting interaction.
 * `Instant createdAt`
 * `Instant lastInteractionAt`
 
-Note: the current implementation is intentionally ranked-focused and does not yet include separate Yes/No or single-choice session state.
+Note: the current implementation now includes both ranked and YES_NO session models via separate poll-type-specific session classes (`VoteSession` and `YesNoVoteSession`). Single-choice plurality may reuse the YES_NO-style session model or introduce its own dedicated variant later.
 
 #### Responsibilities
 
@@ -334,7 +349,11 @@ Your ranking:
 ---
 
 ## Java GUI Layout (Initial)
+### Current visual note
 
+The Java inventory renderer currently leaves non-interactive background slots empty rather than filling them with glass panes.
+
+This is an intentional temporary/default visual decision to avoid poor angled-pane presentation for Bedrock players while preserving the same slot layout and interaction model across platforms.
 ### Recommended size
 
 * 54-slot inventory (6 rows)
@@ -380,7 +399,9 @@ The GUI must:
 * prevent item movement into player inventory
 
 No client-side assumptions are trusted.
+### Current failure UX note
 
+If a confirmed submission fails (for example, due to duplicate-prevention rules), the GUI currently closes so the player can see the failure message clearly in chat instead of remaining stuck on the confirmation screen.
 ---
 
 ## Renderer Architecture

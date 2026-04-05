@@ -7,6 +7,7 @@ import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
+import com.modnmetl.modnvote.service.ResultService;
 import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.SchemaInitializer;
 import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
@@ -47,6 +48,7 @@ public final class ModNVotePlugin extends JavaPlugin {
     private BallotService ballotService;
     private MessageService messageService;
     private IntegrityVerificationService integrityVerificationService;
+    private ResultService resultService;
 
     private VoteSessionManager voteSessionManager;
     private YesNoVoteSessionManager yesNoVoteSessionManager;
@@ -81,7 +83,10 @@ public final class ModNVotePlugin extends JavaPlugin {
                     platformAdapter,
                     getLogger()
             );
-
+            this.resultService = new ResultService(
+                    databaseManager,
+                    getLogger()
+            );
             this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
             this.yesNoVoteSessionManager = new YesNoVoteSessionManager(Duration.ofMinutes(10));
             this.ballotSummaryFormatter = new BallotSummaryFormatter();
@@ -127,6 +132,7 @@ public final class ModNVotePlugin extends JavaPlugin {
                 pollService,
                 ballotService,
                 integrityVerificationService,
+                resultService,
                 messageService,
                 voteSessionManager,
                 yesNoVoteSessionManager,

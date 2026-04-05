@@ -199,7 +199,7 @@ public final class YesNoInventoryVoteRenderer {
     }
 
     private void populateSelectionInventory(Inventory inventory, YesNoVoteSession session) {
-        fillInventory(inventory, createFillerPane());
+        // Intentionally leave background slots empty for no-pane visual testing.
 
         inventory.setItem(INFO_SLOT, buildPollInfoItem(session));
         inventory.setItem(SUMMARY_SLOT, buildSummaryItem(session));
@@ -214,7 +214,7 @@ public final class YesNoInventoryVoteRenderer {
     }
 
     private void populateConfirmationInventory(Inventory inventory, YesNoVoteSession session) {
-        fillInventory(inventory, createFillerPane());
+        // Intentionally leave background slots empty for no-pane visual testing.
 
         inventory.setItem(CONFIRM_SUMMARY_SLOT, buildConfirmationSummaryItem(session));
         inventory.setItem(CONFIRM_BACK_SLOT, buildBackItem());

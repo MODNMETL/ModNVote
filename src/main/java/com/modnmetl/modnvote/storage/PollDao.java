@@ -4,7 +4,12 @@ import com.modnmetl.modnvote.api.PollStatus;
 import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.domain.Poll;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -170,6 +175,47 @@ public final class PollDao {
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, status.name());
+            ps.setLong(2, pollId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updatePollTitle(Connection connection, long pollId, String title) throws SQLException {
+        String sql = "UPDATE polls SET title = ? WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, title);
+            ps.setLong(2, pollId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updatePollDescription(Connection connection, long pollId, String description) throws SQLException {
+        String sql = "UPDATE polls SET description = ? WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, description);
+            ps.setLong(2, pollId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updatePollMaxRankings(Connection connection, long pollId, int maxRankings) throws SQLException {
+        String sql = "UPDATE polls SET max_rankings = ? WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, maxRankings);
+            ps.setLong(2, pollId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updatePollAllowPartialRanking(Connection connection, long pollId, boolean allowPartialRanking)
+            throws SQLException {
+        String sql = "UPDATE polls SET allow_partial_ranking = ? WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, allowPartialRanking ? 1 : 0);
             ps.setLong(2, pollId);
             ps.executeUpdate();
         }

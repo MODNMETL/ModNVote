@@ -60,6 +60,17 @@ The system must ensure that database access alone cannot reveal how a player vot
 
 See: `privacy-model.md`
 
+## Verification boundary reminder
+
+Current verification is designed around:
+- inclusion
+- anonymous-ballot backing
+- audit/integrity validity
+
+It is NOT currently intended to reconstruct and display a player's vote choice from persistent storage.
+
+Any future proposal to make `/verify` reveal how a player voted must first be treated as a privacy-model change, not as a small UX tweak.
+
 ## Supported vote engines
 
 ### Phase 1
@@ -119,13 +130,38 @@ This preserves the intended architecture:
 - service layer remains authoritative
 - anonymous ballot persistence remains separated from identity-aware participation tracking
 
-### Architectural note
+## Current YES_NO Java GUI architecture
 
-The current ranked Java GUI flow should be treated as one poll-type-specific implementation, not as the universal UI model for all future poll types.
+The legacy-style yes/no Java voting path is now implemented as a separate poll-type-specific flow:
 
-Legacy-style `YES_NO` should be introduced as a separate session/renderer flow rather than forcing all poll types through ranked GUI assumptions.
+- `PollCommand`
+    - routes OPEN yes/no polls into the dedicated yes/no GUI/session path
 
+- `YesNoVoteSession`
+    - in-memory per-player yes/no choice state
 
+- `YesNoVoteSessionManager`
+    - temporary yes/no session lifecycle management
+
+- `YesNoGuiText`
+    - GUI-specific yes/no wording composition
+
+- `YesNoInventoryVoteRenderer`
+    - Java inventory presentation of yes/no voting state
+
+- `YesNoVoteGuiListener`
+    - handles local yes/no GUI interaction and state transitions
+
+- `VoteSubmissionCoordinator`
+    - bridges confirmed yes/no GUI state into the authoritative backend
+
+- `BallotService`
+    - final authoritative validation and persistence path through `submitYesNoBallot(...)`
+
+This preserves the same architectural rules as the ranked path:
+- GUI/session layer does not write directly to the database
+- service layer remains authoritative
+- anonymous ballot persistence remains separated from identity-aware participation tracking
 ## Initial delivery target
 
 ModNVote 2.0.0 should ship with:
@@ -153,6 +189,18 @@ Folia support will only be declared when the implementation is genuinely ready.
 ## Voting UX and Interaction Model (Critical Design)
 
 The voting experience is a core part of ModNVote 2.0 and must be treated as a first-class system, not an afterthought.
+
+## Current cross-platform visual position
+
+The Java inventory GUI currently uses a pane-less background by default.
+
+Reason:
+- glass pane fillers looked acceptable in Java
+- but produced messy angled-pane visuals for Bedrock players through Geyser/Floodgate
+
+The current decision is to preserve the same interaction model while using empty background slots rather than introduce a separate Bedrock renderer prematurely.
+
+A Bedrock-specific renderer may still be introduced later if testing shows it is needed.
 
 ### Design goals
 
