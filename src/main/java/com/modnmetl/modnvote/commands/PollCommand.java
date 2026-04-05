@@ -567,7 +567,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         }
 
                         long pollId = parsePollId(args[2]);
-                        String ballotProofPhrase = args[3];
+                        String ballotProofPhrase = normalizeBallotProofPhrase(joinArgs(args, 3));
                         handleBallotVerification(sender, pollId, ballotProofPhrase);
                         return true;
                     }
@@ -956,6 +956,18 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         return new String[] {displayName, description};
     }
 
+    private String normalizeBallotProofPhrase(String raw) throws PollServiceException {
+        Objects.requireNonNull(raw, "raw");
+
+        String trimmed = raw.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isBlank()) {
+            throw new PollServiceException("Ballot proof phrase must not be blank.");
+        }
+
+        String normalizedWhitespace = trimmed.replaceAll("\\s+", " ");
+        return normalizedWhitespace.replace(' ', '-');
+    }
+
     private boolean isPollIdArgumentPosition(String[] args, int index, CommandSender sender) {
         if (args.length <= index) {
             return false;
@@ -1175,7 +1187,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (args[0].equalsIgnoreCase("verify")
                     && "ballot".equalsIgnoreCase(args[1])
                     && sender.hasPermission("modnvote.verify")) {
-                return filterCompletions(loadPollIdCompletions(), args[2]);
+                return Collections.emptyList();
             }
 
             if (args[0].equalsIgnoreCase("option")
