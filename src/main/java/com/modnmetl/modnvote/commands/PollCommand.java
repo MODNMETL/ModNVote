@@ -495,20 +495,29 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                 try {
                     List<BallotService.ParticipationSummary> summaries =
-                            ballotService.listParticipatedPolls(player.getUniqueId().toString());
+                            new ArrayList<>(ballotService.listParticipatedPolls(player.getUniqueId().toString()));
 
                     if (summaries.isEmpty()) {
                         sender.sendMessage(messages.get("mypolls.empty"));
                         return true;
                     }
 
+                    summaries.sort((a, b) -> Long.compare(b.pollId(), a.pollId()));
+
                     sender.sendMessage(messages.getRaw("mypolls.header"));
                     for (BallotService.ParticipationSummary summary : summaries) {
-                        sender.sendMessage(messages.formatRaw("mypolls.entry", Map.of(
-                                "poll_id", String.valueOf(summary.pollId()),
-                                "title", summary.pollTitle(),
-                                "status", summary.pollStatus()
-                        )));
+                        String statusColour = switch (summary.pollStatus()) {
+                            case "DRAFT" -> "§7";
+                            case "READY" -> "§e";
+                            case "OPEN" -> "§a";
+                            case "CLOSED" -> "§c";
+                            case "ARCHIVED" -> "§8";
+                            default -> "§f";
+                        };
+
+                        sender.sendMessage("§6#" + summary.pollId()
+                                + " §f- §b" + summary.pollTitle()
+                                + " §7[" + statusColour + summary.pollStatus() + "§7]");
                     }
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.verify_failed",
@@ -632,45 +641,45 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         Poll poll = requirePoll(pollId);
         List<PollOption> options = findOptions(pollId);
 
-        sender.sendMessage(messages.formatRaw("poll.show_header", Map.of(
-                "poll_id", String.valueOf(poll.pollId()),
-                "title", poll.title()
-        )));
-        sender.sendMessage(messages.formatRaw("poll.show_description", Map.of(
-                "description", poll.description().isBlank() ? "(blank)" : poll.description()
-        )));
-        sender.sendMessage(messages.formatRaw("poll.show_type", Map.of(
-                "type", poll.pollType().name()
-        )));
-        sender.sendMessage(messages.formatRaw("poll.show_status", Map.of(
-                "status", poll.status().name()
-        )));
+        String statusColour = switch (poll.status()) {
+            case DRAFT -> "§7";
+            case READY -> "§e";
+            case OPEN -> "§a";
+            case CLOSED -> "§c";
+            case ARCHIVED -> "§8";
+            default -> "§f";
+        };
 
-        sender.sendMessage(messages.getRaw("poll.show_rules_header"));
-        sender.sendMessage(messages.formatRaw("poll.show_rule_max_rankings", Map.of(
-                "max_rankings", poll.maxRankings() == 0 ? "ALL OPTIONS" : String.valueOf(poll.maxRankings())
-        )));
-        sender.sendMessage(messages.formatRaw("poll.show_rule_allow_partial", Map.of(
-                "allow_partial", String.valueOf(poll.allowPartialRanking())
-        )));
+        sender.sendMessage("§6Poll #" + poll.pollId() + " §f- §b" + poll.title());
+        sender.sendMessage("§7Type: §f" + poll.pollType().name()
+                + " §7| Status: " + statusColour + poll.status().name());
 
-        sender.sendMessage(messages.getRaw("poll.show_options_header"));
+        if (!poll.description().isBlank()) {
+            sender.sendMessage("§7Description: §f" + poll.description());
+        } else {
+            sender.sendMessage("§7Description: §8(blank)");
+        }
+
+        sender.sendMessage("§bRules:");
+        sender.sendMessage(" §8- §7Max rankings: §f"
+                + (poll.maxRankings() == 0 ? "ALL OPTIONS" : poll.maxRankings()));
+        sender.sendMessage(" §8- §7Allow partial ranking: §f" + poll.allowPartialRanking());
+
+        sender.sendMessage("§bOptions:");
         if (options.isEmpty()) {
-            sender.sendMessage(messages.get("poll.show_options_empty"));
+            sender.sendMessage(" §8- §7No options configured.");
             return;
         }
 
         for (PollOption option : options) {
-            sender.sendMessage(messages.formatRaw("poll.show_option_entry", Map.of(
-                    "option_id", String.valueOf(option.optionId()),
-                    "option_key", option.key(),
-                    "option_name", option.displayName(),
-                    "description", option.description(),
-                    "display_order", String.valueOf(option.displayOrder())
-            )));
+            sender.sendMessage(" §8- §f[" + option.optionId() + "] §b" + option.displayName()
+                    + " §7(key=" + option.key() + ", order=" + option.displayOrder() + ")");
+
+            if (!option.description().isBlank()) {
+                sender.sendMessage("   §7" + option.description());
+            }
         }
     }
-
     private void handleValidate(CommandSender sender, long pollId) throws PollServiceException {
         PollService.PollValidationResult result = pollService.validatePollDefinition(pollId);
 
