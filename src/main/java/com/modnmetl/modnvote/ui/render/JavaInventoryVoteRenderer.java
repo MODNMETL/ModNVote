@@ -269,7 +269,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
 
     private ItemStack buildPollInfoItem(VoteSession session) {
         VoteGuiText.ItemText text = voteGuiText.pollInfo(session);
-        return createItem(Material.BOOK, text.title(), text.lore());
+        return createItem(Material.BOOK, text.title(), wrapLore(text.lore()));
     }
 
     private ItemStack buildOptionItem(VoteSession session, PollOption option) {

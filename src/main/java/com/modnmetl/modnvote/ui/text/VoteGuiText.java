@@ -43,14 +43,22 @@ public final class VoteGuiText {
     }
 
     public ItemText pollInfo(VoteSession session) {
+        List<String> lore = new ArrayList<>(messages.formatRawList("gui.selection.info.lore", Map.of(
+                "poll_title", session.poll().title(),
+                "poll_type", readablePollType(session.poll().pollType()),
+                "max_rankings", String.valueOf(session.maxSelectableOptions()),
+                "partial_ranking", session.poll().allowPartialRanking() ? "Allowed" : "Not allowed"
+        )));
+
+        String description = session.poll().description();
+        if (!description.isBlank()) {
+            lore.add(" ");
+            lore.add(ChatColor.GRAY + description);
+        }
+
         return new ItemText(
                 messages.getRaw("gui.selection.info.title"),
-                messages.formatRawList("gui.selection.info.lore", Map.of(
-                        "poll_title", session.poll().title(),
-                        "poll_type", readablePollType(session.poll().pollType()),
-                        "max_rankings", String.valueOf(session.maxSelectableOptions()),
-                        "partial_ranking", session.poll().allowPartialRanking() ? "Allowed" : "Not allowed"
-                ))
+                lore
         );
     }
 

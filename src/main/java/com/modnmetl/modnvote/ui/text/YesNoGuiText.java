@@ -39,11 +39,19 @@ public final class YesNoGuiText {
     }
 
     public ItemText pollInfo(YesNoVoteSession session) {
+        List<String> lore = new ArrayList<>(messages.formatRawList("gui_yes_no.selection.info.lore", Map.of(
+                "poll_title", session.poll().title()
+        )));
+
+        String description = session.poll().description();
+        if (!description.isBlank()) {
+            lore.add(" ");
+            lore.add(ChatColor.GRAY + description);
+        }
+
         return new ItemText(
                 messages.getRaw("gui_yes_no.selection.info.title"),
-                messages.formatRawList("gui_yes_no.selection.info.lore", Map.of(
-                        "poll_title", session.poll().title()
-                ))
+                lore
         );
     }
 
