@@ -27,6 +27,7 @@ public final class PollService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int MAX_TITLE_LENGTH = 48;
     private static final int MAX_DESCRIPTION_LENGTH = 240;
+    private static final int DRAFT_SLUG_RANDOM_BYTES = 4;
     private final DatabaseManager databaseManager;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
@@ -199,7 +200,7 @@ public final class PollService {
     }
 
     public void updatePollTitle(long pollId, String title, String actor) throws PollServiceException {
-        requireNonBlank(title, "title");
+        title = requireNonBlank(title, "title").trim();
         requireNonBlank(actor, "actor");
         if (title.length() > MAX_TITLE_LENGTH) {
             throw new PollServiceException("title must not exceed " + MAX_TITLE_LENGTH + " characters.");
@@ -230,7 +231,7 @@ public final class PollService {
     }
 
     public void updatePollDescription(long pollId, String description, String actor) throws PollServiceException {
-        Objects.requireNonNull(description, "description");
+        description = requireNonBlank(description, "description").trim();
         requireNonBlank(actor, "actor");
         if (description.length() > MAX_DESCRIPTION_LENGTH) {
             throw new PollServiceException("description must not exceed " + MAX_DESCRIPTION_LENGTH + " characters.");
@@ -808,7 +809,11 @@ public final class PollService {
             default -> "poll-draft";
         };
 
-        return prefix + "-" + Instant.now().toEpochMilli();
+        byte[] randomBytes = new byte[DRAFT_SLUG_RANDOM_BYTES];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        String randomSuffix = HexFormat.of().withUpperCase().formatHex(randomBytes).toLowerCase();
+
+        return prefix + "-" + Instant.now().toEpochMilli() + "-" + randomSuffix;
     }
 
     private String generateParticipationSecret() {
