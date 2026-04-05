@@ -331,8 +331,6 @@ public final class PollService {
         Objects.requireNonNull(description, "description");
         requireNonBlank(actor, "actor");
 
-        requireDraftPoll(pollId);
-
         Poll poll = requireDraftPoll(pollId);
 
         try {
