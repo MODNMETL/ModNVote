@@ -759,7 +759,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         )));
 
         if (!verificationResult.ballotFound()) {
-            sender.sendMessage(messages.get("verify.ballot_not_found"));
+            sender.sendMessage("§cNo ballot matching that proof phrase was found for this poll.");
+            sender.sendMessage("§7Check the poll ID and try the proof phrase again using the same words.");
             return;
         }
 
@@ -776,22 +777,37 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
 
         if (!verificationResult.overallValid()) {
+            sender.sendMessage("§cThis proof phrase matched a stored ballot, but the stored ballot failed integrity checks.");
+            sender.sendMessage("§cThat may indicate ballot data corruption or tampering and should be investigated.");
             return;
         }
 
-        sender.sendMessage(messages.getRaw("verify.ballot_selection_header"));
+        sender.sendMessage("§aThis ballot matches the original submission for this proof phrase.");
+        sender.sendMessage("§7Verified ballot reference: §f" + verificationResult.ballotHash());
 
         Map<Long, String> optionNamesById = buildOptionNamesById(pollId);
         List<Long> orderedOptionIds = verificationResult.orderedOptionIds();
 
+        if (poll.pollType() == PollType.YES_NO) {
+            if (orderedOptionIds.isEmpty()) {
+                sender.sendMessage("§eNo recorded selection was found for this ballot.");
+                return;
+            }
+
+            long optionId = orderedOptionIds.get(0);
+            String optionName = optionNamesById.getOrDefault(optionId, "Option #" + optionId);
+
+            sender.sendMessage("§bVerified ballot selection:");
+            sender.sendMessage(" §8- §f" + optionName);
+            return;
+        }
+
+        sender.sendMessage("§bVerified ballot ranking:");
         for (int i = 0; i < orderedOptionIds.size(); i++) {
             long optionId = orderedOptionIds.get(i);
             String optionName = optionNamesById.getOrDefault(optionId, "Option #" + optionId);
 
-            sender.sendMessage(messages.formatRaw("verify.ballot_selection_entry", Map.of(
-                    "rank", String.valueOf(i + 1),
-                    "option_name", optionName
-            )));
+            sender.sendMessage(" §8#§f" + (i + 1) + " §8-> §b" + optionName);
         }
     }
 
