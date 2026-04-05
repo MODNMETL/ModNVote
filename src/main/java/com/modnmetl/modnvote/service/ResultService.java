@@ -114,7 +114,28 @@ public final class ResultService {
             throw new PollServiceException("YES_NO poll #" + poll.pollId() + " must have exactly 2 options.");
         }
 
-        Map<Long, PollOption> optionsById = toOptionsById(options);
+        boolean hasYesKey = false;
+        boolean hasNoKey = false;
+
+        for (PollOption option : options) {
+            String key = option.key().trim().toLowerCase(java.util.Locale.ROOT);
+            if ("yes".equals(key)) {
+                hasYesKey = true;
+            } else if ("no".equals(key)) {
+                hasNoKey = true;
+            } else {
+                throw new PollServiceException(
+                        "YES_NO poll #" + poll.pollId() + " contains non-canonical option key '" + option.key() + "'."
+                );
+            }
+        }
+
+        if (!hasYesKey || !hasNoKey) {
+            throw new PollServiceException(
+                    "YES_NO poll #" + poll.pollId() + " must contain canonical option keys 'yes' and 'no'."
+            );
+        }
+
         Map<Long, Integer> counts = initializeCounts(options);
 
         for (StoredBallot ballot : ballots) {
@@ -131,6 +152,7 @@ public final class ResultService {
         List<OptionTally> orderedTallies = options.stream()
                 .map(option -> new OptionTally(
                         option.optionId(),
+                        option.key(),
                         option.displayName(),
                         counts.getOrDefault(option.optionId(), 0)
                 ))
@@ -173,6 +195,7 @@ public final class ResultService {
         List<OptionTally> orderedTallies = options.stream()
                 .map(option -> new OptionTally(
                         option.optionId(),
+                        option.key(),
                         option.displayName(),
                         firstPreferenceCounts.getOrDefault(option.optionId(), 0)
                 ))
@@ -295,10 +318,12 @@ public final class ResultService {
 
     public record OptionTally(
             long optionId,
+            String optionKey,
             String optionName,
             int votes
     ) {
         public OptionTally {
+            Objects.requireNonNull(optionKey, "optionKey");
             Objects.requireNonNull(optionName, "optionName");
         }
     }

@@ -333,8 +333,15 @@ public final class PollService {
 
         requireDraftPoll(pollId);
 
+        Poll poll = requireDraftPoll(pollId);
+
         try {
             List<PollOption> existing = pollOptionDao.findOptionsByPollId(pollId);
+
+            if (poll.pollType() == PollType.YES_NO) {
+                throw new PollServiceException("YES_NO polls use the canonical 'yes' and 'no' options and do not allow additional options.");
+            }
+
             for (PollOption option : existing) {
                 if (option.key().equalsIgnoreCase(key)) {
                     throw new PollServiceException("An option with key '" + key + "' already exists in poll #" + pollId + ".");
@@ -456,8 +463,12 @@ public final class PollService {
             throw new PollServiceException("displayOrder must not be negative.");
         }
 
-        requireDraftPoll(pollId);
+        Poll poll = requireDraftPoll(pollId);
         requireOptionInPoll(pollId, optionId);
+
+        if (poll.pollType() == PollType.YES_NO) {
+            throw new PollServiceException("YES_NO polls use fixed option ordering and do not allow option reordering.");
+        }
 
         try (Connection connection = databaseManager.getConnection()) {
             connection.setAutoCommit(false);
@@ -486,8 +497,12 @@ public final class PollService {
                              String actor) throws PollServiceException {
         requireNonBlank(actor, "actor");
 
-        requireDraftPoll(pollId);
+        Poll poll = requireDraftPoll(pollId);
         requireOptionInPoll(pollId, optionId);
+
+        if (poll.pollType() == PollType.YES_NO) {
+            throw new PollServiceException("YES_NO polls require the canonical 'yes' and 'no' options and do not allow option removal.");
+        }
 
         try (Connection connection = databaseManager.getConnection()) {
             connection.setAutoCommit(false);
@@ -541,6 +556,29 @@ public final class PollService {
                 if (options.size() != 2) {
                     issues.add("YES_NO polls must have exactly 2 options.");
                 }
+
+                boolean hasYesKey = false;
+                boolean hasNoKey = false;
+
+                for (PollOption option : options) {
+                    String key = option.key().trim().toLowerCase(java.util.Locale.ROOT);
+
+                    if ("yes".equals(key)) {
+                        hasYesKey = true;
+                    } else if ("no".equals(key)) {
+                        hasNoKey = true;
+                    } else {
+                        issues.add("YES_NO polls may only use the canonical option keys 'yes' and 'no'.");
+                    }
+                }
+
+                if (!hasYesKey) {
+                    issues.add("YES_NO polls must contain an option with key 'yes'.");
+                }
+                if (!hasNoKey) {
+                    issues.add("YES_NO polls must contain an option with key 'no'.");
+                }
+
                 if (poll.maxRankings() != 1) {
                     issues.add("YES_NO polls must use maxRankings = 1.");
                 }

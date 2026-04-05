@@ -797,13 +797,13 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         )));
 
         if (result.pollType() == PollType.YES_NO) {
-            Map<String, Integer> countsByName = new HashMap<>();
+            Map<String, Integer> countsByKey = new HashMap<>();
             for (ResultService.OptionTally tally : result.tallies()) {
-                countsByName.put(tally.optionName().toLowerCase(Locale.ROOT), tally.votes());
+                countsByKey.put(tally.optionKey().toLowerCase(Locale.ROOT), tally.votes());
             }
 
-            int yesVotes = countsByName.getOrDefault("yes", 0);
-            int noVotes = countsByName.getOrDefault("no", 0);
+            int yesVotes = countsByKey.getOrDefault("yes", 0);
+            int noVotes = countsByKey.getOrDefault("no", 0);
 
             sender.sendMessage(messages.formatRaw("result.yes_votes", Map.of(
                     "yes_votes", String.valueOf(yesVotes)
