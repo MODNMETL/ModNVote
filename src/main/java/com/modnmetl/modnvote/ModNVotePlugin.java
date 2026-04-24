@@ -3,6 +3,7 @@ package com.modnmetl.modnvote;
 import com.modnmetl.modnvote.commands.PollCommand;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.listener.ActivePollNotificationListener;
+import com.modnmetl.modnvote.platform.ModNScheduler;
 import com.modnmetl.modnvote.platform.PaperPlatformAdapter;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.service.BallotService;
@@ -43,6 +44,7 @@ import java.util.logging.Level;
  */
 public final class ModNVotePlugin extends JavaPlugin {
 
+    private ModNScheduler scheduler;
     private PlatformAdapter platformAdapter;
     private DatabaseManager databaseManager;
     private SchemaInitializer schemaInitializer;
@@ -68,6 +70,7 @@ public final class ModNVotePlugin extends JavaPlugin {
         saveBundledResourceIfMissing("messages.yml");
 
         try {
+            this.scheduler = new ModNScheduler(this, getLogger());
             this.platformAdapter = new PaperPlatformAdapter(this);
 
             String sqliteFileName = getConfig().getString("storage.sqlite_file", "modnvote.db");
@@ -95,8 +98,8 @@ public final class ModNVotePlugin extends JavaPlugin {
             this.voteGuiText = new VoteGuiText(messageService, ballotSummaryFormatter);
             this.yesNoGuiText = new YesNoGuiText(messageService, ballotSummaryFormatter);
             this.voteSoundService = new VoteSoundService(this);
-            this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(this, voteGuiText);
-            this.yesNoInventoryVoteRenderer = new YesNoInventoryVoteRenderer(this, yesNoGuiText);
+            this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(scheduler, voteGuiText);
+            this.yesNoInventoryVoteRenderer = new YesNoInventoryVoteRenderer(scheduler, yesNoGuiText);
             this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
 
             registerCommands();
@@ -192,7 +195,7 @@ public final class ModNVotePlugin extends JavaPlugin {
         );
         getServer().getPluginManager().registerEvents(
                 new ActivePollNotificationListener(
-                        this,
+                        scheduler,
                         pollService,
                         ballotService,
                         getLogger()
@@ -213,6 +216,10 @@ public final class ModNVotePlugin extends JavaPlugin {
         if (messageService != null) {
             messageService.reload();
         }
+    }
+
+    public ModNScheduler getSchedulerBridge() {
+        return Objects.requireNonNull(scheduler, "scheduler");
     }
 
     public PlatformAdapter getPlatformAdapter() {
