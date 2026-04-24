@@ -2,6 +2,7 @@ package com.modnmetl.modnvote;
 
 import com.modnmetl.modnvote.commands.PollCommand;
 import com.modnmetl.modnvote.config.MessageService;
+import com.modnmetl.modnvote.listener.ActivePollNotificationListener;
 import com.modnmetl.modnvote.platform.PaperPlatformAdapter;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.service.BallotService;
@@ -28,6 +29,7 @@ import com.modnmetl.modnvote.ui.text.YesNoGuiText;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
@@ -63,7 +65,7 @@ public final class ModNVotePlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        saveResource("messages.yml", false);
+        saveBundledResourceIfMissing("messages.yml");
 
         try {
             this.platformAdapter = new PaperPlatformAdapter(this);
@@ -188,6 +190,22 @@ public final class ModNVotePlugin extends JavaPlugin {
                 ),
                 this
         );
+        getServer().getPluginManager().registerEvents(
+                new ActivePollNotificationListener(
+                        this,
+                        pollService,
+                        ballotService,
+                        getLogger()
+                ),
+                this
+        );
+    }
+
+    private void saveBundledResourceIfMissing(String resourcePath) {
+        File target = new File(getDataFolder(), resourcePath);
+        if (!target.exists()) {
+            saveResource(resourcePath, false);
+        }
     }
 
     public void reloadPluginConfiguration() {
