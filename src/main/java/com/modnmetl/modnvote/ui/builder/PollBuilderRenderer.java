@@ -53,12 +53,12 @@ public class PollBuilderRenderer {
         ));
 
         if (poll.pollType() == PollType.RANKED_SINGLE_WINNER) {
-            inv.setItem(ALLOW_PARTIAL_SLOT, createItem(Material.LEVER,
+            inv.setItem(ALLOW_PARTIAL_SLOT, createItem(Material.REDSTONE,
                     poll.allowPartialRanking() ? "§aAllow Partial Rankings: ON" : "§cAllow Partial Rankings: OFF",
                     buildAllowPartialLore(poll.allowPartialRanking())
             ));
 
-            inv.setItem(MAX_RANKINGS_SLOT, createItem(Material.COMPARATOR,
+            inv.setItem(MAX_RANKINGS_SLOT, createItem(Material.TARGET,
                     "§aMax Rankings: §f" + formatMaxRankings(poll.maxRankings(), session.getOptionsSnapshot().size()),
                     buildMaxRankingsLore(poll.maxRankings(), session.getOptionsSnapshot().size())
             ));
@@ -107,7 +107,7 @@ public class PollBuilderRenderer {
 
         inv.setItem(CANCEL_SLOT, createItem(Material.RED_WOOL,
                 "§cCancel",
-                List.of("§7Close builder")
+                List.of("§7Close builder without deleting this draft")
         ));
 
         player.openInventory(inv);
