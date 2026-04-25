@@ -95,12 +95,15 @@ public class PollBuilderRenderer {
     private List<String> wrapText(String text, int maxLength) {
         List<String> lines = new ArrayList<>();
 
-        String[] words = text.split(" ");
+        String colorPrefix = "§7";
+        String cleanText = text.replace("§7", "");
+
+        String[] words = cleanText.split(" ");
         StringBuilder currentLine = new StringBuilder();
 
         for (String word : words) {
             if (currentLine.length() + word.length() + 1 > maxLength) {
-                lines.add(currentLine.toString());
+                lines.add(colorPrefix + currentLine.toString());
                 currentLine = new StringBuilder(word);
             } else {
                 if (!currentLine.isEmpty()) {
@@ -111,7 +114,7 @@ public class PollBuilderRenderer {
         }
 
         if (!currentLine.isEmpty()) {
-            lines.add(currentLine.toString());
+            lines.add(colorPrefix + currentLine.toString());
         }
 
         return lines;
