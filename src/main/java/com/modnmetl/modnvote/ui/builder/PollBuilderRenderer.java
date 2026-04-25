@@ -15,6 +15,9 @@ import java.util.List;
 
 public class PollBuilderRenderer {
 
+    private static final int WRAP_LENGTH = 40;
+    private static final int MAX_VALIDATION_ISSUES_IN_LORE = 6;
+
     private final PollService pollService;
 
     public PollBuilderRenderer(PollService pollService) {
@@ -32,51 +35,52 @@ public class PollBuilderRenderer {
 
         inv.setItem(10, createItem(Material.NAME_TAG,
                 "§aTitle",
-                buildDescription(poll.title(), "Click to edit title")
+                buildFieldLore(poll.title(), "Untitled ranked poll", "Click to edit title")
         ));
 
         inv.setItem(12, createItem(Material.BOOK,
                 "§aDescription",
-                buildDescription(poll.description(), "Click to edit description")
+                buildFieldLore(poll.description(), "No description set", "Click to edit description")
         ));
 
         List<PollOption> options = session.getOptionsSnapshot();
         for (int i = 0; i < options.size(); i++) {
             PollOption option = options.get(i);
 
+            boolean nameComplete = isComplete(option.displayName()) && !isPlaceholderOptionName(option.displayName(), i + 1);
+            String optionNameColour = nameComplete ? "§a" : "§c";
+            String displayName = isComplete(option.displayName()) ? option.displayName() : "Option " + (i + 1);
+
             List<String> lore = new ArrayList<>();
             lore.add("§7Left-click: edit name");
             lore.add("§7Right-click: edit description");
+            lore.add("§8");
+            lore.add(nameComplete ? "§aName set" : "§cName still placeholder");
 
-            if (option.description() != null && !option.description().isBlank()) {
-                lore.add("§8");
-                lore.add("§8Description:");
-                lore.addAll(wrapText("§7" + option.description(), 40));
+            if (isComplete(option.description()) && !isPlaceholderOptionDescription(option.description(), i + 1)) {
+                lore.add("§aDescription set:");
+                lore.addAll(wrapText("§a" + option.description(), WRAP_LENGTH));
+            } else {
+                lore.add("§cDescription missing or placeholder");
             }
 
             inv.setItem(19 + i, createItem(Material.PAPER,
-                    "§f" + option.displayName(),
+                    optionNameColour + displayName,
                     lore
             ));
         }
 
-        boolean valid;
-        try {
-            pollService.validatePollDefinition(session.getPollId());
-            valid = true;
-        } catch (Exception e) {
-            valid = false;
-        }
+        PollService.PollValidationResult validationResult = validate(session.getPollId());
 
-        if (valid) {
+        if (validationResult.valid()) {
             inv.setItem(49, createItem(Material.LIME_WOOL,
                     "§aREADY",
                     List.of("§7Click to mark poll ready")
             ));
         } else {
-            inv.setItem(49, createItem(Material.RED_WOOL,
+            inv.setItem(49, createItem(Material.BARRIER,
                     "§cNOT READY",
-                    List.of("§7Poll is incomplete")
+                    buildValidationLore(validationResult)
             ));
         }
 
@@ -86,6 +90,19 @@ public class PollBuilderRenderer {
         ));
 
         player.openInventory(inv);
+    }
+
+    private PollService.PollValidationResult validate(long pollId) {
+        try {
+            return pollService.validatePollDefinition(pollId);
+        } catch (Exception e) {
+            return new PollService.PollValidationResult(
+                    pollId,
+                    "Unknown poll",
+                    false,
+                    List.of("Validation failed: " + e.getMessage())
+            );
+        }
     }
 
     private ItemStack createItem(Material material, String name, List<String> lore) {
@@ -101,26 +118,66 @@ public class PollBuilderRenderer {
         return item;
     }
 
-    private List<String> buildDescription(String text, String fallback) {
+    private List<String> buildFieldLore(String value, String placeholder, String actionHint) {
         List<String> lore = new ArrayList<>();
-        lore.add("§7" + fallback);
-        if (text != null && !text.isBlank()) {
-            lore.add("§8");
-            lore.addAll(wrapText("§7" + text, 40));
+        lore.add("§7" + actionHint);
+        lore.add("§8");
+
+        if (isComplete(value) && !value.equalsIgnoreCase(placeholder)) {
+            lore.addAll(wrapText("§a" + value, WRAP_LENGTH));
+        } else {
+            lore.addAll(wrapText("§c" + placeholder, WRAP_LENGTH));
         }
+
         return lore;
+    }
+
+    private List<String> buildValidationLore(PollService.PollValidationResult validationResult) {
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Complete the highlighted fields.");
+
+        List<String> issues = validationResult.issues();
+        if (!issues.isEmpty()) {
+            lore.add("§8");
+            lore.add("§cIssues:");
+            int displayed = 0;
+            for (String issue : issues) {
+                if (displayed >= MAX_VALIDATION_ISSUES_IN_LORE) {
+                    lore.add("§7...and " + (issues.size() - displayed) + " more.");
+                    break;
+                }
+                lore.addAll(wrapText("§c- " + issue, WRAP_LENGTH));
+                displayed++;
+            }
+        }
+
+        return lore;
+    }
+
+    private boolean isComplete(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private boolean isPlaceholderOptionName(String value, int displayNumber) {
+        return value.equalsIgnoreCase("Option " + displayNumber);
+    }
+
+    private boolean isPlaceholderOptionDescription(String value, int displayNumber) {
+        return value.equalsIgnoreCase("Placeholder description for option " + displayNumber + ".");
     }
 
     private List<String> wrapText(String text, int maxLength) {
         List<String> lines = new ArrayList<>();
-        String colorPrefix = "§7";
-        String cleanText = text.replace("§7", "");
+        String colorPrefix = extractLeadingColor(text, "§7");
+        String cleanText = stripColourCodes(text);
         String[] words = cleanText.split(" ");
         StringBuilder currentLine = new StringBuilder();
 
         for (String word : words) {
             if (currentLine.length() + word.length() + 1 > maxLength) {
-                lines.add(colorPrefix + currentLine.toString());
+                if (!currentLine.isEmpty()) {
+                    lines.add(colorPrefix + currentLine);
+                }
                 currentLine = new StringBuilder(word);
             } else {
                 if (!currentLine.isEmpty()) currentLine.append(" ");
@@ -129,9 +186,20 @@ public class PollBuilderRenderer {
         }
 
         if (!currentLine.isEmpty()) {
-            lines.add(colorPrefix + currentLine.toString());
+            lines.add(colorPrefix + currentLine);
         }
 
         return lines;
+    }
+
+    private String extractLeadingColor(String text, String fallback) {
+        if (text != null && text.length() >= 2 && text.charAt(0) == '§') {
+            return text.substring(0, 2);
+        }
+        return fallback;
+    }
+
+    private String stripColourCodes(String text) {
+        return text == null ? "" : text.replaceAll("§.", "");
     }
 }
