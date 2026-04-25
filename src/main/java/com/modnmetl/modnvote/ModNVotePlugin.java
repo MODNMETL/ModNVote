@@ -11,6 +11,7 @@ import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.ResultService;
 import com.modnmetl.modnvote.storage.DatabaseManager;
+import com.modnmetl.modnvote.storage.PollOptionDao;
 import com.modnmetl.modnvote.storage.SchemaInitializer;
 import com.modnmetl.modnvote.ui.builder.PollBuilderChatListener;
 import com.modnmetl.modnvote.ui.builder.PollBuilderInputPromptManager;
@@ -220,7 +221,11 @@ public final class ModNVotePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new PollBuilderListener(
                         pollBuilderSessionManager,
-                        pollBuilderInputPromptManager
+                        pollBuilderInputPromptManager,
+                        pollService,
+                        new PollOptionDao(databaseManager),
+                        scheduler,
+                        pollBuilderRenderer
                 ),
                 this
         );

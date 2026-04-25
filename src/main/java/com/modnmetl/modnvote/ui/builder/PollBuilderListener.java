@@ -1,7 +1,7 @@
 package com.modnmetl.modnvote.ui.builder;
 
 import com.modnmetl.modnvote.service.PollService;
-import com.modnmetl.modnvote.storage.dao.PollOptionDao;
+import com.modnmetl.modnvote.storage.PollOptionDao;
 import com.modnmetl.modnvote.platform.ModNScheduler;
 import com.modnmetl.modnvote.domain.PollOption;
 import org.bukkit.entity.Player;
@@ -47,7 +47,7 @@ public class PollBuilderListener implements Listener {
         PollBuilderSession session = builderHolder.getSession();
         int slot = event.getSlot();
 
-        // Title
+        // TITLE
         if (slot == 10) {
             player.closeInventory();
 
@@ -69,7 +69,7 @@ public class PollBuilderListener implements Listener {
             return;
         }
 
-        // Description
+        // DESCRIPTION
         if (slot == 12) {
             player.closeInventory();
 
@@ -91,7 +91,7 @@ public class PollBuilderListener implements Listener {
             return;
         }
 
-        // Options
+        // OPTIONS
         if (slot >= 19 && slot < 19 + session.getOptionsSnapshot().size()) {
             int index = slot - 19;
             PollOption option = session.getOptionsSnapshot().get(index);
@@ -136,13 +136,13 @@ public class PollBuilderListener implements Listener {
             return;
         }
 
-        // Validate
+        // VALIDATE (placeholder)
         if (slot == 49) {
             player.sendMessage("§7Validate clicked (not implemented yet)");
             return;
         }
 
-        // Cancel
+        // CANCEL (placeholder)
         if (slot == 53) {
             player.sendMessage("§cCancel clicked (not implemented yet)");
         }
