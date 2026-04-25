@@ -192,16 +192,37 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         return true;
                     }
 
+                    if (pollType == PollType.YES_NO) {
+                        if (!(sender instanceof Player player)) {
+                            sender.sendMessage(messages.get("general.players_only"));
+                            return true;
+                        }
+
+                        long pollId = pollService.createPoll(sender.getName(), pollType);
+
+                        Poll poll = requirePoll(pollId);
+                        List<PollOption> options = findOptions(pollId);
+
+                        PollBuilderSession session = new PollBuilderSession(
+                                player.getUniqueId(),
+                                pollId,
+                                poll,
+                                options
+                        );
+
+                        plugin.getPollBuilderSessionManager().createOrReplaceSession(session);
+                        plugin.getPollBuilderRenderer().open(player, session);
+
+                        sender.sendMessage("§aCreated DRAFT Yes/No poll §f#" + pollId + "§a.");
+                        sender.sendMessage("§7Poll Builder opened. Click fields to edit them.");
+                        return true;
+                    }
+
                     long pollId = pollService.createPoll(sender.getName(), pollType);
                     Poll poll = requirePoll(pollId);
 
                     sender.sendMessage("§aCreated DRAFT poll §f#" + pollId + "§a (" + poll.pollType().name() + ").");
-                    sender.sendMessage("§7Default title: §f" + poll.title());
-                    sender.sendMessage("§7Next steps:");
-                    sender.sendMessage(" §8- §e/" + label + " set " + pollId + " title <your title>");
-                    sender.sendMessage(" §8- §e/" + label + " set " + pollId + " description <your description>");
-                    sender.sendMessage(" §8- §e/" + label + " validate " + pollId);
-                    sender.sendMessage(" §8- §e/" + label + " ready " + pollId);
+                    sender.sendMessage("§7Poll type is not yet supported by the Poll Builder.");
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
