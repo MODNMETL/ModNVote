@@ -257,13 +257,10 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
     }
 
     private ItemStack buildOptionItem(VoteSession session, PollOption option) {
-        Integer rank = session.assignedRank(option.optionId());
         VoteGuiText.ItemText text = voteGuiText.option(session, option);
 
         Material material;
-        if (rank != null) {
-            material = Material.LIME_DYE;
-        } else if (session.canAssignAnotherRank()) {
+        if (session.assignedRank(option.optionId()) != null || session.canAssignAnotherRank()) {
             material = Material.PAPER;
         } else {
             material = Material.GRAY_DYE;
