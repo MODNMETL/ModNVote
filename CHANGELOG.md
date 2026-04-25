@@ -1,53 +1,111 @@
-# Changelog – ModNVote
+# Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to ModNVote are documented in this file.
 
-The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+## [2.0.0] - 2026-04-25
 
----
+### Summary
 
-## [1.1.5] – GUI voting & stronger privacy
+ModNVote 2.0 replaces the original Yes/No-only plugin with a privacy-first, audit-aware polling system.
 
-- Added a **GUI-based voting flow** triggered via `/modnvote`.
-    - Players now click **Yes** or **No** in a menu instead of typing `/modnvote yes` or `/modnvote no`.
-    - This avoids vote choices appearing as chat or command entries in the server console/logs.
-- Removed the `/modnvote yes` and `/modnvote no` subcommands entirely.
-- Ensured vote handling:
-    - Verifies the existing tally’s integrity before accepting a new vote.
-    - Applies the vote only if the tally is cryptographically valid.
-    - Recomputes and stores a new HMAC after the vote to maintain the integrity seal.
-- Improved player feedback:
-    - On voting, players are told whether the tally was valid before their vote and that the integrity seal has been re‑applied after.
-    - `/modnvote status` now reports:
-        - whether the tally is **cryptographically valid** or not, and
-        - whether the tally currently **includes a vote from the viewer**.
-- Kept admin tools (`audit`, `fullaudit`, `reset`, `reload`, `verify`) while tightening their messaging around integrity status and compromised tallies.
+This release introduces GUI-driven poll creation, ranked single-winner voting, improved Yes/No poll handling, anonymous ballot storage, participation verification, ballot proof verification, and lifecycle controls.
 
----
+### Added
 
-## [1.1.4] – Integrity messaging & docs
+- GUI Poll Builder for ranked single-winner polls
+- GUI Poll Builder support for Yes/No polls
+- `/modnvote create ranked_single_winner <optionCount>`
+- `/modnvote create yes_no`
+- `/modnvote edit <draftPollId>`
+- `/modnvote guide`
+- Draft poll creation with placeholder ranked options
+- Service-authoritative poll title editing
+- Service-authoritative poll description editing
+- Service-authoritative option name editing
+- Service-authoritative option description editing
+- Builder chat input prompts with field-specific context
+- Wrapped multiline lore for poll and option descriptions
+- Red/green builder completion indicators
+- Builder validation status item
+- READY action from the builder GUI
+- Builder Cancel action (non-destructive)
+- Allow Partial Rankings toggle in GUI
+- Max Rankings cycle control in GUI
+- `/modnvote mypolls`
+- `/modnvote verify participation <pollId>`
+- `/modnvote verify ballot <pollId> <proofPhrase>`
+- Anonymous ballot verification using proof phrases
+- Participation integrity checks
+- Audit chain integrity checks
+- Ballot hash and commitment verification
+- Ranked voting GUI
+- Yes/No voting GUI
+- Mandatory vote confirmation UX
+- Join notifications for open polls
+- Folia-aware scheduling via `ModNScheduler`
+- Poll-local numbering for options
+- Cleaner command help and tab-completion
 
-- Refined integrity checks and error handling around the HMAC tally seal.
-- Improved messages when verification fails, including clearer guidance for staff.
-- Updated README and documentation to better describe the privacy and integrity model.
-- Added a structured `CHANGELOG.md` to track future changes.
+### Changed
 
----
+- Replaced command-heavy authoring with GUI-first builder workflow
+- Results calculated from anonymous ballots only
+- Participation records separated from vote content
+- Verification commands aligned with privacy model
+- Ranked vote icons stabilised (paper items retained)
+- Builder descriptions wrapped and colour-consistent
+- Builder placeholders now red, completed fields green
+- Builder READY reflects placeholder validation
+- Command help simplified and focused on GUI workflow
+- Low-level commands hidden from normal help
+- GUI design avoids glass panes for Bedrock compatibility
 
-## [1.1.3] – Clean rebuild & repository hygiene
+### Fixed
 
-- Rebuilt the project cleanly in a fresh Gradle setup.
-- Restored and fixed CI workflows for GitHub Actions.
-- Tightened SQLite schema and DAO handling.
-- Updated README to reflect the production‑ready state of the plugin.
+- `.gradle` cache tracking issues
+- `/modnvote show` option numbering
+- Builder persistence via `PollService`
+- Builder refresh after edits
+- Option description updates in GUI
+- Lore wrapping colour loss
+- Premature READY state
+- Yes/No builder option duplication issue
+- Ranked vote icon instability
+- Builder Cancel placeholder
+- Command guide placement
+- Ranked create tab-complete hints
 
----
+### Architecture
 
-## [1.1.2] – Initial public release
+- Introduced builder session system
+- Added renderer/listener/input manager structure
+- Integrated `ModNScheduler`
+- Clean separation of GUI, service, and persistence layers
 
-- First public release of ModNVote as a PaperMC voting plugin.
-- Core features:
-    - Yes/No voting with per‑UUID and per‑IP checks.
-    - SQLite persistence.
-    - Basic cryptographic sealing over tallies and participant lists.
-    - Admin audit commands and PlaceholderAPI support.
+### Privacy and integrity
+
+- Identity and ballot content separated
+- Anonymous ballots are source of truth
+- Participation prevents duplicates without exposing votes
+- Verification preserves privacy boundaries
+
+### Migration notes
+
+- 2.0 supersedes v1
+- No migration from 1.x supported
+- GUI builder replaces legacy setup commands
+
+### Recommended smoke test
+
+```text
+/modnvote create ranked_single_winner 3
+/modnvote create yes_no
+/modnvote edit <draftPollId>
+/modnvote open <readyPollId>
+/modnvote vote <openPollId>
+/modnvote close <openPollId>
+/modnvote result <closedPollId>
+/modnvote mypolls
+/modnvote verify participation <pollId>
+/modnvote verify ballot <pollId> <proofPhrase>
+```

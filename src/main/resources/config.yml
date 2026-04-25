@@ -1,33 +1,70 @@
-# ================================
-# ModNVote Configuration
-# ================================
+# ============================================================
+# ModNVote 2.0 Configuration
+# ============================================================
+# This is the new clean-break configuration for ModNVote 2.x.
+# Existing 1.x data/config installations should not be reused.
+# ============================================================
 
-messages:
-  voted_yes: "Thanks — your YES vote has been recorded."
-  voted_no: "Thanks — your NO vote has been recorded."
-  already_voted: "You have already voted."
-  duplicate_ip: "A vote from your location has already been recorded."
-  reset_done: "All votes reset."
-  reloaded: "ModNVote configuration reloaded."
-  verify_none: "&eNo votes have been cast yet — nothing to verify."
-  verify_valid: "&aVerification passed: tally matches participant set."
-  verify_invalid: "&cVerification failed: tally does NOT match participant set."
-  audit_summary: "Audit » Total: {total}, With bypass: {bypass} ({percent}%) | YES: {yes}, NO: {no}"
-  fullaudit_header: "Full audit (grouped by IP). Showing voters with bypass; non-bypass on same IP listed under each group."
+general:
+  debug: false
 
-cache:
-  refresh_seconds: 30
+storage:
+  sqlite_file: "modnvote.db"
 
-logging:
-  # Privacy-first: these are anonymized (no usernames, IPs, or vote choices).
-  audit_votes_to_console: true
-  audit_bypass_to_console: true
-
-permissions:
-  # Default shipped node. Change this to your existing bypass node if you use
-  # another alt-account limiter plugin (e.g. "noaltsexploits.bypass").
-  bypass_node: "modnvote.bypass"
+publication:
+  discord_webhooks: []
+  publish_poll_opened: true
+  publish_poll_closed: true
+  publish_checkpoints: true
 
 integrity:
-  # Pepper file for HMAC across each round (per-round key file).
-  pepper_file_pattern: "round-%d.key"
+  checkpoint_interval_ballots: 25
+  canonicalization_version: 1
+
+ui:
+  require_confirmation: true
+
+  sounds:
+    enabled: false
+
+    selection_assigned:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.8
+      pitch: 1.2
+
+    selection_removed:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.8
+      pitch: 0.8
+
+    reset:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.9
+      pitch: 0.6
+
+    review_advance:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.9
+      pitch: 1.0
+
+    return_to_selection:
+      sound: "UI_BUTTON_CLICK"
+      volume: 0.9
+      pitch: 0.85
+
+    submit_success:
+      sound: "ENTITY_EXPERIENCE_ORB_PICKUP"
+      volume: 1.0
+      pitch: 1.1
+
+    submit_failure:
+      sound: "ENTITY_VILLAGER_NO"
+      volume: 0.9
+      pitch: 1.0
+
+messages:
+  prefix: "&6[ModNVote] "
+permissions:
+  # Grant this node only where you intentionally want a player to bypass
+  # IP-based duplicate prevention, such as approved same-household cases.
+  bypass_node: "modnvote.bypass"

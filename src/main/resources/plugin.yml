@@ -4,55 +4,60 @@ main: com.modnmetl.modnvote.ModNVotePlugin
 api-version: "1.21"
 author: MODN METL LTD
 website: https://modnmetl.com
+description: ModNVote 2.0 - secure poll and election platform
 
 commands:
   modnvote:
-    description: ModNVote main command
-    usage: "/modnvote <yes|no|status|verify|reset|reload|audit|fullaudit>"
+    description: ModNVote 2.0 root command
+    usage: "/modnvote <status|reload|list|create|seedbreed|show|poll|option|validate|ready|open|close|result|mypolls|verify|vote|testvote>"
     permission: modnvote.use
 
 permissions:
   modnvote.*:
-    description: All ModNVote permissions
+    description: Full access to ModNVote 2.0
     default: op
     children:
       modnvote.use: true
-      modnvote.vote: true
-      modnvote.status: true
-      modnvote.verify: true
-      modnvote.admin.reset: true
       modnvote.admin.reload: true
-      modnvote.admin.audit: true
-      modnvote.admin.fullaudit: true
+      modnvote.admin.poll.list: true
+      modnvote.admin.poll.create: true
+      modnvote.admin.poll.open: true
+      modnvote.admin.poll.close: true
+      modnvote.verify: true
+      modnvote.testvote: true
 
   modnvote.use:
-    description: Allow using /modnvote
-    default: true
-
-  modnvote.vote:
-    description: Allow casting a vote
-    default: true
-
-  modnvote.status:
-    description: Allow viewing status
+    description: Allow use of base ModNVote command
     default: true
 
   modnvote.verify:
-    description: Allow verifying tally integrity
+    description: Allow players to verify their vote inclusion and poll audit validity
     default: true
 
-  modnvote.admin.reset:
-    description: Reset all votes and tallies
-    default: op
-
   modnvote.admin.reload:
-    description: Reload plugin configuration
+    description: Allow reloading ModNVote configuration
     default: op
 
-  modnvote.admin.audit:
-    description: Show audit summary
+  modnvote.admin.poll.list:
+    description: Allow listing stored polls
     default: op
 
-  modnvote.admin.fullaudit:
-    description: Full audit (grouped by IP)
+  modnvote.admin.poll.create:
+    description: Allow creating seed or test polls
     default: op
+
+  modnvote.admin.poll.open:
+    description: Allow opening stored polls
+    default: op
+
+  modnvote.admin.poll.close:
+    description: Allow closing open polls
+    default: op
+
+  modnvote.testvote:
+    description: Allows test vote submission
+    default: op
+
+  modnvote.bypass:
+    description: Allows bypass of IP-based duplicate prevention
+    default: false

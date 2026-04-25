@@ -1,0 +1,326 @@
+# ============================================================
+# ModNVote 2.0 Messages
+# ============================================================
+# These messages are intended to be friendly, clear, and
+# educational so players can better understand the voting
+# system they are participating in.
+# ============================================================
+
+prefix: "&6[ModNVote] "
+
+general:
+  no_permission: "&cYou do not have permission to do that."
+  players_only: "&cOnly players can use that command."
+  unknown_error: "&cSomething went wrong while processing that request."
+  invalid_option_id: "&cOption IDs must be whole numbers."
+
+reload:
+  success: "&aModNVote configuration and messages have been reloaded."
+
+status:
+  header: "&6ModNVote 2.0"
+  poll_service: "&e- {value}"
+  ballot_service: "&e- {value}"
+  integrity_service: "&e- {value}"
+
+help:
+  header: "&6ModNVote 2.0 Commands"
+  status: "&e/{label} status"
+  reload: "&e/{label} reload"
+  list: "&e/{label} list"
+  create: "&e/{label} create <yes_no|ranked_single_winner>"
+  rankedpolldemo: "&e/{label} rankedpolldemo"
+  show: "&e/{label} show <pollId>"
+  set: "&e/{label} set <pollId> <title|description|maxrankings|allowpartial> <value>"
+  delete: "&e/{label} delete <pollId>"
+  option: "&e/{label} option <add|edit|move|remove> ..."
+  validate: "&e/{label} validate <pollId>"
+  ready: "&e/{label} ready <pollId>"
+  open: "&e/{label} open <pollId>"
+  close: "&e/{label} close <pollId>"
+  result: "&e/{label} result <pollId>"
+  mypolls: "&e/{label} mypolls"
+  verify_participation: "&e/{label} verify participation <pollId>"
+  verify_ballot: "&e/{label} verify ballot <pollId> <proofPhrase>"
+  testvote: "&e/{label} testvote <pollId> <optionId1> <optionId2> ..."
+  vote: "&e/{label} vote <pollId>"
+
+usage:
+  create: "&cUsage: /{label} create <yes_no|ranked_single_winner>"
+  show: "&cUsage: /{label} show <pollId>"
+  set: "&cUsage: /{label} set <pollId> <title|description|maxrankings|allowpartial> <value>"
+  option_add: "&cUsage: /{label} option add <pollId> <key> <displayName> | <description>"
+  option_edit_name: "&cUsage: /{label} option edit <pollId> <optionId> name <text>"
+  option_edit_description: "&cUsage: /{label} option edit <pollId> <optionId> description <text>"
+  option_move: "&cUsage: /{label} option move <pollId> <optionId> <displayOrder>"
+  option_remove: "&cUsage: /{label} option remove <pollId> <optionId>"
+  validate: "&cUsage: /{label} validate <pollId>"
+  ready: "&cUsage: /{label} ready <pollId>"
+  open: "&cUsage: /{label} open <pollId>"
+  close: "&cUsage: /{label} close <pollId>"
+  result: "&cUsage: /{label} result <pollId>"
+  mypolls: "&cUsage: /{label} mypolls"
+  verify_participation: "&cUsage: /{label} verify participation <pollId>"
+  verify_ballot: "&cUsage: /{label} verify ballot <pollId> <proofPhrase>"
+  testvote: "&cUsage: /{label} testvote <pollId> <optionId1> <optionId2> ..."
+  vote: "&cUsage: /{label} vote <pollId>"
+
+poll:
+  list_header: "&6Stored polls:"
+  list_empty: "&eThere are currently no stored polls."
+  list_entry: "&e- #{poll_id} [{status}] {title} ({type})"
+
+  created: "&aCreated draft poll '&f{title}&a' with ID &f#{poll_id}&a as type &f{type}&a."
+  rankedpolldemo_created: "&aCreated ranked poll demo '&f{title}&a' with ID &f#{poll_id}&a."
+  ready: "&aPoll '&f{title}&a' (&f#{poll_id}&a) is now READY."
+  opened: "&aPoll '&f{title}&a' (&f#{poll_id}&a) is now open."
+  closed: "&ePoll '&f{title}&e' (&f#{poll_id}&e) is now closed."
+
+  updated_title: "&aUpdated title for poll &f#{poll_id}&a to '&f{title}&a'."
+  updated_description: "&aUpdated description for poll &f#{poll_id}&a."
+  updated_max_rankings: "&aUpdated max rankings for poll &f#{poll_id}&a to &f{max_rankings}&a."
+  updated_allow_partial: "&aUpdated partial-ranking setting for poll &f#{poll_id}&a to &f{allow_partial}&a."
+
+  option_added: "&aAdded option '&f{option_name}&a' to poll &f#{poll_id}&a (internal ID &f#{option_id}&a)."
+  option_updated_name: "&aUpdated option &f#{option_id}&a in poll &f#{poll_id}&a to '&f{option_name}&a'."
+  option_updated_description: "&aUpdated description for option &f#{option_id}&a in poll &f#{poll_id}&a."
+  option_moved: "&aMoved option &f#{option_id}&a in poll &f#{poll_id}&a to display order &f{display_order}&a."
+  option_removed: "&eRemoved option &f#{option_id}&e from poll &f#{poll_id}&e."
+
+  show_header: "&6Poll '&f{title}&6' (&f#{poll_id}&6):"
+  show_description: "&7Description: &f{description}"
+  show_type: "&7Type: &f{type}"
+  show_status: "&7Status: &f{status}"
+
+  show_rules_header: "&bRules:"
+  show_rule_max_rankings: "&7- Max rankings: &f{max_rankings}"
+  show_rule_allow_partial: "&7- Allow partial ranking: &f{allow_partial}"
+
+  show_options_header: "&bOptions:"
+  show_options_empty: "&eThis poll currently has no options."
+  show_option_entry: "&f- #{display_number} {option_name} &7(key={option_key}, internal ID #{option_id}, order={display_order}) &7- {description}"
+
+  validation_header: "&6Validation for '&f{title}&6' (&f#{poll_id}&6):"
+  validation_ok: "&aThis poll passes validation and is ready to be marked READY."
+  validation_issue: "&c- {issue}"
+
+  not_found: "&cPoll #{poll_id} does not exist."
+  invalid_id: "&cPoll IDs must be whole numbers."
+
+mypolls:
+  header: "&6Polls you have participated in:"
+  empty: "&eYou have not yet participated in any recorded polls."
+  entry: "&e- #{poll_id} [{status}] {title}"
+
+result:
+  header: "&6Results for '&f{title}&6' (&f#{poll_id}&6):"
+  total_votes: "&7Total votes: &f{total_votes}"
+  yes_votes: "&aYES votes: &f{yes_votes}"
+  no_votes: "&cNO votes: &f{no_votes}"
+  ranked_winner: "&aIRV winner: &f{winner}"
+  first_preference_header: "&bFirst-preference tally:"
+  tally_entry: "&f- {option_name}: {votes}"
+  unsupported_type: "&cThis poll type does not yet have a displayable result format."
+
+vote:
+  submit_success: "&aThanks — your vote has been safely recorded."
+  poll_context: "&7Poll: &f#{poll_id} &7- &f{title}"
+  ballot_hash: "&7Ballot integrity reference: &f{ballot_hash}"
+  participation_receipt: "&7Participation receipt: &f{participation_receipt}"
+  ballot_proof_phrase: "&7Private ballot proof phrase: &f{ballot_proof_phrase}"
+  ballot_proof_warning: "&cDo not share this phrase. Anyone with it can reveal this ballot's contents."
+  bypass_used: "&eA same-network duplicate check was bypassed for this vote because your account has the configured bypass permission."
+  duplicate_identity: "&cYou have already voted in this poll."
+  duplicate_ip: "&cA vote from your location has already been recorded for this poll."
+  ip_unavailable: "&cWe could not confirm your network address for duplicate-protection checks."
+  failed: "&cYour vote could not be recorded: {reason}"
+  gui_opening: "&aOpening the voting screen for '&f{title}&a'."
+
+  education_privacy: "&bYour vote choice is stored separately from your identity to help protect ballot privacy."
+  education_verification: "&bKeep your participation receipt and private ballot proof phrase if you want to verify this vote later."
+
+verify:
+  participation_header: "&6Participation verification for '&f{title}&6' (&f#{poll_id}&6):"
+  ballot_header: "&6Ballot verification for '&f{title}&6' (&f#{poll_id}&6):"
+
+  included: "&aYour participation is recorded in this poll."
+  not_included: "&cNo recorded participation from you was found in this poll."
+
+  audit_valid: "&aThe audit chain for this poll is currently valid."
+  audit_invalid: "&cThe audit chain for this poll is INVALID."
+
+  ballot_integrity_valid: "&aStored ballots for this poll passed integrity verification."
+  ballot_integrity_invalid: "&cStored ballots for this poll FAILED integrity verification."
+
+  overall_valid: "&aThis poll currently passes the available integrity checks."
+  overall_invalid: "&cThis poll currently FAILS one or more integrity checks."
+
+  ballot_not_found: "&cNo ballot matching that private proof phrase was found for this poll."
+  ballot_hash_valid: "&aThe anonymous ballot hash for this proof phrase is valid."
+  ballot_hash_invalid: "&cThe anonymous ballot hash for this proof phrase is INVALID."
+  ballot_commitment_valid: "&aThe ballot proof commitment matches the stored ballot content."
+  ballot_commitment_invalid: "&cThe ballot proof commitment does NOT match the stored ballot content."
+
+  ballot_selection_header: "&bVerified ballot selection:"
+  ballot_selection_entry: "&f{rank}. {option_name}"
+
+  failed: "&cVerification could not be completed: {reason}"
+
+errors:
+  list_failed: "&cFailed to list polls: {reason}"
+  create_failed: "&cFailed to create the poll: {reason}"
+  show_failed: "&cFailed to show this poll: {reason}"
+  edit_failed: "&cFailed to edit this poll: {reason}"
+  option_failed: "&cFailed to edit poll options: {reason}"
+  validate_failed: "&cFailed to validate this poll: {reason}"
+  ready_failed: "&cFailed to mark this poll READY: {reason}"
+  open_failed: "&cFailed to open the poll: {reason}"
+  close_failed: "&cFailed to close the poll: {reason}"
+  result_failed: "&cFailed to display poll results: {reason}"
+  verify_failed: "&cFailed to verify this poll: {reason}"
+  vote_failed: "&cVote submission failed: {reason}"
+  vote_not_open: "&cThis poll is not currently open for voting."
+
+gui:
+  titles:
+    selection: "&8Vote: &f{poll_title}"
+    confirmation: "&8Confirm: &f{poll_title}"
+
+  selection:
+    info:
+      title: "&ePoll Information"
+      lore:
+        - "&7Review the poll details before ranking."
+        - " "
+        - "&fPoll: &e{poll_title}"
+        - "&fType: &e{poll_type}"
+        - "&fMaximum rankings: &e{max_rankings}"
+        - "&fPartial ranking: &e{partial_ranking}"
+
+    option:
+      title:
+        selected: "&a#{rank} &f- {option_name}"
+        unselected: "&f{option_name}"
+      lore:
+        selected:
+          - "&7{description}"
+          - " "
+          - "&aCurrently ranked: #{rank}"
+          - "&eClick to remove this option from your ranking."
+        unselected_available:
+          - "&7{description}"
+          - " "
+          - "&7Not currently ranked."
+          - "&aClick to assign this as rank #{next_rank}."
+        unselected_full:
+          - "&7{description}"
+          - " "
+          - "&7Not currently ranked."
+          - "&cYou have reached the maximum number of rankings."
+
+    summary:
+      title: "&bCurrent Ranking"
+      lore_intro:
+        - "&7Your current ballot preview:"
+
+    reset:
+      title: "&cReset Ranking"
+      lore:
+        - "&7Clear all current selections"
+        - "&7and begin ranking again."
+
+    cast:
+      title_valid: "&aReview Vote"
+      title_invalid: "&cReview Vote (Unavailable)"
+      lore_valid:
+        - "&aClick to continue to the confirmation screen."
+      lore_invalid:
+        - "&cCreate a valid ranking before continuing."
+
+  confirmation:
+    summary:
+      title: "&eConfirm Your Vote"
+      lore_intro:
+        - "&7Please review this ranking carefully."
+        - "&7Your vote will only be submitted after confirmation."
+        - " "
+
+    back:
+      title: "&cGo Back"
+      lore:
+        - "&7Return to the ranking screen"
+        - "&7without submitting your vote."
+
+    commit:
+      title: "&aSubmit Vote Now"
+      lore:
+        - "&7Submit this confirmed ranking"
+        - "&7to the authoritative voting service."
+
+gui_yes_no:
+  titles:
+    selection: "&8Vote: &f{poll_title}"
+    confirmation: "&8Confirm: &f{poll_title}"
+
+  selection:
+    info:
+      title: "&ePoll Information"
+      lore:
+        - "&7Choose one clear answer below."
+        - " "
+        - "&fPoll: &e{poll_title}"
+        - "&fType: &eYes / No"
+
+    option:
+      title:
+        selected: "&aSelected: {option_name}"
+        unselected: "&f{option_name}"
+      lore:
+        selected:
+          - "&7{description}"
+          - " "
+          - "&aThis is your current choice."
+          - "&eClick again to clear it."
+        unselected:
+          - "&7{description}"
+          - " "
+          - "&aClick to choose this answer."
+
+    summary:
+      title: "&bCurrent Choice"
+      lore_intro:
+        - "&7Your current ballot preview:"
+
+    clear:
+      title: "&cClear Choice"
+      lore:
+        - "&7Remove your current answer"
+        - "&7and choose again."
+
+    cast:
+      title_valid: "&aReview Vote"
+      title_invalid: "&cReview Vote (Unavailable)"
+      lore_valid:
+        - "&aClick to continue to the confirmation screen."
+      lore_invalid:
+        - "&cChoose Yes or No before continuing."
+
+  confirmation:
+    summary:
+      title: "&eConfirm Your Vote"
+      lore_intro:
+        - "&7Please review this choice carefully."
+        - "&7Your vote will only be submitted after confirmation."
+        - " "
+
+    back:
+      title: "&cGo Back"
+      lore:
+        - "&7Return to the yes/no screen"
+        - "&7without submitting your vote."
+
+    commit:
+      title: "&aSubmit Vote Now"
+      lore:
+        - "&7Submit this confirmed choice"
+        - "&7to the authoritative voting service."

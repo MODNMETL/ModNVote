@@ -1,0 +1,24 @@
+# IntelliJ
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Java
+out/
+
+# Local env
+.env
+
+# Versioning
+votefileversions
