@@ -41,6 +41,7 @@ ModNVote 2.0 is a clean architectural reset from the legacy 1.x single Yes/No mo
 - Participation tracking separate from anonymous ballot vote content.
 - IP duplicate-prevention heuristics with bypass permission support.
 - Player poll participation listing through `/modnvote mypolls`.
+- Login notification for open polls the joining player has not yet participated in.
 - Participation verification through `/modnvote verify participation <pollId>`.
 - Ballot proof phrase verification through `/modnvote verify ballot <pollId> <proof phrase>`.
 - Flexible proof phrase input normalisation for spaces, hyphens, and mixed case.
@@ -53,6 +54,7 @@ ModNVote 2.0 is a clean architectural reset from the legacy 1.x single Yes/No mo
 - Service-layer validation for poll readiness and Yes/No semantic integrity.
 - Append-only audit-chain model for poll lifecycle and mutation events.
 - Ballot hash and proof commitment validation foundations.
+- `ModNScheduler` bridge for Paper/Folia-aware player and async scheduling.
 
 ### Changed
 
@@ -62,6 +64,10 @@ ModNVote 2.0 is a clean architectural reset from the legacy 1.x single Yes/No mo
 - Removed sensitive database path output from `/modnvote status`.
 - Renamed the old `seedbreed` demo command to the clearer `rankedpolldemo` command.
 - Updated README documentation to describe the current 2.0 branch architecture, commands, privacy model, and roadmap.
+- Replaced direct Bukkit delayed scheduling in vote renderers with the scheduler bridge.
+- Reworked join poll notifications so database checks run asynchronously and player messaging returns to the player scheduler.
+- Restored the full bundled `messages.yml` after an accidental partial overwrite, keeping updated 2.0 command wording.
+- Clarified option-added messaging so global database option IDs are labelled as internal IDs.
 
 ### Privacy and integrity notes
 
@@ -70,6 +76,7 @@ ModNVote 2.0 is a clean architectural reset from the legacy 1.x single Yes/No mo
 - `/modnvote verify ballot <pollId> <proof phrase>` reveals a ballot only to someone possessing the proof phrase, and must not require or use player UUID/IP.
 - Results must be reconstructed from anonymous ballot data only, not participation records.
 - GUI/session code must not write ballots or lifecycle state directly to the database.
+- Join notifications are identity-aware participation checks only and do not inspect ballot content.
 
 ### Known development notes
 
@@ -77,6 +84,8 @@ ModNVote 2.0 is a clean architectural reset from the legacy 1.x single Yes/No mo
 - Schema and APIs may still evolve before merge to the legacy replacement line.
 - Future work should consider whether draft/ready deletion should remain hard-delete or become soft-delete/archive if long-term audit preservation is required.
 - Result display, admin audit transparency, bulk option authoring, and exportable audit snapshots remain useful next polish areas.
+- `/modnvote show` still needs a small code-side polish so displayed option numbering is poll-local while retaining internal option IDs for admin editing/debugging.
+- Java 21 remains the intended build target for broad Paper 1.21.x compatibility; Java 25 runtimes can run Java 21 bytecode.
 
 ---
 
