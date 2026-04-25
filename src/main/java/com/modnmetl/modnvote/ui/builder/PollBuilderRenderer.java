@@ -1,7 +1,8 @@
 package com.modnmetl.modnvote.ui.builder;
 
+import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.domain.Poll;
-import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modvote.domain.PollOption;
 import com.modnmetl.modnvote.service.PollService;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -14,6 +15,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PollBuilderRenderer {
+
+    public static final int TITLE_SLOT = 10;
+    public static final int DESCRIPTION_SLOT = 12;
+    public static final int ALLOW_PARTIAL_SLOT = 14;
+    public static final int MAX_RANKINGS_SLOT = 16;
+    public static final int FIRST_OPTION_SLOT = 19;
+    public static final int READY_SLOT = 49;
+    public static final int CANCEL_SLOT = 53;
 
     private static final int WRAP_LENGTH = 40;
     private static final int MAX_VALIDATION_ISSUES_IN_LORE = 6;
@@ -33,15 +42,27 @@ public class PollBuilderRenderer {
 
         Poll poll = session.getPollSnapshot();
 
-        inv.setItem(10, createItem(Material.NAME_TAG,
+        inv.setItem(TITLE_SLOT, createItem(Material.NAME_TAG,
                 "§aTitle",
                 buildFieldLore(poll.title(), "Untitled ranked poll", "Click to edit title")
         ));
 
-        inv.setItem(12, createItem(Material.BOOK,
+        inv.setItem(DESCRIPTION_SLOT, createItem(Material.BOOK,
                 "§aDescription",
                 buildFieldLore(poll.description(), "No description set", "Click to edit description")
         ));
+
+        if (poll.pollType() == PollType.RANKED_SINGLE_WINNER) {
+            inv.setItem(ALLOW_PARTIAL_SLOT, createItem(Material.LEVER,
+                    poll.allowPartialRanking() ? "§aAllow Partial Rankings: ON" : "§cAllow Partial Rankings: OFF",
+                    buildAllowPartialLore(poll.allowPartialRanking())
+            ));
+
+            inv.setItem(MAX_RANKINGS_SLOT, createItem(Material.COMPARATOR,
+                    "§aMax Rankings: §f" + formatMaxRankings(poll.maxRankings(), session.getOptionsSnapshot().size()),
+                    buildMaxRankingsLore(poll.maxRankings(), session.getOptionsSnapshot().size())
+            ));
+        }
 
         List<PollOption> options = session.getOptionsSnapshot();
         for (int i = 0; i < options.size(); i++) {
@@ -64,7 +85,7 @@ public class PollBuilderRenderer {
                 lore.add("§cDescription missing or placeholder");
             }
 
-            inv.setItem(19 + i, createItem(Material.PAPER,
+            inv.setItem(FIRST_OPTION_SLOT + i, createItem(Material.PAPER,
                     optionNameColour + displayName,
                     lore
             ));
@@ -73,23 +94,54 @@ public class PollBuilderRenderer {
         BuilderValidation validation = validateBuilder(session);
 
         if (validation.valid()) {
-            inv.setItem(49, createItem(Material.LIME_WOOL,
+            inv.setItem(READY_SLOT, createItem(Material.LIME_WOOL,
                     "§aREADY",
                     List.of("§7Click to mark poll ready")
             ));
         } else {
-            inv.setItem(49, createItem(Material.BARRIER,
+            inv.setItem(READY_SLOT, createItem(Material.BARRIER,
                     "§cNOT READY",
                     buildValidationLore(validation.issues())
             ));
         }
 
-        inv.setItem(53, createItem(Material.RED_WOOL,
+        inv.setItem(CANCEL_SLOT, createItem(Material.RED_WOOL,
                 "§cCancel",
                 List.of("§7Close builder")
         ));
 
         player.openInventory(inv);
+    }
+
+    private List<String> buildAllowPartialLore(boolean enabled) {
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Click to toggle.");
+        lore.add("§8");
+        if (enabled) {
+            lore.addAll(wrapText("§aPlayers may submit a ballot after ranking fewer than the maximum allowed choices.", WRAP_LENGTH));
+        } else {
+            lore.addAll(wrapText("§cPlayers must rank the required number of choices before submitting.", WRAP_LENGTH));
+        }
+        return lore;
+    }
+
+    private List<String> buildMaxRankingsLore(int maxRankings, int optionCount) {
+        List<String> lore = new ArrayList<>();
+        lore.add("§7Click to cycle.");
+        lore.add("§8");
+        lore.addAll(wrapText("§7Controls how many choices each player may rank.", WRAP_LENGTH));
+        lore.add("§8");
+        lore.addAll(wrapText("§7Example: 6 options with Max Rankings 3 means players choose their top 3 only.", WRAP_LENGTH));
+        lore.add("§8");
+        lore.add("§7Current: §f" + formatMaxRankings(maxRankings, optionCount));
+        return lore;
+    }
+
+    private String formatMaxRankings(int maxRankings, int optionCount) {
+        if (maxRankings <= 0 || maxRankings >= optionCount) {
+            return "ALL OPTIONS";
+        }
+        return String.valueOf(maxRankings);
     }
 
     private BuilderValidation validateBuilder(PollBuilderSession session) {
