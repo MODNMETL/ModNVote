@@ -184,7 +184,11 @@ public class PollBuilderListener implements Listener {
         }
 
         if (slot == PollBuilderRenderer.CANCEL_SLOT) {
-            player.sendMessage("§cCancel clicked (not implemented yet)");
+            sessionManager.removeSession(player.getUniqueId());
+            player.closeInventory();
+            player.sendMessage("§ePoll Builder closed. Draft poll #" + session.getPollId() + " is still saved.");
+            player.sendMessage("§7Use §e/modnvote edit " + session.getPollId() + " §7to resume editing.");
+            return;
         }
     }
 
