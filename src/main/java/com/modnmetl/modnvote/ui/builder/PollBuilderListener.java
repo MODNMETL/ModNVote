@@ -51,7 +51,7 @@ public class PollBuilderListener implements Listener {
         if (slot == 10) {
             player.closeInventory();
 
-            inputManager.prompt(player, input -> {
+            inputManager.prompt(player, "poll title", input -> {
                 scheduler.runAsync(() -> {
                     try {
                         pollService.updatePollTitle(
@@ -73,7 +73,7 @@ public class PollBuilderListener implements Listener {
         if (slot == 12) {
             player.closeInventory();
 
-            inputManager.prompt(player, input -> {
+            inputManager.prompt(player, "poll description", input -> {
                 scheduler.runAsync(() -> {
                     try {
                         pollService.updatePollDescription(
@@ -99,7 +99,7 @@ public class PollBuilderListener implements Listener {
             player.closeInventory();
 
             if (event.isRightClick()) {
-                inputManager.prompt(player, input -> {
+                inputManager.prompt(player, "option " + (index + 1) + " description", input -> {
                     scheduler.runAsync(() -> {
                         try {
                             pollService.updateOptionDescription(
@@ -116,7 +116,7 @@ public class PollBuilderListener implements Listener {
                     });
                 });
             } else {
-                inputManager.prompt(player, input -> {
+                inputManager.prompt(player, "option " + (index + 1) + " name", input -> {
                     scheduler.runAsync(() -> {
                         try {
                             pollService.updateOptionName(
