@@ -2,6 +2,7 @@ package com.modnmetl.modnvote.ui.builder;
 
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.service.PollService;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -13,6 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PollBuilderRenderer {
+
+    private final PollService pollService;
+
+    public PollBuilderRenderer(PollService pollService) {
+        this.pollService = pollService;
+    }
 
     public void open(Player player, PollBuilderSession session) {
         Inventory inv = Bukkit.createInventory(
@@ -53,10 +60,25 @@ public class PollBuilderRenderer {
             ));
         }
 
-        inv.setItem(49, createItem(Material.BARRIER,
-                "§cNOT READY",
-                List.of("§7Validation not implemented yet")
-        ));
+        boolean valid;
+        try {
+            pollService.validatePollDefinition(session.getPollId());
+            valid = true;
+        } catch (Exception e) {
+            valid = false;
+        }
+
+        if (valid) {
+            inv.setItem(49, createItem(Material.LIME_WOOL,
+                    "§aREADY",
+                    List.of("§7Click to mark poll ready")
+            ));
+        } else {
+            inv.setItem(49, createItem(Material.RED_WOOL,
+                    "§cNOT READY",
+                    List.of("§7Poll is incomplete")
+            ));
+        }
 
         inv.setItem(53, createItem(Material.RED_WOOL,
                 "§cCancel",
@@ -81,23 +103,18 @@ public class PollBuilderRenderer {
 
     private List<String> buildDescription(String text, String fallback) {
         List<String> lore = new ArrayList<>();
-
         lore.add("§7" + fallback);
-
         if (text != null && !text.isBlank()) {
             lore.add("§8");
             lore.addAll(wrapText("§7" + text, 40));
         }
-
         return lore;
     }
 
     private List<String> wrapText(String text, int maxLength) {
         List<String> lines = new ArrayList<>();
-
         String colorPrefix = "§7";
         String cleanText = text.replace("§7", "");
-
         String[] words = cleanText.split(" ");
         StringBuilder currentLine = new StringBuilder();
 
@@ -106,9 +123,7 @@ public class PollBuilderRenderer {
                 lines.add(colorPrefix + currentLine.toString());
                 currentLine = new StringBuilder(word);
             } else {
-                if (!currentLine.isEmpty()) {
-                    currentLine.append(" ");
-                }
+                if (!currentLine.isEmpty()) currentLine.append(" ");
                 currentLine.append(word);
             }
         }
