@@ -2,9 +2,9 @@
 
 **Privacy-first, auditable community voting for PaperMC servers**
 
-ModNVote is an open-source Minecraft plugin for communities that want voting to be easy for players, practical for admins, and verifiable after the fact.
+ModNVote is a Minecraft voting and polling plugin for communities that want voting to be easy for players, practical for admins, and verifiable after the fact.
 
-Originally built as a simple Yes/No voting tool, ModNVote 2.0 is a clean architectural redesign into a ballot-based voting platform with anonymous ballots, poll lifecycles, ranked-choice support, deterministic results, and tamper-evident audit data.
+ModNVote 2.0 replaces the original Yes/No-only workflow with a GUI-first, ballot-based polling platform supporting ranked single-winner polls, Yes/No polls, anonymous ballots, poll lifecycle controls, and tamper-evident integrity checks.
 
 Developed by [MODN METL LTD](https://modnmetl.com).
 
@@ -17,262 +17,352 @@ Developed by [MODN METL LTD](https://modnmetl.com).
 
 ## ModNVote 2.0 status
 
-> ModNVote 2.0 is in active development on the `feature/modnvote-2.0-core` branch.
+ModNVote 2.0 is the active replacement for the legacy 1.x Yes/No-only plugin.
 
-Current 2.0 builds are functional for testing and SMP use, but schema, commands, and APIs may continue to evolve before the 2.0 branch replaces the legacy 1.x line.
+2.0 introduces:
+
+- GUI-driven poll creation and editing
+- Ranked single-winner polls
+- Yes/No polls
+- Anonymous ballot storage
+- Identity-aware participation tracking without joining identity to vote content
+- Ballot proof-phrase verification
+- Tamper-evident audit records
+- Java/Bedrock-friendly inventory interfaces
+- Mandatory confirmation before ballots are cast
 
 2.0 is a clean install target. Migration from legacy 1.x databases is not currently supported.
 
 ---
 
-## Core principles
+## Core privacy model
 
-### Privacy
+ModNVote 2.0 is designed around one central rule:
 
-ModNVote 2.0 deliberately separates identity-aware participation records from anonymous ballot content.
+> Anonymous ballots are the source of truth for vote content.
 
-- Participation records say that a player voted in a poll.
-- Anonymous ballots contain the actual vote selections.
-- The system must not introduce a joinable identity-to-vote path.
+The system deliberately separates:
 
-This means admins can verify participation and enforce duplicate-prevention rules without being handed a direct record of how a named player voted.
+| Data type | Purpose |
+|---|---|
+| Anonymous ballots | Store vote content and drive results |
+| Participation records | Track who has participated and prevent duplicate voting |
+| Audit records | Provide lifecycle and integrity evidence |
+| Proof phrases | Let a voter verify a ballot without revealing identity links |
 
-### Verifiability
+This means:
 
-Votes should not require blind trust.
-
-Players receive proof material after voting so they can later verify that their ballot still exists and still represents the selection they submitted.
-
-### Tamper evidence
-
-ModNVote does not claim to make tampering impossible. Instead, it is designed to make tampering detectable through stored ballot hashes, proof commitments, and an append-only audit chain.
-
-### Usability
-
-Voting is a trust interface. Players should be able to understand what they are voting on, review their choices, confirm intentionally, and later verify their participation or ballot without needing technical knowledge.
+- Results are calculated from anonymous ballots only.
+- Participation records do not contain vote content.
+- Vote content and voter identity are not stored together.
+- `/modnvote verify participation` confirms participation without revealing a vote.
+- `/modnvote verify ballot` uses a proof phrase as a bearer-token style verification mechanism.
+- GUI/session state does not directly write ballots or lifecycle state.
 
 ---
 
-## Current 2.0 capabilities
+## Supported poll types
 
-- Multi-poll architecture
-- Poll lifecycle: `DRAFT -> READY -> OPEN -> CLOSED`
-- Yes/No polls
-- Ranked single-winner polls using deterministic IRV-style counting
-- Draft poll authoring from commands
-- Draft poll title and description editing
-- Ranked option authoring with names and descriptions
-- Ready-state validation before a poll can open
-- Draft/ready poll deletion for abandoned setup work
-- Pane-less inventory GUI design for better Bedrock compatibility
-- Separate Java inventory renderers and session managers for ranked and Yes/No polls
-- Mandatory confirmation screen before submission
-- Authoritative ballot submission through the service layer
-- Anonymous ballots as the source of truth for vote content
-- Participation tracking separate from ballot data
-- IP duplicate-prevention heuristics with bypass support
-- Player participation listing via `/modnvote mypolls`
-- Participation verification that does not reveal vote choices
-- Ballot proof phrase verification for players who possess the proof phrase
-- Result reporting from anonymous ballots only
-- Append-only audit event chain
-- Ballot integrity verification
-- Deterministic recounting from stored anonymous ballots
+### Ranked single-winner polls
 
----
+Ranked polls let players rank options in preference order. Results are calculated from anonymous ranked ballots.
 
-## Poll lifecycle
+Admins can configure through the Poll Builder GUI:
 
-Polls move through explicit lifecycle states:
+- Poll title
+- Poll description
+- Option names
+- Option descriptions
+- Whether partial rankings are allowed
+- Maximum number of rankings a player may submit
+
+Example:
 
 ```text
-DRAFT -> READY -> OPEN -> CLOSED
+/modnvote create ranked_single_winner 5
 ```
 
-### DRAFT
+This creates a DRAFT poll with five placeholder options and immediately opens the Poll Builder GUI.
 
-The poll is editable. Admins can set the title, set the description, add/edit/move/remove ranked options, and validate the poll definition.
+### Yes/No polls
 
-### READY
+Yes/No polls use canonical Yes and No options managed by the service layer.
 
-The poll has passed validation and is staged for opening. It is no longer editable, but it can still be deleted if it has not opened.
-
-### OPEN
-
-Players can vote. The GUI is available through `/modnvote vote <pollId>`.
-
-### CLOSED
-
-Voting is finished. Public results can be reported with `/modnvote result <pollId>`.
-
----
-
-## Poll types
-
-### Yes/No
-
-Yes/No polls use canonical `yes` and `no` option keys. Admins may customise the display names and descriptions while the poll is in draft, but the semantic option structure is protected.
-
-### Ranked single-winner
-
-Ranked polls allow players to order choices by preference. The current result model determines the winner through deterministic IRV-style counting and displays an ordered tally view.
-
----
-
-## Voting UX
-
-Players vote with inventory GUIs rather than chat commands that reveal their choices.
-
-Current flows include:
-
-1. `/modnvote vote <pollId>`
-2. Poll-type-specific selection screen
-3. Mandatory confirmation screen
-4. Service-layer ballot submission
-5. Chat receipt with poll context, ballot hash, and proof phrase
-
-Design notes:
-
-- Ranked and Yes/No voting use separate session and renderer implementations.
-- The GUI layer is not authoritative and does not write to the database directly.
-- All voting validation happens in the service layer.
-- Background panes are intentionally omitted to avoid Bedrock angled-pane rendering issues.
-- Long poll and option descriptions are wrapped in item lore for readability.
-
----
-
-## Verification model
-
-ModNVote has two user-facing verification paths.
-
-### Participation verification
+Example:
 
 ```text
-/modnvote verify participation <pollId>
+/modnvote create yes_no
 ```
 
-This tells a player whether their participation is recorded for a poll and reports integrity status. It does not reveal how they voted.
-
-Legacy shorthand is also supported:
-
-```text
-/modnvote verify <pollId>
-```
-
-### Ballot proof verification
-
-```text
-/modnvote verify ballot <pollId> <proof phrase>
-```
-
-The proof phrase acts as a bearer token for that ballot. Anyone who has the phrase can reveal the ballot selection, so players are warned not to share it.
-
-The proof phrase is deliberately not player-specific. If someone brute-forces or guesses a phrase, the discovered ballot is still not directly attributable to a player through the participation table.
-
-Proof phrase input is normalised for usability, so players may type phrases with spaces or hyphens and mixed case.
+This creates a DRAFT Yes/No poll and opens the Poll Builder GUI.
 
 ---
 
-## Results model
+## Admin workflow
+
+### Create a ranked poll
+
+```text
+/modnvote create ranked_single_winner <optionCount>
+```
+
+Example:
+
+```text
+/modnvote create ranked_single_winner 5
+```
+
+The Poll Builder opens automatically.
+
+In the builder:
+
+- Left-click the title item to edit the poll title.
+- Click the description book to edit the poll description.
+- Left-click an option item to edit its display name.
+- Right-click an option item to edit its description.
+- Click the Allow Partial Rankings item to toggle partial ranking.
+- Click the Max Rankings item to cycle the maximum number of rankings.
+- Red fields still need work.
+- Green fields are complete.
+- When READY turns green, click it to mark the poll ready.
+
+### Create a Yes/No poll
+
+```text
+/modnvote create yes_no
+```
+
+The Poll Builder opens automatically.
+
+Yes/No polls do not show ranked-only settings such as Max Rankings or Allow Partial Rankings.
+
+### Resume editing a draft poll
+
+```text
+/modnvote edit <draftPollId>
+```
+
+This reopens the Poll Builder for an existing DRAFT poll.
+
+### Open a poll for voting
+
+```text
+/modnvote open <pollId>
+```
+
+Only READY polls can be opened.
+
+### Vote in an open poll
+
+```text
+/modnvote vote <pollId>
+```
+
+Voting uses an inventory GUI.
+
+For ranked polls:
+
+- Options remain visually stable as paper items.
+- Hovering an option shows whether it is currently ranked and at what position.
+- Players review their selection before casting.
+- Ballot submission requires confirmation.
+
+### Close a poll
+
+```text
+/modnvote close <pollId>
+```
+
+### Show results
 
 ```text
 /modnvote result <pollId>
 ```
 
-Results are derived from anonymous ballots only.
-
-- Open polls reject result requests.
-- Closed Yes/No polls show total votes, Yes count, and No count.
-- Closed ranked single-winner polls show total votes, the winning option, and an ordered tally of options.
-
-The result command does not use participation records to reconstruct vote content.
+Results are calculated from anonymous ballots only.
 
 ---
 
-## Commands
+## Verification commands
 
-All commands are rooted at `/modnvote`.
-
-### General
+### Show polls you participated in
 
 ```text
-/modnvote status
-/modnvote reload
+/modnvote mypolls
+```
+
+### Verify participation
+
+```text
+/modnvote verify participation <pollId>
+```
+
+This confirms whether the player participated in a poll and reports integrity status. It does not reveal vote content.
+
+### Verify a ballot proof phrase
+
+```text
+/modnvote verify ballot <pollId> <proofPhrase>
+```
+
+This checks whether a proof phrase matches a stored anonymous ballot and verifies the ballot integrity data.
+
+Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify that ballot reference.
+
+---
+
+## Admin command reference
+
+Normal admin-facing commands:
+
+```text
+/modnvote guide
+/modnvote create ranked_single_winner <optionCount>
+/modnvote create yes_no
+/modnvote edit <draftPollId>
 /modnvote list
-```
-
-`status` reports service readiness without exposing sensitive server filesystem paths.
-
-### Admin authoring
-
-```text
-/modnvote create <yes_no|ranked_single_winner>
-/modnvote set <pollId> title <title text>
-/modnvote set <pollId> description <description text>
-/modnvote set <pollId> maxrankings <number>
-/modnvote set <pollId> allowpartial <true|false>
-/modnvote option add <pollId> <key> <displayName> | <description>
-/modnvote option edit <pollId> <optionId> <name|description> <value>
-/modnvote option move <pollId> <optionId> <displayOrder>
-/modnvote option remove <pollId> <optionId>
-/modnvote validate <pollId>
-/modnvote ready <pollId>
+/modnvote show <pollId>
 /modnvote delete <pollId>
-```
-
-`delete` is limited to polls that have not opened yet: `DRAFT` or `READY`.
-
-### Admin lifecycle
-
-```text
 /modnvote open <pollId>
 /modnvote close <pollId>
+/modnvote result <pollId>
 ```
 
-A poll must be `READY` before it can open.
-
-### Demo and testing
-
-```text
-/modnvote rankedpolldemo
-/modnvote testvote <pollId> <optionId1> <optionId2> ...
-```
-
-`rankedpolldemo` creates a ready-to-open ranked horse-breed demo poll for admins who want to see the plugin flow before building their own poll.
-
-### Player commands
+Player-facing commands:
 
 ```text
 /modnvote vote <pollId>
 /modnvote mypolls
 /modnvote verify participation <pollId>
-/modnvote verify ballot <pollId> <proof phrase>
-/modnvote result <pollId>
+/modnvote verify ballot <pollId> <proofPhrase>
 ```
+
+Utility commands:
+
+```text
+/modnvote status
+/modnvote reload
+```
+
+Some older low-level authoring commands may remain callable as recovery tools, but normal poll setup should use the GUI builder.
 
 ---
 
 ## Permissions
 
-Permissions are still evolving during 2.0 development. Current command gating uses nodes including:
+Exact permission defaults are defined in `plugin.yml`.
 
-```text
-modnvote.admin.reload
-modnvote.admin.poll.list
-modnvote.admin.poll.create
-modnvote.admin.poll.open
-modnvote.admin.poll.close
-modnvote.verify
-modnvote.testvote
-```
+Common permissions include:
+
+| Permission | Purpose |
+|---|---|
+| `modnvote.admin.poll.create` | Create, edit, inspect, and manage draft polls |
+| `modnvote.admin.poll.list` | List polls |
+| `modnvote.admin.poll.open` | Open polls for voting |
+| `modnvote.admin.poll.close` | Close polls |
+| `modnvote.admin.reload` | Reload plugin configuration |
+| `modnvote.verify` | Use verification commands |
+| `modnvote.testvote` | Access test vote tooling where enabled |
 
 Duplicate-prevention bypass support remains configurable through the plugin configuration.
 
 ---
 
+## GUI design notes
+
+The current GUI intentionally avoids decorative glass panes.
+
+This keeps the interface simpler and more compatible with Bedrock players while still providing clear interaction cues through:
+
+- Item names
+- Item lore
+- Red/green completion status
+- Confirmation screens
+- Wrapped multiline descriptions
+
+The Poll Builder and voting GUI are designed to remain intuitive across Java and Bedrock clients.
+
+---
+
+## Architecture overview
+
+ModNVote 2.0 uses a service-authoritative design.
+
+### GUI/session layer
+
+Responsible for:
+
+- Rendering inventories
+- Holding temporary player interaction state
+- Capturing chat input for builder fields
+- Delegating all mutations to services
+
+Not responsible for:
+
+- Writing ballots directly
+- Writing lifecycle state directly
+- Calculating results
+- Bypassing validation
+
+### Service layer
+
+Responsible for:
+
+- Poll creation
+- Poll validation
+- Lifecycle transitions
+- Option mutation
+- Ballot submission
+- Integrity and audit enforcement
+
+### Persistence layer
+
+Responsible for:
+
+- Poll definitions
+- Poll options
+- Anonymous ballots
+- Participation records
+- Audit records
+
+---
+
+## Lifecycle
+
+A poll progresses through lifecycle states such as:
+
+```text
+DRAFT -> READY -> OPEN -> CLOSED
+```
+
+Typical admin flow:
+
+```text
+create -> edit in builder -> mark READY -> open -> players vote -> close -> result
+```
+
+The builder keeps polls in DRAFT until required fields are complete and the admin marks the poll ready.
+
+---
+
+## Integrity and audit model
+
+ModNVote 2.0 includes audit and verification features intended to make election data tamper-evident.
+
+Integrity checks include:
+
+- Participation inclusion checks
+- Ballot hash verification
+- Ballot commitment verification
+- Audit chain validation
+
+The goal is not to identify how someone voted. The goal is to verify that the stored election data remains internally consistent and that a voter can verify their own ballot proof phrase.
+
+---
+
 ## Installation
 
-> ModNVote 2.0 currently requires a clean install.
+ModNVote 2.0 currently requires a clean install.
 
 1. Stop the server.
 2. Remove any legacy ModNVote 1.x jar.
@@ -284,62 +374,70 @@ Duplicate-prevention bypass support remains configurable through the plugin conf
 
 ### Requirements
 
-- Paper 1.21.x+
+- Paper 1.21.x
 - Java 21
 
 ---
 
-## Architecture notes
+## Build requirements
 
-The 2.0 architecture keeps clear separation between layers:
+Build locally:
 
-- Command layer: parses user input and displays messages.
-- GUI/session layer: owns inventory state and player interaction flow.
-- Service layer: enforces voting, validation, lifecycle, privacy, and integrity rules.
-- DAO layer: persists poll, option, participation, anonymous ballot, preference, and audit data.
+```text
+./gradlew clean build
+```
 
-The GUI/session layer must not write ballots or lifecycle state directly to the database. Ballot submission goes through the authoritative ballot service.
+On Windows:
+
+```text
+gradlew.bat clean build
+```
+
+The Java source/target level should remain Java 21 unless explicitly changed.
+
+---
+
+## Development notes
+
+- Keep `.gradle/` out of version control.
+- Do not commit local Gradle cache files.
+- Prefer tranche-based changes that build after each tranche.
+- GUI features should remain Folia-aware through `ModNScheduler`.
+- Results must always come from anonymous ballots only.
+- Participation verification must never reveal vote content.
+
+---
+
+## Release smoke test
+
+Recommended smoke test before release:
+
+```text
+/modnvote create ranked_single_winner 3
+/modnvote create yes_no
+/modnvote edit <draftPollId>
+/modnvote open <readyPollId>
+/modnvote vote <openPollId>
+/modnvote close <openPollId>
+/modnvote result <closedPollId>
+/modnvote mypolls
+/modnvote verify participation <pollId>
+/modnvote verify ballot <pollId> <proofPhrase>
+```
 
 ---
 
 ## Roadmap
 
-### Toward 2.0.0
-
-- Continue SMP testing of Yes/No and ranked single-winner polls
-- Polish result display formatting
-- Improve authoring ergonomics for longer option sets
-- Expand audit/admin visibility without weakening ballot privacy
-- Prepare the 2.0 branch to replace the legacy 1.x line
-
-### Later 2.x
+Potential future 2.x work:
 
 - Multi-winner STV
 - Combined elections such as Mayor + Council
 - Exportable audit snapshots
 - Optional external witness publication
 - Advanced reporting and dashboards
-
----
-
-## Important notes
-
-- 2.0 is a clean architectural reset.
-- No migration from 1.x is currently supported.
-- Schema and APIs are still evolving.
-- Early builds are intended for testing and iteration.
-- Privacy depends on preserving the separation between participation and ballot content.
-
----
-
-## Contributing
-
-1. Fork the repo.
-2. Create a feature branch.
-3. Build with `./gradlew clean build`.
-4. Submit a PR with clear rationale.
-
-Please preserve the privacy model when contributing. In particular, do not introduce identity-to-ballot joins or verification flows that reveal how a named player voted.
+- Dedicated GUI delete confirmation flow
+- Additional admin transparency tooling
 
 ---
 
@@ -366,5 +464,5 @@ MIT License
 
 ---
 
-> “Trust, but verify.”  
+> "Trust, but verify."  
 > ModNVote is built to help communities make fair, transparent decisions.
