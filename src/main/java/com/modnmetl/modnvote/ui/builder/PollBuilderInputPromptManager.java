@@ -18,8 +18,12 @@ public class PollBuilderInputPromptManager {
     private final Map<UUID, Consumer<String>> pendingInputs = new ConcurrentHashMap<>();
 
     public void prompt(Player player, Consumer<String> handler) {
+        prompt(player, "value", handler);
+    }
+
+    public void prompt(Player player, String fieldLabel, Consumer<String> handler) {
         pendingInputs.put(player.getUniqueId(), handler);
-        player.sendMessage("§eEnter value in chat or type 'cancel'.");
+        player.sendMessage("§eEnter " + fieldLabel + " in chat or type 'cancel'.");
     }
 
     public boolean handleChat(Player player, String message) {
