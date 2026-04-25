@@ -113,7 +113,7 @@ public final class ModNVotePlugin extends JavaPlugin {
             this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
             this.pollBuilderSessionManager = new PollBuilderSessionManager();
             this.pollBuilderInputPromptManager = new PollBuilderInputPromptManager();
-            this.pollBuilderRenderer = new PollBuilderRenderer();
+            this.pollBuilderRenderer = new PollBuilderRenderer(pollService);
 
             registerCommands();
             registerListeners();
