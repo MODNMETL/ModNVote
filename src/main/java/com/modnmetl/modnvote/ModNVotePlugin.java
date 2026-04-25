@@ -12,6 +12,11 @@ import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.ResultService;
 import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.SchemaInitializer;
+import com.modnmetl.modnvote.ui.builder.PollBuilderChatListener;
+import com.modnmetl.modnvote.ui.builder.PollBuilderInputPromptManager;
+import com.modnmetl.modnvote.ui.builder.PollBuilderListener;
+import com.modnmetl.modnvote.ui.builder.PollBuilderRenderer;
+import com.modnmetl.modnvote.ui.builder.PollBuilderSessionManager;
 import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
 import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
@@ -64,6 +69,10 @@ public final class ModNVotePlugin extends JavaPlugin {
     private YesNoInventoryVoteRenderer yesNoInventoryVoteRenderer;
     private VoteSubmissionCoordinator voteSubmissionCoordinator;
 
+    private PollBuilderSessionManager pollBuilderSessionManager;
+    private PollBuilderInputPromptManager pollBuilderInputPromptManager;
+    private PollBuilderRenderer pollBuilderRenderer;
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -101,6 +110,9 @@ public final class ModNVotePlugin extends JavaPlugin {
             this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(scheduler, voteGuiText);
             this.yesNoInventoryVoteRenderer = new YesNoInventoryVoteRenderer(scheduler, yesNoGuiText);
             this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
+            this.pollBuilderSessionManager = new PollBuilderSessionManager();
+            this.pollBuilderInputPromptManager = new PollBuilderInputPromptManager();
+            this.pollBuilderRenderer = new PollBuilderRenderer();
 
             registerCommands();
             registerListeners();
@@ -119,6 +131,9 @@ public final class ModNVotePlugin extends JavaPlugin {
         }
         if (yesNoVoteSessionManager != null) {
             yesNoVoteSessionManager.clearAllSessions();
+        }
+        if (pollBuilderSessionManager != null) {
+            // Poll builder sessions are in-memory only and intentionally discarded on shutdown.
         }
 
         if (databaseManager != null) {
@@ -200,6 +215,17 @@ public final class ModNVotePlugin extends JavaPlugin {
                         ballotService,
                         getLogger()
                 ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new PollBuilderListener(
+                        pollBuilderSessionManager,
+                        pollBuilderInputPromptManager
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new PollBuilderChatListener(pollBuilderInputPromptManager),
                 this
         );
     }
