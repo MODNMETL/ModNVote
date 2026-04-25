@@ -211,6 +211,50 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+            case "edit" -> {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(messages.get("general.players_only"));
+                    return true;
+                }
+
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " edit <pollId>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
+
+                    if (poll.status() != PollStatus.DRAFT) {
+                        sender.sendMessage("§cOnly DRAFT polls can be edited in the Poll Builder.");
+                        return true;
+                    }
+
+                    List<PollOption> options = findOptions(pollId);
+
+                    PollBuilderSession session = new PollBuilderSession(
+                            player.getUniqueId(),
+                            pollId,
+                            poll,
+                            options
+                    );
+
+                    plugin.getPollBuilderSessionManager().createOrReplaceSession(session);
+                    plugin.getPollBuilderRenderer().open(player, session);
+
+                    sender.sendMessage("§aOpened Poll Builder for draft poll #" + pollId + ".");
+                } catch (PollServiceException e) {
+                    sender.sendMessage("§cUnable to open Poll Builder: " + e.getMessage());
+                }
+
+                return true;
+            }
             case "rankedpolldemo" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.create")) {
                     sender.sendMessage(messages.get("general.no_permission"));
