@@ -2,7 +2,7 @@ package com.modnmetl.modnvote.ui.builder;
 
 import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.domain.Poll;
-import com.modnmetl.modvote.domain.PollOption;
+import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.service.PollService;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
