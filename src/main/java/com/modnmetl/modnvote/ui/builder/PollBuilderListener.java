@@ -136,9 +136,21 @@ public class PollBuilderListener implements Listener {
             return;
         }
 
-        // VALIDATE (placeholder)
+        // READY / VALIDATE
         if (slot == 49) {
-            player.sendMessage("§7Validate clicked (not implemented yet)");
+            scheduler.runAsync(() -> {
+                try {
+                    pollService.readyPoll(session.getPollId(), player.getName());
+                    sessionManager.removeSession(player.getUniqueId());
+                    scheduler.runForPlayer(player, () -> {
+                        player.closeInventory();
+                        player.sendMessage("§aPoll marked READY.");
+                    });
+                } catch (Exception e) {
+                    scheduler.runForPlayer(player,
+                            () -> player.sendMessage("§cCannot mark ready: " + e.getMessage()));
+                }
+            });
             return;
         }
 
