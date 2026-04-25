@@ -12,6 +12,7 @@ import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.service.ResultService;
 import com.modnmetl.modnvote.storage.PollOptionDao;
+import com.modnmetl.modnvote.ui.builder.PollBuilderSession;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
@@ -140,12 +141,56 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage("§cUsage: /" + label + " create <yes_no|ranked_single_winner>");
+                    sender.sendMessage("§cUsage: /" + label + " create <yes_no|ranked_single_winner> [optionCount]");
                     return true;
                 }
 
                 try {
                     PollType pollType = parsePollType(args[1]);
+
+                    if (pollType == PollType.RANKED_SINGLE_WINNER) {
+                        if (!(sender instanceof Player player)) {
+                            sender.sendMessage(messages.get("general.players_only"));
+                            return true;
+                        }
+
+                        if (args.length < 3) {
+                            sender.sendMessage("§cUsage: /" + label + " create ranked_single_winner <optionCount>");
+                            return true;
+                        }
+
+                        int optionCount = parseOptionCount(args[2]);
+
+                        long pollId = pollService.createPoll(sender.getName(), pollType);
+
+                        for (int i = 1; i <= optionCount; i++) {
+                            pollService.addOption(
+                                    pollId,
+                                    "option_" + i,
+                                    "Option " + i,
+                                    "Placeholder description for option " + i + ".",
+                                    sender.getName()
+                            );
+                        }
+
+                        Poll poll = requirePoll(pollId);
+                        List<PollOption> options = findOptions(pollId);
+
+                        PollBuilderSession session = new PollBuilderSession(
+                                player.getUniqueId(),
+                                pollId,
+                                poll,
+                                options
+                        );
+
+                        plugin.getPollBuilderSessionManager().createOrReplaceSession(session);
+                        plugin.getPollBuilderRenderer().open(player, session);
+
+                        sender.sendMessage("§aCreated DRAFT ranked poll §f#" + pollId + "§a with §f"
+                                + optionCount + "§a placeholder options.");
+                        sender.sendMessage("§7Poll Builder opened. Click fields to edit them.");
+                        return true;
+                    }
 
                     long pollId = pollService.createPoll(sender.getName(), pollType);
                     Poll poll = requirePoll(pollId);
@@ -155,16 +200,14 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage("§7Next steps:");
                     sender.sendMessage(" §8- §e/" + label + " set " + pollId + " title <your title>");
                     sender.sendMessage(" §8- §e/" + label + " set " + pollId + " description <your description>");
-
-                    if (poll.pollType() == PollType.RANKED_SINGLE_WINNER) {
-                        sender.sendMessage(" §8- §e/" + label + " option add " + pollId + " <key> <displayName> | <description>");
-                    }
-
                     sender.sendMessage(" §8- §e/" + label + " validate " + pollId);
                     sender.sendMessage(" §8- §e/" + label + " ready " + pollId);
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(messages.format("errors.create_failed",
+                            Map.of("reason", "Option count must be a whole number.")));
                 }
                 return true;
             }
@@ -931,6 +974,21 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
             throw new PollServiceException(messages.getRaw("poll.invalid_id"));
+        }
+    }
+
+    private int parseOptionCount(String raw) throws PollServiceException {
+        try {
+            int optionCount = Integer.parseInt(raw);
+            if (optionCount < 2) {
+                throw new PollServiceException("Ranked polls must have at least 2 options.");
+            }
+            if (optionCount > 30) {
+                throw new PollServiceException("Ranked poll builder currently supports at most 30 options.");
+            }
+            return optionCount;
+        } catch (NumberFormatException e) {
+            throw new PollServiceException("Option count must be a whole number.");
         }
     }
 

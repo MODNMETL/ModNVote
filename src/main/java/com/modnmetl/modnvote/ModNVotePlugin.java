@@ -283,6 +283,13 @@ public final class ModNVotePlugin extends JavaPlugin {
     public JavaInventoryVoteRenderer getJavaInventoryVoteRenderer() {
         return Objects.requireNonNull(javaInventoryVoteRenderer, "javaInventoryVoteRenderer");
     }
+    public PollBuilderSessionManager getPollBuilderSessionManager() {
+        return Objects.requireNonNull(pollBuilderSessionManager, "pollBuilderSessionManager");
+    }
+
+    public PollBuilderRenderer getPollBuilderRenderer() {
+        return Objects.requireNonNull(pollBuilderRenderer, "pollBuilderRenderer");
+    }
 
     public YesNoInventoryVoteRenderer getYesNoInventoryVoteRenderer() {
         return Objects.requireNonNull(yesNoInventoryVoteRenderer, "yesNoInventoryVoteRenderer");
