@@ -1,6 +1,7 @@
 package com.modnmetl.modnvote.ui.render;
 
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.platform.ModNScheduler;
 import com.modnmetl.modnvote.ui.session.VoteScreen;
 import com.modnmetl.modnvote.ui.session.VoteSession;
 import com.modnmetl.modnvote.ui.text.VoteGuiText;
@@ -12,7 +13,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
 import java.util.Objects;
@@ -60,7 +60,7 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
             28, 29, 30, 31, 32, 33, 34
     };
 
-    private final JavaPlugin plugin;
+    private final ModNScheduler scheduler;
     private final VoteGuiText voteGuiText;
 
     /**
@@ -68,9 +68,9 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
      */
     private final Set<UUID> playersWithManagedReopenInProgress = ConcurrentHashMap.newKeySet();
 
-    public JavaInventoryVoteRenderer(JavaPlugin plugin,
+    public JavaInventoryVoteRenderer(ModNScheduler scheduler,
                                      VoteGuiText voteGuiText) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.voteGuiText = Objects.requireNonNull(voteGuiText, "voteGuiText");
     }
 
@@ -212,8 +212,8 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         clearCursor(player);
         player.openInventory(inventory);
 
-        Bukkit.getScheduler().runTaskLater(
-                plugin,
+        scheduler.runForPlayerLater(
+                player,
                 () -> {
                     clearCursor(player);
                     playersWithManagedReopenInProgress.remove(playerUuid);
@@ -249,22 +249,6 @@ public final class JavaInventoryVoteRenderer implements VoteRenderer {
         inventory.setItem(CONFIRM_SUMMARY_SLOT, buildConfirmationSummaryItem(session));
         inventory.setItem(CONFIRM_BACK_SLOT, buildBackItem());
         inventory.setItem(CONFIRM_COMMIT_SLOT, buildCommitItem());
-    }
-
-    private void fillInventory(Inventory inventory, ItemStack itemStack) {
-        for (int slot = 0; slot < inventory.getSize(); slot++) {
-            inventory.setItem(slot, itemStack);
-        }
-    }
-
-    private ItemStack createFillerPane() {
-        ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(" ");
-            item.setItemMeta(meta);
-        }
-        return item;
     }
 
     private ItemStack buildPollInfoItem(VoteSession session) {
