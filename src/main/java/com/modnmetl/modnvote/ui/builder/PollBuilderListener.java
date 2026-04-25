@@ -6,11 +6,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.InventoryHolder;
 
-/**
- * Handles interaction within the Poll Builder GUI.
- *
- * Scaffold only – routing logic will be expanded next.
- */
 public class PollBuilderListener implements Listener {
 
     private final PollBuilderSessionManager sessionManager;
@@ -32,10 +27,37 @@ public class PollBuilderListener implements Listener {
         event.setCancelled(true);
 
         PollBuilderSession session = builderHolder.getSession();
+        int slot = event.getSlot();
 
-        player.sendMessage("§7[PollBuilder] Click captured (slot=" + event.getSlot() + ") for poll #" + session.getPollId());
+        if (slot == 10) {
+            player.closeInventory();
+            inputManager.prompt(player, input -> player.sendMessage("§7Title set: " + input));
+            return;
+        }
 
-        // TODO: route clicks to edit title / description / options
-        // TODO: integrate inputManager.prompt(...)
+        if (slot == 12) {
+            player.closeInventory();
+            inputManager.prompt(player, input -> player.sendMessage("§7Description updated"));
+            return;
+        }
+
+        if (slot >= 19 && slot < 19 + session.getOptionsSnapshot().size()) {
+            player.closeInventory();
+            if (event.isRightClick()) {
+                inputManager.prompt(player, input -> player.sendMessage("§7Option description updated"));
+            } else {
+                inputManager.prompt(player, input -> player.sendMessage("§7Option name updated"));
+            }
+            return;
+        }
+
+        if (slot == 49) {
+            player.sendMessage("§7Validate clicked");
+            return;
+        }
+
+        if (slot == 53) {
+            player.sendMessage("§cCancel clicked");
+        }
     }
 }
