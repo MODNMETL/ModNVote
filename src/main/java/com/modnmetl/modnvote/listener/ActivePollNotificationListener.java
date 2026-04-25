@@ -38,11 +38,11 @@ public final class ActivePollNotificationListener implements Listener {
         UUID playerId = player.getUniqueId();
 
         scheduler.runForPlayerLater(player, () -> {
-            scheduler.runAsync(() -> process(playerId));
+            scheduler.runAsync(() -> process(player, playerId));
         }, 40L);
     }
 
-    private void process(UUID playerId) {
+    private void process(Player player, UUID playerId) {
         try {
             List<Poll> polls = pollService.listPolls();
             List<Poll> openUnvoted = new ArrayList<>();
@@ -67,8 +67,8 @@ public final class ActivePollNotificationListener implements Listener {
             }
 
             scheduler.runForPlayerLater(
-                    org.bukkit.Bukkit.getPlayer(playerId),
-                    () -> sendMessage(org.bukkit.Bukkit.getPlayer(playerId), openUnvoted),
+                    player,
+                    () -> sendMessage(player, openUnvoted),
                     1L
             );
 
