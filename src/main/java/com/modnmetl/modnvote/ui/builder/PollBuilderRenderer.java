@@ -70,9 +70,9 @@ public class PollBuilderRenderer {
             ));
         }
 
-        PollService.PollValidationResult validationResult = validate(session.getPollId());
+        BuilderValidation validation = validateBuilder(session);
 
-        if (validationResult.valid()) {
+        if (validation.valid()) {
             inv.setItem(49, createItem(Material.LIME_WOOL,
                     "§aREADY",
                     List.of("§7Click to mark poll ready")
@@ -80,7 +80,7 @@ public class PollBuilderRenderer {
         } else {
             inv.setItem(49, createItem(Material.BARRIER,
                     "§cNOT READY",
-                    buildValidationLore(validationResult)
+                    buildValidationLore(validation.issues())
             ));
         }
 
@@ -92,17 +92,38 @@ public class PollBuilderRenderer {
         player.openInventory(inv);
     }
 
-    private PollService.PollValidationResult validate(long pollId) {
+    private BuilderValidation validateBuilder(PollBuilderSession session) {
+        List<String> issues = new ArrayList<>();
+        Poll poll = session.getPollSnapshot();
+        List<PollOption> options = session.getOptionsSnapshot();
+
         try {
-            return pollService.validatePollDefinition(pollId);
+            PollService.PollValidationResult serviceValidation = pollService.validatePollDefinition(session.getPollId());
+            issues.addAll(serviceValidation.issues());
         } catch (Exception e) {
-            return new PollService.PollValidationResult(
-                    pollId,
-                    "Unknown poll",
-                    false,
-                    List.of("Validation failed: " + e.getMessage())
-            );
+            issues.add("Validation failed: " + e.getMessage());
         }
+
+        if (!isComplete(poll.title()) || poll.title().equalsIgnoreCase("Untitled ranked poll")) {
+            issues.add("Poll title must be changed from the placeholder.");
+        }
+        if (!isComplete(poll.description())) {
+            issues.add("Poll description must not be blank.");
+        }
+
+        for (int i = 0; i < options.size(); i++) {
+            PollOption option = options.get(i);
+            int displayNumber = i + 1;
+
+            if (!isComplete(option.displayName()) || isPlaceholderOptionName(option.displayName(), displayNumber)) {
+                issues.add("Option " + displayNumber + " name must be changed from the placeholder.");
+            }
+            if (!isComplete(option.description()) || isPlaceholderOptionDescription(option.description(), displayNumber)) {
+                issues.add("Option " + displayNumber + " description must be changed from the placeholder.");
+            }
+        }
+
+        return new BuilderValidation(issues.isEmpty(), List.copyOf(issues));
     }
 
     private ItemStack createItem(Material material, String name, List<String> lore) {
@@ -132,11 +153,10 @@ public class PollBuilderRenderer {
         return lore;
     }
 
-    private List<String> buildValidationLore(PollService.PollValidationResult validationResult) {
+    private List<String> buildValidationLore(List<String> issues) {
         List<String> lore = new ArrayList<>();
         lore.add("§7Complete the highlighted fields.");
 
-        List<String> issues = validationResult.issues();
         if (!issues.isEmpty()) {
             lore.add("§8");
             lore.add("§cIssues:");
@@ -201,5 +221,8 @@ public class PollBuilderRenderer {
 
     private String stripColourCodes(String text) {
         return text == null ? "" : text.replaceAll("§.", "");
+    }
+
+    private record BuilderValidation(boolean valid, List<String> issues) {
     }
 }
