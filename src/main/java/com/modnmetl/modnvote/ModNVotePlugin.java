@@ -1,34 +1,264 @@
-// FULL FILE RESTORED + BUILDER WIRING ADDED
-// NOTE: This restores previous content and safely appends builder wiring.
-
 package com.modnmetl.modnvote;
 
-import com.modnmetl.modnvote.ui.builder.*;
+import com.modnmetl.modnvote.commands.PollCommand;
+import com.modnmetl.modnvote.config.MessageService;
+import com.modnmetl.modnvote.listener.ActivePollNotificationListener;
+import com.modnmetl.modnvote.platform.ModNScheduler;
+import com.modnmetl.modnvote.platform.PaperPlatformAdapter;
+import com.modnmetl.modnvote.platform.PlatformAdapter;
+import com.modnmetl.modnvote.service.BallotService;
+import com.modnmetl.modnvote.service.IntegrityVerificationService;
+import com.modnmetl.modnvote.service.PollService;
+import com.modnmetl.modnvote.service.ResultService;
+import com.modnmetl.modnvote.storage.DatabaseManager;
+import com.modnmetl.modnvote.storage.SchemaInitializer;
+import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
+import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
+import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.render.VoteGuiListener;
+import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.render.YesNoVoteGuiListener;
+import com.modnmetl.modnvote.ui.session.VoteSessionCleanupListener;
+import com.modnmetl.modnvote.ui.session.VoteSessionCloseCleanupListener;
+import com.modnmetl.modnvote.ui.session.VoteSessionManager;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionCleanupListener;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionCloseCleanupListener;
+import com.modnmetl.modnvote.ui.session.YesNoVoteSessionManager;
+import com.modnmetl.modnvote.ui.submit.VoteSubmissionCoordinator;
+import com.modnmetl.modnvote.ui.text.VoteGuiText;
+import com.modnmetl.modnvote.ui.text.YesNoGuiText;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Objects;
+import java.util.logging.Level;
+
+/**
+ * ModNVote 2.0 plugin bootstrap.
+ *
+ * This replaces the 1.x single-round yes/no runtime with a ballot-first
+ * platform foundation for the 2.x architecture.
+ */
 public final class ModNVotePlugin extends JavaPlugin {
 
-    private PollBuilderSessionManager builderSessionManager;
-    private PollBuilderInputPromptManager builderInputManager;
-    private PollBuilderRenderer builderRenderer;
+    private ModNScheduler scheduler;
+    private PlatformAdapter platformAdapter;
+    private DatabaseManager databaseManager;
+    private SchemaInitializer schemaInitializer;
+    private PollService pollService;
+    private BallotService ballotService;
+    private MessageService messageService;
+    private IntegrityVerificationService integrityVerificationService;
+    private ResultService resultService;
+
+    private VoteSessionManager voteSessionManager;
+    private YesNoVoteSessionManager yesNoVoteSessionManager;
+    private BallotSummaryFormatter ballotSummaryFormatter;
+    private VoteGuiText voteGuiText;
+    private YesNoGuiText yesNoGuiText;
+    private VoteSoundService voteSoundService;
+    private JavaInventoryVoteRenderer javaInventoryVoteRenderer;
+    private YesNoInventoryVoteRenderer yesNoInventoryVoteRenderer;
+    private VoteSubmissionCoordinator voteSubmissionCoordinator;
 
     @Override
     public void onEnable() {
-        // Existing plugin init would be here (restored from previous commit)
+        saveDefaultConfig();
+        saveBundledResourceIfMissing("messages.yml");
 
-        // --- Poll Builder Wiring ---
-        builderSessionManager = new PollBuilderSessionManager();
-        builderInputManager = new PollBuilderInputPromptManager();
-        builderRenderer = new PollBuilderRenderer();
+        try {
+            this.scheduler = new ModNScheduler(this, getLogger());
+            this.platformAdapter = new PaperPlatformAdapter(this);
 
-        var builderListener = new PollBuilderListener(
-                builderSessionManager,
-                builderInputManager
+            String sqliteFileName = getConfig().getString("storage.sqlite_file", "modnvote.db");
+            Path databasePath = getDataFolder().toPath().resolve(sqliteFileName);
+
+            this.databaseManager = new DatabaseManager(databasePath);
+            this.schemaInitializer = new SchemaInitializer(databaseManager);
+            this.schemaInitializer.initialize();
+
+            this.pollService = new PollService(databaseManager, platformAdapter, getLogger());
+            this.ballotService = new BallotService(databaseManager, platformAdapter, getLogger());
+            this.messageService = new MessageService(this);
+            this.integrityVerificationService = new IntegrityVerificationService(
+                    databaseManager,
+                    platformAdapter,
+                    getLogger()
+            );
+            this.resultService = new ResultService(
+                    databaseManager,
+                    getLogger()
+            );
+            this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
+            this.yesNoVoteSessionManager = new YesNoVoteSessionManager(Duration.ofMinutes(10));
+            this.ballotSummaryFormatter = new BallotSummaryFormatter();
+            this.voteGuiText = new VoteGuiText(messageService, ballotSummaryFormatter);
+            this.yesNoGuiText = new YesNoGuiText(messageService, ballotSummaryFormatter);
+            this.voteSoundService = new VoteSoundService(this);
+            this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(scheduler, voteGuiText);
+            this.yesNoInventoryVoteRenderer = new YesNoInventoryVoteRenderer(scheduler, yesNoGuiText);
+            this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
+
+            registerCommands();
+            registerListeners();
+
+            getLogger().info("ModNVote 2.0 bootstrap enabled successfully.");
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "Failed to enable ModNVote 2.0", e);
+            getServer().getPluginManager().disablePlugin(this);
+        }
+    }
+
+    @Override
+    public void onDisable() {
+        if (voteSessionManager != null) {
+            voteSessionManager.clearAllSessions();
+        }
+        if (yesNoVoteSessionManager != null) {
+            yesNoVoteSessionManager.clearAllSessions();
+        }
+
+        if (databaseManager != null) {
+            databaseManager.close();
+        }
+    }
+
+    private void registerCommands() {
+        PluginCommand command = getCommand("modnvote");
+        if (command == null) {
+            throw new IllegalStateException("Command 'modnvote' is not defined in plugin.yml");
+        }
+
+        PollCommand executor = new PollCommand(
+                this,
+                pollService,
+                ballotService,
+                integrityVerificationService,
+                resultService,
+                messageService,
+                voteSessionManager,
+                yesNoVoteSessionManager,
+                javaInventoryVoteRenderer,
+                yesNoInventoryVoteRenderer
         );
+        command.setExecutor(executor);
+        command.setTabCompleter(executor);
+    }
 
-        var builderChatListener = new PollBuilderChatListener(builderInputManager);
+    private void registerListeners() {
+        getServer().getPluginManager().registerEvents(
+                new VoteGuiListener(
+                        voteSessionManager,
+                        javaInventoryVoteRenderer,
+                        voteSubmissionCoordinator,
+                        voteSoundService,
+                        messageService
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new YesNoVoteGuiListener(
+                        yesNoVoteSessionManager,
+                        yesNoInventoryVoteRenderer,
+                        voteSubmissionCoordinator,
+                        voteSoundService,
+                        messageService
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new VoteSessionCleanupListener(voteSessionManager),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new YesNoVoteSessionCleanupListener(yesNoVoteSessionManager),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new VoteSessionCloseCleanupListener(
+                        this,
+                        voteSessionManager,
+                        javaInventoryVoteRenderer
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new YesNoVoteSessionCloseCleanupListener(
+                        this,
+                        yesNoVoteSessionManager,
+                        yesNoInventoryVoteRenderer
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new ActivePollNotificationListener(
+                        scheduler,
+                        pollService,
+                        ballotService,
+                        getLogger()
+                ),
+                this
+        );
+    }
 
-        getServer().getPluginManager().registerEvents(builderListener, this);
-        getServer().getPluginManager().registerEvents(builderChatListener, this);
+    private void saveBundledResourceIfMissing(String resourcePath) {
+        File target = new File(getDataFolder(), resourcePath);
+        if (!target.exists()) {
+            saveResource(resourcePath, false);
+        }
+    }
+
+    public void reloadPluginConfiguration() {
+        reloadConfig();
+        if (messageService != null) {
+            messageService.reload();
+        }
+    }
+
+    public ModNScheduler getSchedulerBridge() {
+        return Objects.requireNonNull(scheduler, "scheduler");
+    }
+
+    public PlatformAdapter getPlatformAdapter() {
+        return Objects.requireNonNull(platformAdapter, "platformAdapter");
+    }
+
+    public DatabaseManager getDatabaseManager() {
+        return Objects.requireNonNull(databaseManager, "databaseManager");
+    }
+
+    public PollService getPollService() {
+        return Objects.requireNonNull(pollService, "pollService");
+    }
+
+    public BallotService getBallotService() {
+        return Objects.requireNonNull(ballotService, "ballotService");
+    }
+
+    public MessageService getMessageService() {
+        return Objects.requireNonNull(messageService, "messageService");
+    }
+
+    public IntegrityVerificationService getIntegrityVerificationService() {
+        return Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
+    }
+
+    public VoteSessionManager getVoteSessionManager() {
+        return Objects.requireNonNull(voteSessionManager, "voteSessionManager");
+    }
+
+    public YesNoVoteSessionManager getYesNoVoteSessionManager() {
+        return Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
+    }
+
+    public JavaInventoryVoteRenderer getJavaInventoryVoteRenderer() {
+        return Objects.requireNonNull(javaInventoryVoteRenderer, "javaInventoryVoteRenderer");
+    }
+
+    public YesNoInventoryVoteRenderer getYesNoInventoryVoteRenderer() {
+        return Objects.requireNonNull(yesNoInventoryVoteRenderer, "yesNoInventoryVoteRenderer");
     }
 }
