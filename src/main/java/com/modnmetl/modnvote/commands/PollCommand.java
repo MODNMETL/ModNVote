@@ -255,6 +255,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                 return true;
             }
+            case "guide" -> {
+                sendGuide(sender, label);
+                return true;
+            }
             case "rankedpolldemo" -> {
                 if (!sender.hasPermission("modnvote.admin.poll.create")) {
                     sender.sendMessage(messages.get("general.no_permission"));
@@ -470,10 +474,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                             }
 
                             sender.sendMessage(messages.format("usage.option_edit_name", Map.of("label", label)));
-                        }
-                        case "guide" -> {
-                            sendGuide(sender, label);
-                            return true;
                         }
                         case "move" -> {
                             if (args.length < 5) {
@@ -1318,6 +1318,12 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 3) {
+            if (args[0].equalsIgnoreCase("create")
+                    && args[1].equalsIgnoreCase("ranked_single_winner")
+                    && sender.hasPermission("modnvote.admin.poll.create")) {
+                return filterCompletions(List.of("2", "3", "4", "5", "6"), args[2]);
+            }
+
             if (args[0].equalsIgnoreCase("set")
                     && sender.hasPermission("modnvote.admin.poll.create")) {
                 return filterCompletions(
@@ -1325,6 +1331,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         args[2]
                 );
             }
+
             if (args[0].equalsIgnoreCase("poll") && sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("title");
                 completions.add("description");
