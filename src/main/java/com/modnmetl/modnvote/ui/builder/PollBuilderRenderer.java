@@ -21,21 +21,18 @@ public class PollBuilderRenderer {
                 "Poll Builder"
         );
 
-        Poll poll = session.getPoll();
+        Poll poll = session.getPollSnapshot();
 
-        // Title item (slot 10)
         inv.setItem(10, createItem(Material.NAME_TAG,
                 "§aTitle",
                 buildDescription(poll.title(), "Click to edit title")
         ));
 
-        // Description item (slot 12)
         inv.setItem(12, createItem(Material.BOOK,
                 "§aDescription",
                 buildDescription(poll.description(), "Click to edit description")
         ));
 
-        // Options starting at slot 19
         List<PollOption> options = session.getOptionsSnapshot();
         for (int i = 0; i < options.size(); i++) {
             PollOption option = options.get(i);
@@ -56,13 +53,11 @@ public class PollBuilderRenderer {
             ));
         }
 
-        // Validation placeholder (slot 49)
         inv.setItem(49, createItem(Material.BARRIER,
                 "§cNOT READY",
                 List.of("§7Validation not implemented yet")
         ));
 
-        // Cancel placeholder (slot 53)
         inv.setItem(53, createItem(Material.RED_WOOL,
                 "§cCancel",
                 List.of("§7Close builder")
