@@ -471,6 +471,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                             sender.sendMessage(messages.format("usage.option_edit_name", Map.of("label", label)));
                         }
+                        case "guide" -> {
+                            sendGuide(sender, label);
+                            return true;
+                        }
                         case "move" -> {
                             if (args.length < 5) {
                                 sender.sendMessage(messages.format("usage.option_move", Map.of("label", label)));
@@ -980,29 +984,36 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage("§6ModNVote 2.0 Commands");
-        sender.sendMessage("§e/" + label + " status");
-        sender.sendMessage("§e/" + label + " reload");
-        sender.sendMessage("§e/" + label + " list");
-        sender.sendMessage("§e/" + label + " create <yes_no|ranked_single_winner>");
-        sender.sendMessage("§e/" + label + " rankedpolldemo");
-        sender.sendMessage("§e/" + label + " show <pollId>");
-        sender.sendMessage("§e/" + label + " set <pollId> <title|description|maxrankings|allowpartial> <value>");
-        sender.sendMessage("§e/" + label + " delete <pollId>");
-        sender.sendMessage("§e/" + label + " option add <pollId> <key> <displayName> | <description>");
-        sender.sendMessage("§e/" + label + " option edit <pollId> <optionId> <name|description> <value>");
-        sender.sendMessage("§e/" + label + " option move <pollId> <optionId> <displayOrder>");
-        sender.sendMessage("§e/" + label + " option remove <pollId> <optionId>");
-        sender.sendMessage("§e/" + label + " validate <pollId>");
-        sender.sendMessage("§e/" + label + " ready <pollId>");
-        sender.sendMessage("§e/" + label + " open <pollId>");
-        sender.sendMessage("§e/" + label + " close <pollId>");
-        sender.sendMessage("§e/" + label + " result <pollId>");
-        sender.sendMessage("§e/" + label + " mypolls");
-        sender.sendMessage("§e/" + label + " verify participation <pollId>");
-        sender.sendMessage("§e/" + label + " verify ballot <pollId> <proofPhrase>");
-        sender.sendMessage("§e/" + label + " vote <pollId>");
-        sender.sendMessage("§e/" + label + " testvote <pollId> <optionId1> <optionId2> ...");
+        sender.sendMessage("§e/" + label + " guide §7- How to create and manage polls");
+        sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount> §7- Create a ranked poll with the GUI builder");
+        sender.sendMessage("§e/" + label + " edit <draftPollId> §7- Resume editing a draft poll");
+        sender.sendMessage("§e/" + label + " list §7- List polls");
+        sender.sendMessage("§e/" + label + " show <pollId> §7- Show poll details");
+        sender.sendMessage("§e/" + label + " open <pollId> §7- Open a ready poll for voting");
+        sender.sendMessage("§e/" + label + " close <pollId> §7- Close an open poll");
+        sender.sendMessage("§e/" + label + " result <pollId> §7- Show results");
+        sender.sendMessage("§e/" + label + " vote <pollId> §7- Vote in an open poll");
+        sender.sendMessage("§e/" + label + " mypolls §7- Show polls you have participated in");
+        sender.sendMessage("§e/" + label + " verify participation <pollId> §7- Verify your participation");
+        sender.sendMessage("§e/" + label + " verify ballot <pollId> <proofPhrase> §7- Verify a ballot proof phrase");
     }
+
+    private void sendGuide(CommandSender sender, String label) {
+        sender.sendMessage("§6ModNVote Poll Builder Guide");
+        sender.sendMessage("§7Create a ranked poll:");
+        sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount>");
+        sender.sendMessage("§7Example:");
+        sender.sendMessage("§e/" + label + " create ranked_single_winner 5");
+        sender.sendMessage("§7The Poll Builder opens automatically.");
+        sender.sendMessage("§7Left-click the title or option items to edit names.");
+        sender.sendMessage("§7Right-click option items to edit descriptions.");
+        sender.sendMessage("§7Click the description book to edit the poll description.");
+        sender.sendMessage("§cRed fields §7still need work. §aGreen fields §7are complete.");
+        sender.sendMessage("§7When READY turns green, click it to mark the poll ready.");
+        sender.sendMessage("§7Resume an unfinished draft:");
+        sender.sendMessage("§e/" + label + " edit <pollId>");
+    }
+
     private Poll requirePoll(long pollId) throws PollServiceException {
         Poll poll = pollService.findPollById(pollId);
         if (poll == null) {
@@ -1180,7 +1191,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             case "close" -> loadPollIdCompletions(PollStatus.OPEN);
             case "result" -> loadPollIdCompletions(PollStatus.CLOSED);
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
-            case "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
+            case "edit", "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
             case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
             case "show" -> loadPollIdCompletions();
             default -> loadPollIdCompletions();
@@ -1238,13 +1249,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("create");
-                completions.add("rankedpolldemo");
+                completions.add("edit");
+                completions.add("guide");
                 completions.add("show");
-                completions.add("set");
                 completions.add("delete");
-                completions.add("option");
-                completions.add("validate");
-                completions.add("ready");
             }
             if (sender.hasPermission("modnvote.admin.poll.open")) {
                 completions.add("open");
@@ -1280,6 +1288,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 completions.add("yes_no");
                 completions.add("ranked_single_winner");
                 return filterCompletions(completions, args[1]);
+            }
+
+            if (args[0].equalsIgnoreCase("edit") && sender.hasPermission("modnvote.admin.poll.create")) {
+                return filterCompletions(loadPollIdCompletions(PollStatus.DRAFT), args[1]);
             }
 
             if (args[0].equalsIgnoreCase("set") && sender.hasPermission("modnvote.admin.poll.create")) {
