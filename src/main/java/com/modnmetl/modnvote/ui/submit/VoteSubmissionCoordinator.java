@@ -1,5 +1,6 @@
 package com.modnmetl.modnvote.ui.submit;
 
+import com.modnmetl.modnvote.publication.WitnessPublicationService;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.ui.session.VoteSession;
@@ -13,20 +14,6 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Objects;
 
-/**
- * Bridges in-memory vote sessions to the authoritative ballot submission service.
- *
- * Responsibilities:
- * - extract temporary UI selections from session models
- * - derive submission context from the player
- * - apply configured bypass permission checks
- * - submit through BallotService
- *
- * Non-responsibilities:
- * - no GUI rendering
- * - no inventory event handling
- * - no direct session storage/cleanup
- */
 public final class VoteSubmissionCoordinator {
 
     private static final String DEFAULT_BYPASS_NODE = "modnvote.bypass";
@@ -35,11 +22,14 @@ public final class VoteSubmissionCoordinator {
 
     private final JavaPlugin plugin;
     private final BallotService ballotService;
+    private final WitnessPublicationService witnessPublicationService;
 
     public VoteSubmissionCoordinator(JavaPlugin plugin,
-                                     BallotService ballotService) {
+                                     BallotService ballotService,
+                                     WitnessPublicationService witnessPublicationService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
+        this.witnessPublicationService = Objects.requireNonNull(witnessPublicationService, "witnessPublicationService");
     }
 
     public SubmissionOutcome submitRankedVote(Player player,
@@ -59,6 +49,10 @@ public final class VoteSubmissionCoordinator {
                 null,
                 bypassIpDuplicateCheck
         );
+
+        if (result.success()) {
+            witnessPublicationService.maybePublishCheckpoint(session.pollId());
+        }
 
         return new SubmissionOutcome(result, bypassIpDuplicateCheck);
     }
@@ -85,6 +79,10 @@ public final class VoteSubmissionCoordinator {
                 null,
                 bypassIpDuplicateCheck
         );
+
+        if (result.success()) {
+            witnessPublicationService.maybePublishCheckpoint(session.pollId());
+        }
 
         return new SubmissionOutcome(result, bypassIpDuplicateCheck);
     }
