@@ -141,15 +141,7 @@ public final class WitnessPublicationService {
                 return;
             }
 
-            Poll poll = pollService.findPollById(pollId);
-            if (poll == null) {
-                return;
-            }
-
-            IntegrityVerificationService.IntegrityVerificationResult integrityResult =
-                    integrityVerificationService.verifyPollIntegrity(pollId);
-
-            publishCheckpoint(poll, ballotCount, interval, integrityResult);
+            publishCheckpoint(pollId, ballotCount, interval, "Automatic interval checkpoint");
         } catch (PollServiceException e) {
             logger.warning("Failed to prepare witness checkpoint for poll #" + pollId + ": " + e.getMessage());
         } catch (Exception e) {
@@ -157,15 +149,48 @@ public final class WitnessPublicationService {
         }
     }
 
+    public ManualCheckpointPublicationResult publishManualCheckpoint(long pollId) throws PollServiceException {
+        if (!plugin.getConfig().getBoolean("publication.publish_checkpoints", true)) {
+            throw new PollServiceException("Witness checkpoint publication is disabled in config.yml.");
+        }
+
+        try {
+            int ballotCount = anonymousBallotDao.findAnonymousBallotsByPollId(pollId).size();
+            publishCheckpoint(pollId, ballotCount, configuredCheckpointInterval(), "Manual checkpoint");
+            return new ManualCheckpointPublicationResult(pollId, ballotCount, configuredWebhookUrls().size());
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to publish manual witness checkpoint for poll #" + pollId, e);
+        }
+    }
+
+    private void publishCheckpoint(long pollId,
+                                   int ballotCount,
+                                   int interval,
+                                   String checkpointMode) throws PollServiceException {
+        Poll poll = pollService.findPollById(pollId);
+        if (poll == null) {
+            throw new PollServiceException("Poll #" + pollId + " does not exist.");
+        }
+
+        IntegrityVerificationService.IntegrityVerificationResult integrityResult =
+                integrityVerificationService.verifyPollIntegrity(pollId);
+
+        publishCheckpoint(poll, ballotCount, interval, checkpointMode, integrityResult);
+    }
+
     private void publishCheckpoint(Poll poll,
                                    int ballotCount,
                                    int interval,
+                                   String checkpointMode,
                                    IntegrityVerificationService.IntegrityVerificationResult integrityResult) {
         List<DiscordField> fields = new ArrayList<>();
         fields.add(new DiscordField("Poll ID", "#" + poll.pollId(), true));
         fields.add(new DiscordField("Status", poll.status().name(), true));
         fields.add(new DiscordField("Ballots", String.valueOf(ballotCount), true));
-        fields.add(new DiscordField("Interval", String.valueOf(interval), true));
+        fields.add(new DiscordField("Interval", interval > 0 ? String.valueOf(interval) : "Manual", true));
+        fields.add(new DiscordField("Mode", checkpointMode, true));
         fields.add(new DiscordField("Audit Chain", integrityResult.auditChainValid() ? "Valid" : "Invalid", true));
         fields.add(new DiscordField("Ballot Hashes", integrityResult.ballotHashesValid() ? "Valid" : "Invalid", true));
         fields.add(new DiscordField("Record Counts", integrityResult.recordCountsMatch() ? "Valid" : "Invalid", true));
@@ -212,6 +237,10 @@ public final class WitnessPublicationService {
             out.add(url.trim());
         }
         return List.copyOf(out);
+    }
+
+    private int configuredCheckpointInterval() {
+        return plugin.getConfig().getInt("integrity.checkpoint_interval_ballots", 25);
     }
 
     private void sendWebhook(String webhookUrl, String payload) {
@@ -351,6 +380,13 @@ public final class WitnessPublicationService {
             }
         }
         return sb.toString();
+    }
+
+    public record ManualCheckpointPublicationResult(
+            long pollId,
+            int ballotCount,
+            int webhookCount
+    ) {
     }
 
     private record DiscordEmbed(
