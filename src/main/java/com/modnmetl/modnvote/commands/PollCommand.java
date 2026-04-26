@@ -276,6 +276,50 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                 return true;
             }
+            case "clone" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " clone <sourcePollId>");
+                    return true;
+                }
+
+                try {
+                    long sourcePollId = parsePollId(args[1]);
+                    long clonedPollId = pollService.clonePoll(sourcePollId, sender.getName());
+
+                    Poll clonedPoll = requirePoll(clonedPollId);
+                    List<PollOption> clonedOptions = findOptions(clonedPollId);
+
+                    sender.sendMessage("§aCloned poll §f#" + sourcePollId
+                            + "§a into new DRAFT poll §f#" + clonedPollId + "§a.");
+
+                    if (sender instanceof Player player) {
+                        PollBuilderSession session = new PollBuilderSession(
+                                player.getUniqueId(),
+                                clonedPollId,
+                                clonedPoll,
+                                clonedOptions
+                        );
+
+                        plugin.getPollBuilderSessionManager().createOrReplaceSession(session);
+                        plugin.getPollBuilderRenderer().open(player, session);
+
+                        sender.sendMessage("§7Poll Builder opened for the cloned draft.");
+                    } else {
+                        sender.sendMessage("§7Use §e/" + label + " edit " + clonedPollId
+                                + " §7in-game to review and adjust the cloned draft.");
+                    }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.create_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+
+                return true;
+            }
             case "guide" -> {
                 sendGuide(sender, label);
                 return true;
@@ -1008,6 +1052,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " guide §7- How to create and manage polls");
         sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount> §7- Create a ranked poll with the GUI builder");
         sender.sendMessage("§e/" + label + " edit <draftPollId> §7- Resume editing a draft poll");
+        sender.sendMessage("§e/" + label + " clone <sourcePollId> §7- Clone an existing poll into a new draft");
         sender.sendMessage("§e/" + label + " list §7- List polls");
         sender.sendMessage("§e/" + label + " show <pollId> §7- Show poll details");
         sender.sendMessage("§e/" + label + " open <pollId> §7- Open a ready poll for voting");
@@ -1033,6 +1078,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§7When READY turns green, click it to mark the poll ready.");
         sender.sendMessage("§7Resume an unfinished draft:");
         sender.sendMessage("§e/" + label + " edit <pollId>");
+        sender.sendMessage("§7Clone an existing poll into a new editable draft:");
+        sender.sendMessage("§e/" + label + " clone <sourcePollId>");
     }
 
     private Poll requirePoll(long pollId) throws PollServiceException {
@@ -1139,7 +1186,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
         if ("show".equals(root) || "validate".equals(root) || "ready".equals(root)
                 || "open".equals(root) || "close".equals(root)
-                || "result".equals(root) || "vote".equals(root)) {
+                || "result".equals(root) || "vote".equals(root)
+                || "clone".equals(root)) {
             return index == 1;
         }
 
@@ -1214,7 +1262,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
             case "edit", "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
             case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
-            case "show" -> loadPollIdCompletions();
+            case "show", "clone" -> loadPollIdCompletions();
             default -> loadPollIdCompletions();
         };
     }
@@ -1270,6 +1318,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("create");
+                completions.add("clone");
                 completions.add("edit");
                 completions.add("guide");
                 completions.add("show");

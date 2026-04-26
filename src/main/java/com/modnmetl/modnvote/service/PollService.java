@@ -199,6 +199,87 @@ public final class PollService {
         }
     }
 
+    public long clonePoll(long sourcePollId, String actor) throws PollServiceException {
+        requireNonBlank(actor, "actor");
+
+        try {
+            Poll sourcePoll = pollDao.findPollById(sourcePollId);
+            if (sourcePoll == null) {
+                throw new PollServiceException("Poll #" + sourcePollId + " does not exist.");
+            }
+
+            if (!isSupportedAuthoringType(sourcePoll.pollType())) {
+                throw new PollServiceException("Poll type " + sourcePoll.pollType().name()
+                        + " is not supported by the clone workflow.");
+            }
+
+            List<PollOption> sourceOptions = pollOptionDao.findOptionsByPollId(sourcePollId);
+            String clonedTitle = buildCloneTitle(sourcePoll.title());
+
+            Poll clonedPoll = new Poll(
+                    0L,
+                    generateDraftSlug(sourcePoll.pollType()),
+                    clonedTitle,
+                    sourcePoll.description(),
+                    sourcePoll.pollType(),
+                    PollStatus.DRAFT,
+                    null,
+                    null,
+                    sourcePoll.maxRankings(),
+                    sourcePoll.seatCount(),
+                    sourcePoll.allowPartialRanking(),
+                    sourcePoll.requiresConfirmation(),
+                    generateParticipationSecret()
+            );
+
+            List<PollOption> clonedOptions = new ArrayList<>(sourceOptions.size());
+            for (PollOption option : sourceOptions) {
+                clonedOptions.add(new PollOption(
+                        0L,
+                        0L,
+                        option.key(),
+                        option.displayName(),
+                        option.description(),
+                        option.displayOrder()
+                ));
+            }
+
+            try (Connection connection = databaseManager.getConnection()) {
+                connection.setAutoCommit(false);
+                try {
+                    long clonedPollId = pollDao.insertPoll(connection, clonedPoll, actor, "UUID_AND_IP_HEURISTIC", "{}");
+
+                    if (!clonedOptions.isEmpty()) {
+                        pollOptionDao.insertOptions(connection, clonedPollId, clonedOptions);
+                    }
+
+                    auditEventDao.insertPollEvent(
+                            connection,
+                            clonedPollId,
+                            "POLL_CLONED",
+                            "actor=" + actor
+                                    + ";source_poll_id=" + sourcePollId
+                                    + ";new_poll_id=" + clonedPollId
+                                    + ";source_status=" + sourcePoll.status().name()
+                                    + ";type=" + sourcePoll.pollType().name()
+                    );
+
+                    connection.commit();
+                    return clonedPollId;
+                } catch (Exception e) {
+                    connection.rollback();
+                    throw e;
+                } finally {
+                    connection.setAutoCommit(true);
+                }
+            }
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to clone poll #" + sourcePollId, e);
+        }
+    }
+
     public void updatePollTitle(long pollId, String title, String actor) throws PollServiceException {
         title = requireNonBlank(title, "title").trim();
         requireNonBlank(actor, "actor");
@@ -800,6 +881,15 @@ public final class PollService {
             case RANKED_SINGLE_WINNER -> "Untitled ranked poll";
             default -> "Untitled poll";
         };
+    }
+
+    private String buildCloneTitle(String sourceTitle) {
+        String baseTitle = "Copy of " + sourceTitle;
+        if (baseTitle.length() <= MAX_TITLE_LENGTH) {
+            return baseTitle;
+        }
+
+        return baseTitle.substring(0, MAX_TITLE_LENGTH);
     }
 
     private String generateDraftSlug(PollType pollType) {
