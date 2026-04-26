@@ -6,6 +6,7 @@ import com.modnmetl.modnvote.listener.ActivePollNotificationListener;
 import com.modnmetl.modnvote.platform.ModNScheduler;
 import com.modnmetl.modnvote.platform.PaperPlatformAdapter;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
+import com.modnmetl.modnvote.publication.WitnessPublicationService;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
@@ -42,12 +43,6 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.logging.Level;
 
-/**
- * ModNVote 2.0 plugin bootstrap.
- *
- * This replaces the 1.x single-round yes/no runtime with a ballot-first
- * platform foundation for the 2.x architecture.
- */
 public final class ModNVotePlugin extends JavaPlugin {
 
     private ModNScheduler scheduler;
@@ -59,6 +54,7 @@ public final class ModNVotePlugin extends JavaPlugin {
     private MessageService messageService;
     private IntegrityVerificationService integrityVerificationService;
     private ResultService resultService;
+    private WitnessPublicationService witnessPublicationService;
 
     private VoteSessionManager voteSessionManager;
     private YesNoVoteSessionManager yesNoVoteSessionManager;
@@ -102,6 +98,15 @@ public final class ModNVotePlugin extends JavaPlugin {
                     databaseManager,
                     getLogger()
             );
+
+            this.witnessPublicationService = new WitnessPublicationService(
+                    this,
+                    pollService,
+                    integrityVerificationService,
+                    databaseManager,
+                    getLogger()
+            );
+
             this.voteSessionManager = new VoteSessionManager(Duration.ofMinutes(10));
             this.yesNoVoteSessionManager = new YesNoVoteSessionManager(Duration.ofMinutes(10));
             this.ballotSummaryFormatter = new BallotSummaryFormatter();
@@ -110,7 +115,7 @@ public final class ModNVotePlugin extends JavaPlugin {
             this.voteSoundService = new VoteSoundService(this);
             this.javaInventoryVoteRenderer = new JavaInventoryVoteRenderer(scheduler, voteGuiText);
             this.yesNoInventoryVoteRenderer = new YesNoInventoryVoteRenderer(scheduler, yesNoGuiText);
-            this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService);
+            this.voteSubmissionCoordinator = new VoteSubmissionCoordinator(this, ballotService, witnessPublicationService);
             this.pollBuilderSessionManager = new PollBuilderSessionManager();
             this.pollBuilderInputPromptManager = new PollBuilderInputPromptManager();
             this.pollBuilderRenderer = new PollBuilderRenderer(pollService);
@@ -133,9 +138,6 @@ public final class ModNVotePlugin extends JavaPlugin {
         if (yesNoVoteSessionManager != null) {
             yesNoVoteSessionManager.clearAllSessions();
         }
-        if (pollBuilderSessionManager != null) {
-            // Poll builder sessions are in-memory only and intentionally discarded on shutdown.
-        }
 
         if (databaseManager != null) {
             databaseManager.close();
@@ -154,6 +156,7 @@ public final class ModNVotePlugin extends JavaPlugin {
                 ballotService,
                 integrityVerificationService,
                 resultService,
+                witnessPublicationService,
                 messageService,
                 voteSessionManager,
                 yesNoVoteSessionManager,
@@ -288,6 +291,7 @@ public final class ModNVotePlugin extends JavaPlugin {
     public JavaInventoryVoteRenderer getJavaInventoryVoteRenderer() {
         return Objects.requireNonNull(javaInventoryVoteRenderer, "javaInventoryVoteRenderer");
     }
+
     public PollBuilderSessionManager getPollBuilderSessionManager() {
         return Objects.requireNonNull(pollBuilderSessionManager, "pollBuilderSessionManager");
     }
