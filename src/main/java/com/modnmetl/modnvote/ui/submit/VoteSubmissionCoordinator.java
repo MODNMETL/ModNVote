@@ -50,9 +50,7 @@ public final class VoteSubmissionCoordinator {
                 bypassIpDuplicateCheck
         );
 
-        if (result.success()) {
-            witnessPublicationService.maybePublishCheckpoint(session.pollId());
-        }
+        witnessPublicationService.maybePublishCheckpoint(session.pollId());
 
         return new SubmissionOutcome(result, bypassIpDuplicateCheck);
     }
@@ -80,9 +78,7 @@ public final class VoteSubmissionCoordinator {
                 bypassIpDuplicateCheck
         );
 
-        if (result.success()) {
-            witnessPublicationService.maybePublishCheckpoint(session.pollId());
-        }
+        witnessPublicationService.maybePublishCheckpoint(session.pollId());
 
         return new SubmissionOutcome(result, bypassIpDuplicateCheck);
     }
