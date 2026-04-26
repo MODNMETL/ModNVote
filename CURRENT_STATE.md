@@ -71,6 +71,10 @@ Normal admin workflow:
 - `/modnvote open <pollId>`
 - `/modnvote close <pollId>`
 - `/modnvote result <pollId>`
+- 
+  Alias:
+
+- `/poll` is a direct alias of `/modnvote` for all commands.
 
 Player workflow:
 

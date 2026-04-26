@@ -1,8 +1,31 @@
 # Changelog
 
 All notable changes to ModNVote are documented in this file.
+## [2.1.0] - 2026-04-26
 
+### Added
+
+- `/modnvote clone <sourcePollId>` for cloning existing polls into new editable drafts.
+- `/modnvote checkpoint <pollId>` for manual witness checkpoint publication.
+- `/poll` as a short alias for `/modnvote`.
+- External witness publication via configured Discord-compatible webhooks.
+- Poll opened witness publication.
+- Poll closed witness publication with result summary.
+- Automatic integrity checkpoint publication every configured ballot interval.
+- Clear first-run config guidance for webhook list formatting.
+
+### Changed
+
+- Poll lifecycle commands can now publish best-effort external witness events.
+- Vote submission can now trigger automatic privacy-safe checkpoint publication.
+- Config comments clarify how to configure one or more webhook URLs.
+
+### Security / Privacy
+
+- Witness publication does not include player names, UUIDs, IP addresses, proof phrases, participation receipts, or per-player vote content.
+- Webhook delivery failures are logged without exposing full webhook URLs and do not affect poll lifecycle or ballot persistence.
 ## [2.0.0] - 2026-04-25
+
 
 ### Summary
 

@@ -6,6 +6,7 @@ import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.publication.WitnessPublicationService;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
@@ -47,6 +48,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private final BallotService ballotService;
     private final IntegrityVerificationService integrityVerificationService;
     private final ResultService resultService;
+    private final WitnessPublicationService witnessPublicationService;
     private final MessageService messages;
     private final VoteSessionManager voteSessionManager;
     private final YesNoVoteSessionManager yesNoVoteSessionManager;
@@ -59,6 +61,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                        BallotService ballotService,
                        IntegrityVerificationService integrityVerificationService,
                        ResultService resultService,
+                       WitnessPublicationService witnessPublicationService,
                        MessageService messages,
                        VoteSessionManager voteSessionManager,
                        YesNoVoteSessionManager yesNoVoteSessionManager,
@@ -69,6 +72,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
         this.integrityVerificationService = Objects.requireNonNull(integrityVerificationService, "integrityVerificationService");
         this.resultService = Objects.requireNonNull(resultService, "resultService");
+        this.witnessPublicationService = Objects.requireNonNull(witnessPublicationService, "witnessPublicationService");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.voteSessionManager = Objects.requireNonNull(voteSessionManager, "voteSessionManager");
         this.yesNoVoteSessionManager = Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
@@ -313,6 +317,34 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         sender.sendMessage("§7Use §e/" + label + " edit " + clonedPollId
                                 + " §7in-game to review and adjust the cloned draft.");
                     }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.create_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+
+                return true;
+            }
+            case "checkpoint" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " checkpoint <pollId>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+
+                    WitnessPublicationService.ManualCheckpointPublicationResult result =
+                            witnessPublicationService.publishManualCheckpoint(pollId);
+
+                    sender.sendMessage("§aCheckpoint published for poll §f#" + result.pollId()
+                            + "§a (" + result.ballotCount() + " ballots, "
+                            + result.webhookCount() + " webhook(s)).");
+
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.create_failed",
                             Map.of("reason", e.getMessage())));
@@ -598,6 +630,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     Poll poll = requirePoll(pollId);
                     pollService.openPoll(pollId, sender.getName());
 
+                    Poll openedPoll = requirePoll(pollId);
+                    witnessPublicationService.publishPollOpened(openedPoll, findOptions(pollId));
+
                     sender.sendMessage(messages.format("poll.opened", Map.of(
                             "poll_id", String.valueOf(pollId),
                             "title", poll.title()
@@ -623,6 +658,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     Poll poll = requirePoll(pollId);
 
                     pollService.closePoll(pollId, sender.getName());
+
+                    Poll closedPoll = requirePoll(pollId);
+                    ResultService.PollResult result = resultService.getPollResult(pollId);
+                    witnessPublicationService.publishPollClosed(closedPoll, findOptions(pollId), result);
 
                     sender.sendMessage(messages.format("poll.closed", Map.of(
                             "poll_id", String.valueOf(pollId),
@@ -1049,10 +1088,12 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage("§6ModNVote 2.0 Commands");
+        sender.sendMessage("§7Alias: §e/poll §7can be used instead of §e/" + label);
         sender.sendMessage("§e/" + label + " guide §7- How to create and manage polls");
         sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount> §7- Create a ranked poll with the GUI builder");
         sender.sendMessage("§e/" + label + " edit <draftPollId> §7- Resume editing a draft poll");
         sender.sendMessage("§e/" + label + " clone <sourcePollId> §7- Clone an existing poll into a new draft");
+        sender.sendMessage("§e/" + label + " checkpoint <pollId> §7- Publish an integrity checkpoint");
         sender.sendMessage("§e/" + label + " list §7- List polls");
         sender.sendMessage("§e/" + label + " show <pollId> §7- Show poll details");
         sender.sendMessage("§e/" + label + " open <pollId> §7- Open a ready poll for voting");
@@ -1066,6 +1107,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
     private void sendGuide(CommandSender sender, String label) {
         sender.sendMessage("§6ModNVote Poll Builder Guide");
+        sender.sendMessage("§7Alias: §e/poll §7can be used instead of §e/" + label);
         sender.sendMessage("§7Create a ranked poll:");
         sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount>");
         sender.sendMessage("§7Example:");
@@ -1080,6 +1122,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " edit <pollId>");
         sender.sendMessage("§7Clone an existing poll into a new editable draft:");
         sender.sendMessage("§e/" + label + " clone <sourcePollId>");
+        sender.sendMessage("§7Publish an integrity checkpoint:");
+        sender.sendMessage("§e/" + label + " checkpoint <pollId>");
     }
 
     private Poll requirePoll(long pollId) throws PollServiceException {
@@ -1187,7 +1231,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         if ("show".equals(root) || "validate".equals(root) || "ready".equals(root)
                 || "open".equals(root) || "close".equals(root)
                 || "result".equals(root) || "vote".equals(root)
-                || "clone".equals(root)) {
+                || "clone".equals(root) || "checkpoint".equals(root)) {
             return index == 1;
         }
 
@@ -1262,7 +1306,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
             case "edit", "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
             case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
-            case "show", "clone" -> loadPollIdCompletions();
+            case "show", "clone", "checkpoint" -> loadPollIdCompletions();
             default -> loadPollIdCompletions();
         };
     }
@@ -1319,6 +1363,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("create");
                 completions.add("clone");
+                completions.add("checkpoint");
                 completions.add("edit");
                 completions.add("guide");
                 completions.add("show");
