@@ -1088,6 +1088,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
     private void sendHelp(CommandSender sender, String label) {
         sender.sendMessage("§6ModNVote 2.0 Commands");
+        sender.sendMessage("§7Alias: §e/poll §7can be used instead of §e/" + label);
         sender.sendMessage("§e/" + label + " guide §7- How to create and manage polls");
         sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount> §7- Create a ranked poll with the GUI builder");
         sender.sendMessage("§e/" + label + " edit <draftPollId> §7- Resume editing a draft poll");
@@ -1106,6 +1107,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
     private void sendGuide(CommandSender sender, String label) {
         sender.sendMessage("§6ModNVote Poll Builder Guide");
+        sender.sendMessage("§7Alias: §e/poll §7can be used instead of §e/" + label);
         sender.sendMessage("§7Create a ranked poll:");
         sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount>");
         sender.sendMessage("§7Example:");

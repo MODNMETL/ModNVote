@@ -98,6 +98,13 @@ This creates a DRAFT Yes/No poll and opens the Poll Builder GUI.
 
 ---
 
+### Command alias
+
+All `/modnvote` commands can also be used via the shorter alias:
+
+```text
+/poll ...
+
 ## Admin workflow
 
 ### Create a ranked poll
@@ -214,7 +221,8 @@ Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify
 ## Admin command reference
 
 Normal admin-facing commands:
-
+Alias:
+/poll ...
 ```text
 /modnvote guide
 /modnvote create ranked_single_winner <optionCount>
