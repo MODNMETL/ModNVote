@@ -15,11 +15,11 @@ Developed by [MODN METL LTD](https://modnmetl.com).
 
 ---
 
-## ModNVote 2.0 status
+## ModNVote 2.x status
 
 ModNVote 2.0 is the active replacement for the legacy 1.x Yes/No-only plugin.
 
-2.0 introduces:
+2.x includes:
 
 - GUI-driven poll creation and editing
 - Ranked single-winner polls
@@ -30,6 +30,10 @@ ModNVote 2.0 is the active replacement for the legacy 1.x Yes/No-only plugin.
 - Tamper-evident audit records
 - Java/Bedrock-friendly inventory interfaces
 - Mandatory confirmation before ballots are cast
+- Poll cloning for repeated or template-based poll setup
+- Optional external witness publication via Discord-compatible webhooks
+- Automatic and manual integrity checkpoint publication
+- `/poll` as a short alias for `/modnvote`
 
 2.0 is a clean install target. Migration from legacy 1.x databases is not currently supported.
 
@@ -57,6 +61,7 @@ This means:
 - Vote content and voter identity are not stored together.
 - `/modnvote verify participation` confirms participation without revealing a vote.
 - `/modnvote verify ballot` uses a proof phrase as a bearer-token style verification mechanism.
+- `/poll` may be used as a shorter alias for `/modnvote`.
 - GUI/session state does not directly write ballots or lifecycle state.
 
 ---
@@ -98,12 +103,23 @@ This creates a DRAFT Yes/No poll and opens the Poll Builder GUI.
 
 ---
 
-### Command alias
+## Command alias
 
 All `/modnvote` commands can also be used via the shorter alias:
 
 ```text
 /poll ...
+```
+
+For example:
+
+```text
+/poll create ranked_single_winner 5
+/poll open <pollId>
+/poll vote <pollId>
+```
+
+---
 
 ## Admin workflow
 
@@ -151,6 +167,16 @@ Yes/No polls do not show ranked-only settings such as Max Rankings or Allow Part
 
 This reopens the Poll Builder for an existing DRAFT poll.
 
+### Clone an existing poll
+
+```text
+/modnvote clone <sourcePollId>
+```
+
+This creates a new DRAFT poll by copying the source poll’s definition and options, then opens the Poll Builder so the clone can be adjusted.
+
+Cloning does not copy ballots, participation records, lifecycle timestamps, proof phrases, or audit history.
+
 ### Open a poll for voting
 
 ```text
@@ -188,6 +214,64 @@ For ranked polls:
 
 Results are calculated from anonymous ballots only.
 
+### Publish a manual integrity checkpoint
+
+```text
+/modnvote checkpoint <pollId>
+```
+
+This publishes a privacy-safe witness checkpoint to the configured webhook targets.
+
+Manual checkpoints include poll-level integrity status only. They do not publish player names, UUIDs, IP addresses, proof phrases, participation receipts, or per-player vote content.
+
+---
+
+## Witness publication
+
+ModNVote can publish public witness events to configured Discord-compatible webhooks.
+
+Supported witness events:
+
+- Poll opened
+- Poll closed, including a public result summary
+- Automatic integrity checkpoints every configured number of accepted ballots
+- Manual integrity checkpoints via `/modnvote checkpoint <pollId>`
+
+Webhook delivery is best-effort and non-blocking. A failed webhook does not cancel voting, poll opening, poll closing, or persistence.
+
+Configure webhook publication in `config.yml`:
+
+```yaml
+publication:
+  # External witness publication targets.
+  #
+  # Leave this as [] to disable webhook publication:
+  # discord_webhooks: []
+  #
+  # To enable Discord publication, change it to a YAML list:
+  # discord_webhooks:
+  #   - "https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN"
+  #
+  # Multiple webhooks are supported:
+  # discord_webhooks:
+  #   - "https://discord.com/api/webhooks/FIRST_WEBHOOK_ID/FIRST_WEBHOOK_TOKEN"
+  #   - "https://discord.com/api/webhooks/SECOND_WEBHOOK_ID/SECOND_WEBHOOK_TOKEN"
+  #
+  # Never commit real webhook URLs to source control.
+  discord_webhooks: []
+  publish_poll_opened: true
+  publish_poll_closed: true
+  publish_checkpoints: true
+
+integrity:
+  # Automatic witness checkpoints are published every N accepted ballots
+  # when publication.publish_checkpoints is true and at least one webhook is configured.
+  #
+  # Set to 0 or a negative number to disable automatic interval checkpoints.
+  checkpoint_interval_ballots: 25
+  canonicalization_version: 1
+```
+
 ---
 
 ## Verification commands
@@ -220,20 +304,23 @@ Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify
 
 ## Admin command reference
 
+All commands below may use either `/modnvote` or `/poll`.
+
 Normal admin-facing commands:
-Alias:
-/poll ...
+
 ```text
 /modnvote guide
 /modnvote create ranked_single_winner <optionCount>
 /modnvote create yes_no
 /modnvote edit <draftPollId>
+/modnvote clone <sourcePollId>
 /modnvote list
 /modnvote show <pollId>
 /modnvote delete <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>
 /modnvote result <pollId>
+/modnvote checkpoint <pollId>
 ```
 
 Player-facing commands:
@@ -252,6 +339,14 @@ Utility commands:
 /modnvote reload
 ```
 
+Short alias examples:
+
+```text
+/poll status
+/poll guide
+/poll vote <pollId>
+```
+
 Some older low-level authoring commands may remain callable as recovery tools, but normal poll setup should use the GUI builder.
 
 ---
@@ -264,7 +359,7 @@ Common permissions include:
 
 | Permission | Purpose |
 |---|---|
-| `modnvote.admin.poll.create` | Create, edit, inspect, and manage draft polls |
+| `modnvote.admin.poll.create` | Create, clone, edit, inspect, checkpoint, and manage draft polls |
 | `modnvote.admin.poll.list` | List polls |
 | `modnvote.admin.poll.open` | Open polls for voting |
 | `modnvote.admin.poll.close` | Close polls |
@@ -363,14 +458,17 @@ Integrity checks include:
 - Ballot hash verification
 - Ballot commitment verification
 - Audit chain validation
+- Optional witness checkpoint publication
 
 The goal is not to identify how someone voted. The goal is to verify that the stored election data remains internally consistent and that a voter can verify their own ballot proof phrase.
+
+Witness publication can optionally publish poll-level lifecycle and checkpoint events to configured webhooks. These events are privacy-safe and do not include voter identity, proof phrases, participation receipts, IP data, or per-player vote content.
 
 ---
 
 ## Installation
 
-ModNVote 2.0 currently requires a clean install.
+ModNVote 2.x requires a clean install (No upgrade path from v1.x).
 
 1. Stop the server.
 2. Remove any legacy ModNVote 1.x jar.
@@ -416,36 +514,17 @@ The Java source/target level should remain Java 21 unless explicitly changed.
 
 ---
 
-## Release smoke test
-
-Recommended smoke test before release:
-
-```text
-/modnvote create ranked_single_winner 3
-/modnvote create yes_no
-/modnvote edit <draftPollId>
-/modnvote open <readyPollId>
-/modnvote vote <openPollId>
-/modnvote close <openPollId>
-/modnvote result <closedPollId>
-/modnvote mypolls
-/modnvote verify participation <pollId>
-/modnvote verify ballot <pollId> <proofPhrase>
-```
-
----
-
 ## Roadmap
 
 Potential future 2.x work:
 
 - Multi-winner STV
 - Combined elections such as Mayor + Council
-- Exportable audit snapshots
-- Optional external witness publication
+- Exportable signed audit snapshots
 - Advanced reporting and dashboards
 - Dedicated GUI delete confirmation flow
 - Additional admin transparency tooling
+- Multi-target witness publication beyond Discord-compatible webhooks
 
 ---
 
