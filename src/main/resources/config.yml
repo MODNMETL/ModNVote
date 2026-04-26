@@ -12,12 +12,31 @@ storage:
   sqlite_file: "modnvote.db"
 
 publication:
+  # External witness publication targets.
+  #
+  # Leave this as [] to disable webhook publication:
+  # discord_webhooks: []
+  #
+  # To enable Discord publication, change it to a YAML list:
+  # discord_webhooks:
+  #   - "https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN"
+  #
+  # Multiple webhooks are supported:
+  # discord_webhooks:
+  #   - "https://discord.com/api/webhooks/FIRST_WEBHOOK_ID/FIRST_WEBHOOK_TOKEN"
+  #   - "https://discord.com/api/webhooks/SECOND_WEBHOOK_ID/SECOND_WEBHOOK_TOKEN"
+  #
+  # Never commit real webhook URLs to source control.
   discord_webhooks: []
   publish_poll_opened: true
   publish_poll_closed: true
   publish_checkpoints: true
 
 integrity:
+  # Automatic witness checkpoints are published every N accepted ballots
+  # when publication.publish_checkpoints is true and at least one webhook is configured.
+  #
+  # Set to 0 or a negative number to disable automatic interval checkpoints.
   checkpoint_interval_ballots: 25
   canonicalization_version: 1
 
