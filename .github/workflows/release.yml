@@ -27,8 +27,8 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build uberJar
-        run: ./gradlew --no-daemon clean uberJar
+      - name: Build plugin jar
+        run: ./gradlew --no-daemon clean build
 
       - name: Generate checksums
         run: |
