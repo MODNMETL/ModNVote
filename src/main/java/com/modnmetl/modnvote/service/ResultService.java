@@ -28,9 +28,9 @@ import java.util.logging.Logger;
  * - participation data is not used for vote-content reporting
  * - this service does not mutate poll state or publish finality markers
  *
- * For ranked single-winner polls, the displayed candidate table in this first
- * pass is a first-preference tally view, while the winner is determined by a
- * deterministic IRV recount over the stored anonymous ballots.
+ * For ranked single-winner polls, the public result now includes deterministic
+ * IRV round snapshots so presentation layers can distinguish first-preference
+ * support from the final transferred winner.
  */
 public final class ResultService {
 
@@ -149,19 +149,7 @@ public final class ResultService {
             }
         }
 
-        List<OptionTally> orderedTallies = options.stream()
-                .map(option -> new OptionTally(
-                        option.optionId(),
-                        option.key(),
-                        option.displayName(),
-                        counts.getOrDefault(option.optionId(), 0)
-                ))
-                .sorted(Comparator
-                        .comparingInt(OptionTally::votes).reversed()
-                        .thenComparing(OptionTally::optionName, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparingLong(OptionTally::optionId))
-                .toList();
-
+        List<OptionTally> orderedTallies = sortTallies(options, counts);
         OptionTally winner = orderedTallies.isEmpty() ? null : orderedTallies.get(0);
 
         return new PollResult(
@@ -170,40 +158,26 @@ public final class ResultService {
                 poll.pollType(),
                 ballots.size(),
                 winner != null ? winner.optionName() : null,
-                orderedTallies
+                orderedTallies,
+                List.of(),
+                winner,
+                0
         );
     }
 
     private PollResult buildRankedSingleWinnerResult(Poll poll,
                                                      List<PollOption> options,
-                                                     List<StoredBallot> ballots) throws PollServiceException {
+                                                     List<StoredBallot> ballots) {
         Map<Long, PollOption> optionsById = toOptionsById(options);
+        RankedChoiceReport report = determineRankedChoiceReport(options, ballots, optionsById.keySet());
 
-        Map<Long, Integer> firstPreferenceCounts = initializeCounts(options);
-        for (StoredBallot ballot : ballots) {
-            Long firstPreference = firstValidPreference(ballot.orderedOptionIds(), optionsById.keySet());
-            if (firstPreference != null) {
-                firstPreferenceCounts.put(firstPreference, firstPreferenceCounts.get(firstPreference) + 1);
-            }
-        }
-
-        Long winnerOptionId = determineIrVWinner(options, ballots, optionsById.keySet());
-        String winnerName = winnerOptionId != null && optionsById.containsKey(winnerOptionId)
-                ? optionsById.get(winnerOptionId).displayName()
+        String winnerName = report.winnerOptionId() != null && optionsById.containsKey(report.winnerOptionId())
+                ? optionsById.get(report.winnerOptionId()).displayName()
                 : null;
 
-        List<OptionTally> orderedTallies = options.stream()
-                .map(option -> new OptionTally(
-                        option.optionId(),
-                        option.key(),
-                        option.displayName(),
-                        firstPreferenceCounts.getOrDefault(option.optionId(), 0)
-                ))
-                .sorted(Comparator
-                        .comparingInt(OptionTally::votes).reversed()
-                        .thenComparing(OptionTally::optionName, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparingLong(OptionTally::optionId))
-                .toList();
+        List<OptionTally> firstPreferenceTallies = report.rounds().isEmpty()
+                ? sortTallies(options, initializeCounts(options))
+                : report.rounds().get(0).tallies();
 
         return new PollResult(
                 poll.pollId(),
@@ -211,17 +185,26 @@ public final class ResultService {
                 poll.pollType(),
                 ballots.size(),
                 winnerName,
-                orderedTallies
+                firstPreferenceTallies,
+                report.rounds(),
+                report.winnerTally(),
+                report.exhaustedBallots()
         );
     }
 
-    private Long determineIrVWinner(List<PollOption> options,
-                                    List<StoredBallot> ballots,
-                                    Set<Long> validOptionIds) {
+    private RankedChoiceReport determineRankedChoiceReport(List<PollOption> options,
+                                                           List<StoredBallot> ballots,
+                                                           Set<Long> validOptionIds) {
         LinkedHashSet<Long> active = options.stream()
                 .sorted(Comparator.comparingInt(PollOption::displayOrder).thenComparingLong(PollOption::optionId))
                 .map(PollOption::optionId)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        Map<Long, PollOption> optionsById = toOptionsById(options);
+        List<RankedChoiceRound> rounds = new ArrayList<>();
+        Long winnerOptionId = null;
+        OptionTally winnerTally = null;
+        int finalExhaustedBallots = 0;
 
         while (!active.isEmpty()) {
             Map<Long, Integer> roundCounts = new LinkedHashMap<>();
@@ -239,30 +222,102 @@ public final class ResultService {
                 }
             }
 
-            if (active.size() == 1) {
-                return active.iterator().next();
+            int exhaustedBallots = ballots.size() - countedBallots;
+            Long majorityWinner = findMajorityWinner(roundCounts, countedBallots);
+            boolean lastCandidateStanding = active.size() == 1;
+            boolean finalRound = majorityWinner != null || lastCandidateStanding;
+            Long roundWinnerOptionId = majorityWinner;
+            if (roundWinnerOptionId == null && lastCandidateStanding) {
+                roundWinnerOptionId = active.iterator().next();
             }
 
-            for (Map.Entry<Long, Integer> entry : roundCounts.entrySet()) {
-                if (entry.getValue() * 2 > countedBallots) {
-                    return entry.getKey();
-                }
+            Long optionToEliminate = null;
+            if (!finalRound) {
+                optionToEliminate = active.stream()
+                        .min(Comparator
+                                .comparingInt((Long optionId) -> roundCounts.getOrDefault(optionId, 0))
+                                .thenComparingLong(optionId -> optionId))
+                        .orElse(null);
             }
 
-            Long optionToEliminate = active.stream()
-                    .min(Comparator
-                            .comparingInt((Long optionId) -> roundCounts.getOrDefault(optionId, 0))
-                            .thenComparingLong(optionId -> optionId))
-                    .orElse(null);
+            List<OptionTally> tallies = sortActiveTallies(active, optionsById, roundCounts);
+            OptionTally eliminatedTally = optionToEliminate == null
+                    ? null
+                    : toTally(optionsById.get(optionToEliminate), roundCounts.getOrDefault(optionToEliminate, 0));
+            OptionTally roundWinnerTally = roundWinnerOptionId == null
+                    ? null
+                    : toTally(optionsById.get(roundWinnerOptionId), roundCounts.getOrDefault(roundWinnerOptionId, 0));
+
+            rounds.add(new RankedChoiceRound(
+                    rounds.size() + 1,
+                    tallies,
+                    countedBallots,
+                    exhaustedBallots,
+                    eliminatedTally,
+                    roundWinnerTally,
+                    finalRound
+            ));
+
+            if (finalRound) {
+                winnerOptionId = roundWinnerOptionId;
+                winnerTally = roundWinnerTally;
+                finalExhaustedBallots = exhaustedBallots;
+                break;
+            }
 
             if (optionToEliminate == null) {
-                return null;
+                break;
             }
 
             active.remove(optionToEliminate);
         }
 
+        return new RankedChoiceReport(winnerOptionId, winnerTally, finalExhaustedBallots, rounds);
+    }
+
+    private Long findMajorityWinner(Map<Long, Integer> roundCounts, int countedBallots) {
+        for (Map.Entry<Long, Integer> entry : roundCounts.entrySet()) {
+            if (entry.getValue() * 2 > countedBallots) {
+                return entry.getKey();
+            }
+        }
         return null;
+    }
+
+    private List<OptionTally> sortTallies(List<PollOption> options, Map<Long, Integer> counts) {
+        return options.stream()
+                .map(option -> new OptionTally(
+                        option.optionId(),
+                        option.key(),
+                        option.displayName(),
+                        counts.getOrDefault(option.optionId(), 0)
+                ))
+                .sorted(Comparator
+                        .comparingInt(OptionTally::votes).reversed()
+                        .thenComparing(OptionTally::optionName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparingLong(OptionTally::optionId))
+                .toList();
+    }
+
+    private List<OptionTally> sortActiveTallies(Set<Long> active,
+                                                Map<Long, PollOption> optionsById,
+                                                Map<Long, Integer> counts) {
+        return active.stream()
+                .map(optionId -> toTally(optionsById.get(optionId), counts.getOrDefault(optionId, 0)))
+                .sorted(Comparator
+                        .comparingInt(OptionTally::votes).reversed()
+                        .thenComparing(OptionTally::optionName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparingLong(OptionTally::optionId))
+                .toList();
+    }
+
+    private OptionTally toTally(PollOption option, int votes) {
+        return new OptionTally(
+                option.optionId(),
+                option.key(),
+                option.displayName(),
+                votes
+        );
     }
 
     private Long firstValidPreference(List<Long> orderedOptionIds, Set<Long> allowedOptionIds) {
@@ -300,17 +355,49 @@ public final class ResultService {
         }
     }
 
+    private record RankedChoiceReport(
+            Long winnerOptionId,
+            OptionTally winnerTally,
+            int exhaustedBallots,
+            List<RankedChoiceRound> rounds
+    ) {
+        private RankedChoiceReport {
+            Objects.requireNonNull(rounds, "rounds");
+            rounds = List.copyOf(rounds);
+        }
+    }
+
     public record PollResult(
             long pollId,
             String pollTitle,
             PollType pollType,
             int totalVotes,
             String winnerName,
-            List<OptionTally> tallies
+            List<OptionTally> tallies,
+            List<RankedChoiceRound> rankedChoiceRounds,
+            OptionTally finalWinnerTally,
+            int exhaustedBallots
     ) {
         public PollResult {
             Objects.requireNonNull(pollTitle, "pollTitle");
             Objects.requireNonNull(pollType, "pollType");
+            Objects.requireNonNull(tallies, "tallies");
+            Objects.requireNonNull(rankedChoiceRounds, "rankedChoiceRounds");
+            tallies = List.copyOf(tallies);
+            rankedChoiceRounds = List.copyOf(rankedChoiceRounds);
+        }
+    }
+
+    public record RankedChoiceRound(
+            int roundNumber,
+            List<OptionTally> tallies,
+            int activeBallots,
+            int exhaustedBallots,
+            OptionTally eliminatedTally,
+            OptionTally winnerTally,
+            boolean finalRound
+    ) {
+        public RankedChoiceRound {
             Objects.requireNonNull(tallies, "tallies");
             tallies = List.copyOf(tallies);
         }
