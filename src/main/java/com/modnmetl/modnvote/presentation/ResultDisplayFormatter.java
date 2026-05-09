@@ -29,6 +29,10 @@ public final class ResultDisplayFormatter {
         return formatSimpleInGame(result);
     }
 
+    public static String formatInGameText(ResultService.PollResult result) {
+        return String.join("\n", formatInGame(result));
+    }
+
     public static List<FieldBlock> formatDiscordFields(ResultService.PollResult result, int maxFieldValueLength) {
         Objects.requireNonNull(result, "result");
 
