@@ -205,7 +205,9 @@ public final class ResultService {
         Long winnerOptionId = null;
         OptionTally winnerTally = null;
         int finalExhaustedBallots = 0;
-
+        if (ballots.isEmpty()) {
+            return new RankedChoiceReport(null, null, 0, List.of());
+        }
         while (!active.isEmpty()) {
             Map<Long, Integer> roundCounts = new LinkedHashMap<>();
             for (Long optionId : active) {

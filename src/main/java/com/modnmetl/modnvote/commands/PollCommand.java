@@ -689,6 +689,38 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+            case "publishresult" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.close")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " publishresult <pollId>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
+
+                    if (poll.status() != PollStatus.CLOSED) {
+                        sender.sendMessage("§cOnly CLOSED polls can have results published.");
+                        return true;
+                    }
+
+                    ResultService.PollResult result = resultService.getPollResult(pollId);
+                    witnessPublicationService.publishPollClosed(poll, findOptions(pollId), result);
+
+                    sender.sendMessage("§aPublished closed result for poll §f#" + pollId
+                            + "§a to configured witness webhook(s).");
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.result_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+
+                return true;
+            }
             case "mypolls" -> {
                 if (!(sender instanceof Player player)) {
                     sender.sendMessage(messages.get("general.players_only"));

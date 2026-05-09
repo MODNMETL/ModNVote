@@ -88,7 +88,7 @@ public final class ResultDisplayFormatter {
         lines.add("§7Ballots: §f" + result.totalVotes());
 
         if (result.winnerName() != null && !result.winnerName().isBlank()) {
-            lines.add("§aWinner after transfers: §f" + result.winnerName());
+            lines.add("§aPoll winner: §f" + result.winnerName());
         }
 
         if (result.finalWinnerTally() != null) {
