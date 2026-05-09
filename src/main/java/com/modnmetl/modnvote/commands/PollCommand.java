@@ -6,6 +6,7 @@ import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.presentation.ResultDisplayFormatter;
 import com.modnmetl.modnvote.publication.WitnessPublicationService;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
@@ -1019,48 +1020,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                                      long pollId) throws PollServiceException {
         ResultService.PollResult result = resultService.getPollResult(pollId);
 
-        sender.sendMessage(messages.formatRaw("result.header", Map.of(
-                "poll_id", String.valueOf(result.pollId()),
-                "title", result.pollTitle()
-        )));
-        sender.sendMessage(messages.formatRaw("result.total_votes", Map.of(
-                "total_votes", String.valueOf(result.totalVotes())
-        )));
-
-        if (result.pollType() == PollType.YES_NO) {
-            Map<String, Integer> countsByKey = new HashMap<>();
-            for (ResultService.OptionTally tally : result.tallies()) {
-                countsByKey.put(tally.optionKey().toLowerCase(Locale.ROOT), tally.votes());
-            }
-
-            int yesVotes = countsByKey.getOrDefault("yes", 0);
-            int noVotes = countsByKey.getOrDefault("no", 0);
-
-            sender.sendMessage(messages.formatRaw("result.yes_votes", Map.of(
-                    "yes_votes", String.valueOf(yesVotes)
-            )));
-            sender.sendMessage(messages.formatRaw("result.no_votes", Map.of(
-                    "no_votes", String.valueOf(noVotes)
-            )));
-            return;
+        for (String line : ResultDisplayFormatter.formatInGame(result)) {
+            sender.sendMessage(line);
         }
-
-        if (result.pollType() == PollType.RANKED_SINGLE_WINNER) {
-            sender.sendMessage(messages.formatRaw("result.ranked_winner", Map.of(
-                    "winner", result.winnerName() == null ? "No winner determined" : result.winnerName()
-            )));
-            sender.sendMessage(messages.getRaw("result.first_preference_header"));
-
-            for (ResultService.OptionTally tally : result.tallies()) {
-                sender.sendMessage(messages.formatRaw("result.tally_entry", Map.of(
-                        "option_name", tally.optionName(),
-                        "votes", String.valueOf(tally.votes())
-                )));
-            }
-            return;
-        }
-
-        sender.sendMessage(messages.get("result.unsupported_type"));
     }
 
     private List<PollOption> findOptions(long pollId) throws PollServiceException {
