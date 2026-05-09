@@ -2,6 +2,7 @@ package com.modnmetl.modnvote.publication;
 
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.presentation.ResultDisplayFormatter;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
@@ -113,7 +114,10 @@ public final class WitnessPublicationService {
             fields.add(new DiscordField("Winner", result.winnerName(), false));
         }
 
-        fields.add(new DiscordField("Result Summary", formatResultSummary(result), false));
+        for (ResultDisplayFormatter.FieldBlock block :
+                ResultDisplayFormatter.formatDiscordFields(result, MAX_FIELD_VALUE_LENGTH)) {
+            fields.add(new DiscordField(block.name(), block.value(), false));
+        }
 
         DiscordEmbed embed = new DiscordEmbed(
                 "Poll Closed",
@@ -305,26 +309,6 @@ public final class WitnessPublicationService {
             return "All " + options.size();
         }
         return String.valueOf(poll.maxRankings());
-    }
-
-    private String formatResultSummary(ResultService.PollResult result) {
-        if (result.tallies().isEmpty()) {
-            return "No recorded tallies.";
-        }
-
-        List<String> lines = new ArrayList<>();
-        for (ResultService.OptionTally tally : result.tallies()) {
-            lines.add(tally.optionName() + ": " + tally.votes());
-            if (lines.size() >= 8) {
-                break;
-            }
-        }
-
-        if (result.tallies().size() > lines.size()) {
-            lines.add("...and " + (result.tallies().size() - lines.size()) + " more options");
-        }
-
-        return truncate(String.join("\n", lines), MAX_FIELD_VALUE_LENGTH);
     }
 
     private String redactWebhookUrl(String webhookUrl) {
