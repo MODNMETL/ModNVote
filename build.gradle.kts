@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.modnmetl"
-version = "2.1.0"
+version = "2.1.1"
 description = "ModNVote 2.0 - secure poll and election platform for Paper"
 
 java {
