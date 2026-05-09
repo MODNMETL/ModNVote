@@ -1093,6 +1093,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " open <pollId> §7- Open a ready poll for voting");
         sender.sendMessage("§e/" + label + " close <pollId> §7- Close an open poll");
         sender.sendMessage("§e/" + label + " result <pollId> §7- Show results");
+        sender.sendMessage("§e/" + label + " publishresult <pollId> §7- Republish a CLOSED poll result to witness webhooks.");
         sender.sendMessage("§e/" + label + " vote <pollId> §7- Vote in an open poll");
         sender.sendMessage("§e/" + label + " mypolls §7- Show polls you have participated in");
         sender.sendMessage("§e/" + label + " verify participation <pollId> §7- Verify your participation");
@@ -1224,7 +1225,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
         if ("show".equals(root) || "validate".equals(root) || "ready".equals(root)
                 || "open".equals(root) || "close".equals(root)
-                || "result".equals(root) || "vote".equals(root)
+                || "result".equals(root) || "publishresult".equals(root)
+                || "vote".equals(root)
                 || "clone".equals(root) || "checkpoint".equals(root)) {
             return index == 1;
         }
@@ -1296,7 +1298,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         return switch (root) {
             case "open" -> loadPollIdCompletions(PollStatus.READY);
             case "close" -> loadPollIdCompletions(PollStatus.OPEN);
-            case "result" -> loadPollIdCompletions(PollStatus.CLOSED);
+            case "result", "publishresult" -> loadPollIdCompletions(PollStatus.CLOSED);
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
             case "edit", "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
             case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
@@ -1368,6 +1370,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
             if (sender.hasPermission("modnvote.admin.poll.close")) {
                 completions.add("close");
+                completions.add("publishresult");
             }
 
             completions.add("result");
