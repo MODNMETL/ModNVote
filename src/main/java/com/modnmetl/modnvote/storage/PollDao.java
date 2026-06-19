@@ -105,7 +105,8 @@ public final class PollDao {
                     seat_count,
                     allow_partial_ranking,
                     requires_confirmation,
-                    participation_secret
+                    participation_secret,
+                    config_json
                 FROM polls
                 ORDER BY poll_id ASC
                 """;
@@ -150,7 +151,8 @@ public final class PollDao {
                     seat_count,
                     allow_partial_ranking,
                     requires_confirmation,
-                    participation_secret
+                    participation_secret,
+                    config_json
                 FROM polls
                 WHERE poll_id = ?
                 LIMIT 1
@@ -234,6 +236,11 @@ public final class PollDao {
         Long opensAtMillis = getNullableLong(rs, "opens_at");
         Long closesAtMillis = getNullableLong(rs, "closes_at");
 
+        String configJson = rs.getString("config_json");
+        if (configJson == null || configJson.isBlank()) {
+            configJson = "{}";
+        }
+
         return new Poll(
                 rs.getLong("poll_id"),
                 rs.getString("slug"),
@@ -247,7 +254,8 @@ public final class PollDao {
                 rs.getInt("seat_count"),
                 rs.getInt("allow_partial_ranking") == 1,
                 rs.getInt("requires_confirmation") == 1,
-                rs.getString("participation_secret")
+                rs.getString("participation_secret"),
+                configJson
         );
     }
 

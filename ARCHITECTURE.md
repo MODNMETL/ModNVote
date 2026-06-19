@@ -105,6 +105,23 @@ shared component, `BallotCanonicalizer` (`service.canonical`).
   without an intentional version bump, or previously stored ballot hashes would
   fail verification.
 
+#### Linked offices election definition (definition-only)
+
+The `domain.election` package holds a generic, immutable election-definition
+model (`ElectionDefinition`, `ContestDefinition`, `CandidateDefinition`,
+`OfficeDependencyRule`, `CountingMethod`, `OfficeDependencyType`), together with
+an `ElectionDefinitionParser` (from `polls.config_json`) and an
+`ElectionDefinitionValidator`.
+
+- Offices, contests, candidates, and dependencies are fully generic. No office
+  name (such as Mayor or Council) is hardcoded; those appear only in
+  configuration/examples.
+- This layer is definition/config infrastructure only. It does not implement
+  voting, persistence of multi-contest ballot content, counting, or GUI flow.
+- The anonymous-ballot privacy model is untouched: definitions live in the
+  existing `polls.config_json` / `poll_options.metadata_json` columns and carry
+  no voter identity.
+
 ---
 
 ### Persistence (DAO) layer

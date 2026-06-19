@@ -49,10 +49,27 @@ Completed groundwork so far:
   - schema privacy/non-joinability regression tests over the live schema
 - Bumped the project version to `2.2.0`.
 
+Tranche 2A added the generic election-definition/config layer (definition only, no voting):
+
+- Generic election-definition domain model under `domain.election`
+  (`ElectionDefinition`, `ContestDefinition`, `CandidateDefinition`,
+  `OfficeDependencyRule`, `CountingMethod`, `OfficeDependencyType`). Mayor/Council
+  are examples only; nothing is hardcoded.
+- `ElectionDefinitionParser` (parses `polls.config_json`; preserves office and
+  candidate order; converts `excludeWinnersFrom` into `EXCLUDE_WINNERS`
+  dependencies; rejects unknown models/methods) and `ElectionDefinitionValidator`
+  (generic structural rules including an acyclic dependency check).
+- Surfaced `config_json` on `Poll`/`PollDao` and `metadata_json` on
+  `PollOption`/`PollOptionDao`, both defaulting to `"{}"` via backward-compatible
+  constructors. No schema change.
+- Gson is used for parsing as a `compileOnly` (Paper-provided) + test-only
+  dependency; it is not shaded into the plugin jar.
+
 Explicitly NOT done in this groundwork:
 
-- No `LINKED_OFFICES` poll type.
+- No `LINKED_OFFICES` poll type (definitions validate the `model` string only).
 - No `anonymous_ballot_contest_responses` table or any schema change.
+- No multi-contest ballot submission, counting pipeline, or IRV extraction.
 - No GUI/session, lifecycle, proof-phrase, or participation-token changes.
 
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
@@ -372,6 +389,15 @@ src/main/java/com/modnmetl/modnvote/service/canonical/BallotCanonicalizer.java
 
 Shared canonical anonymous-ballot payload construction used by both
 `BallotService` and `IntegrityVerificationService`.
+
+```text
+src/main/java/com/modnmetl/modnvote/domain/election/
+```
+
+Generic linked-offices election definition layer (Tranche 2A): immutable
+definition model, `ElectionDefinitionParser`, and `ElectionDefinitionValidator`.
+Definition/config only — no voting, persistence of multi-contest content,
+counting, or GUI.
 
 ```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java

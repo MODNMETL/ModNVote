@@ -45,7 +45,7 @@ public final class PollOptionDao {
                 ps.setInt(5, option.displayOrder());
                 ps.setString(6, "MATERIAL");
                 ps.setString(7, "PAPER");
-                ps.setString(8, "{}");
+                ps.setString(8, option.metadataJson());
                 ps.addBatch();
             }
             ps.executeBatch();
@@ -74,7 +74,7 @@ public final class PollOptionDao {
             ps.setInt(5, option.displayOrder());
             ps.setString(6, "MATERIAL");
             ps.setString(7, "PAPER");
-            ps.setString(8, "{}");
+            ps.setString(8, option.metadataJson());
             ps.executeUpdate();
 
             try (ResultSet rs = ps.getGeneratedKeys()) {
@@ -95,7 +95,8 @@ public final class PollOptionDao {
                     option_key,
                     display_name,
                     description,
-                    display_order
+                    display_order,
+                    metadata_json
                 FROM poll_options
                 WHERE poll_id = ?
                 ORDER BY display_order ASC, option_id ASC
@@ -123,7 +124,8 @@ public final class PollOptionDao {
                     option_key,
                     display_name,
                     description,
-                    display_order
+                    display_order,
+                    metadata_json
                 FROM poll_options
                 WHERE option_id = ?
                 LIMIT 1
@@ -183,13 +185,19 @@ public final class PollOptionDao {
     }
 
     private PollOption mapRow(ResultSet rs) throws SQLException {
+        String metadataJson = rs.getString("metadata_json");
+        if (metadataJson == null || metadataJson.isBlank()) {
+            metadataJson = "{}";
+        }
+
         return new PollOption(
                 rs.getLong("option_id"),
                 rs.getLong("poll_id"),
                 rs.getString("option_key"),
                 rs.getString("display_name"),
                 rs.getString("description"),
-                rs.getInt("display_order")
+                rs.getInt("display_order"),
+                metadataJson
         );
     }
 }

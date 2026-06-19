@@ -12,8 +12,18 @@ import java.util.Objects;
  * Polls now also carry a per-poll participation secret used to derive
  * one-way participation tokens. This lets the system enforce inclusion
  * and duplicate prevention without storing identity alongside vote content.
+ *
+ * Polls additionally carry an opaque {@code configJson} payload sourced from the
+ * existing {@code polls.config_json} column. For existing YES_NO and
+ * RANKED_SINGLE_WINNER polls this is simply "{}". It is the forward-looking home
+ * for richer poll/election definition data (for example, the generic linked
+ * offices election definition) without requiring schema changes. The domain
+ * model only carries the raw JSON; parsing/validation lives in dedicated
+ * components in the service/domain layers.
  */
 public final class Poll {
+
+    private static final String DEFAULT_CONFIG_JSON = "{}";
 
     private final long pollId;
     private final String slug;
@@ -28,7 +38,14 @@ public final class Poll {
     private final boolean allowPartialRanking;
     private final boolean requiresConfirmation;
     private final String participationSecret;
+    private final String configJson;
 
+    /**
+     * Backward-compatible constructor that defaults {@code configJson} to "{}".
+     *
+     * Existing call sites that predate the config_json surfacing keep working
+     * unchanged through this overload.
+     */
     public Poll(long pollId,
                 String slug,
                 String title,
@@ -42,6 +59,36 @@ public final class Poll {
                 boolean allowPartialRanking,
                 boolean requiresConfirmation,
                 String participationSecret) {
+        this(pollId,
+                slug,
+                title,
+                description,
+                pollType,
+                status,
+                opensAt,
+                closesAt,
+                maxRankings,
+                seatCount,
+                allowPartialRanking,
+                requiresConfirmation,
+                participationSecret,
+                DEFAULT_CONFIG_JSON);
+    }
+
+    public Poll(long pollId,
+                String slug,
+                String title,
+                String description,
+                PollType pollType,
+                PollStatus status,
+                Instant opensAt,
+                Instant closesAt,
+                int maxRankings,
+                int seatCount,
+                boolean allowPartialRanking,
+                boolean requiresConfirmation,
+                String participationSecret,
+                String configJson) {
         this.pollId = pollId;
         this.slug = requireNonBlank(slug, "slug");
         this.title = requireNonBlank(title, "title");
@@ -55,6 +102,7 @@ public final class Poll {
         this.allowPartialRanking = allowPartialRanking;
         this.requiresConfirmation = requiresConfirmation;
         this.participationSecret = requireNonBlank(participationSecret, "participationSecret");
+        this.configJson = normalizeConfigJson(configJson);
 
         if (maxRankings < 0) {
             throw new IllegalArgumentException("maxRankings must not be negative");
@@ -71,6 +119,13 @@ public final class Poll {
         Objects.requireNonNull(value, fieldName);
         if (value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value;
+    }
+
+    private static String normalizeConfigJson(String value) {
+        if (value == null || value.isBlank()) {
+            return DEFAULT_CONFIG_JSON;
         }
         return value;
     }
@@ -125,5 +180,9 @@ public final class Poll {
 
     public String participationSecret() {
         return participationSecret;
+    }
+
+    public String configJson() {
+        return configJson;
     }
 }

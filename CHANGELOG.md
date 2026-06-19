@@ -6,26 +6,33 @@ All notable changes to ModNVote are documented in this file.
 
 ### Summary
 
-Groundwork for the ModNVote 2.2.0 development stretch. This is preparation only; the Linked Offices election model is **not** implemented in this tranche.
+Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranches. This is preparation only; Linked Offices **voting is not implemented yet**. There is no multi-contest ballot storage, GUI/session flow, or counting pipeline.
 
 ### Added
 
-- Shared `BallotCanonicalizer` (`service.canonical`) as the single source of truth for anonymous-ballot canonical payload construction, used by both `BallotService` (submission) and `IntegrityVerificationService` (recount/verification).
-- Test foundation under `src/test`:
-  - golden/stability tests that lock the canonical payload format byte-for-byte for existing `YES_NO` and `RANKED_SINGLE_WINNER` ballots
-  - schema privacy/non-joinability regression tests asserting anonymous vote-content tables carry no identity columns and share no per-voter linking column with participation records
+- **Tranche 1 — canonicalization foundation:**
+  - Shared `BallotCanonicalizer` (`service.canonical`) as the single source of truth for anonymous-ballot canonical payload construction, used by both `BallotService` (submission) and `IntegrityVerificationService` (recount/verification).
+  - Test foundation under `src/test`: golden/stability tests locking the canonical payload format byte-for-byte for existing `YES_NO` and `RANKED_SINGLE_WINNER` ballots, plus schema privacy/non-joinability regression tests.
+- **Tranche 2A — election definition infrastructure (definition/config only):**
+  - Generic election-definition domain model under `domain.election`: `ElectionDefinition`, `ContestDefinition`, `CandidateDefinition`, `OfficeDependencyRule`, plus `CountingMethod` (`IRV`, `APPROVAL_TOP_N`) and `OfficeDependencyType` (`EXCLUDE_WINNERS`). Offices/contests/candidates/dependencies are fully generic; Mayor/Council are examples only, never hardcoded.
+  - `ElectionDefinitionParser` parsing `polls.config_json` into an `ElectionDefinition` (preserves office and candidate order; converts `excludeWinnersFrom` into `EXCLUDE_WINNERS` dependencies; rejects unknown models and counting methods).
+  - `ElectionDefinitionValidator` enforcing generic structural rules (unique keys, non-blank names, seats, IRV single-seat, approval `maxSelections`, candidate eligibility, dependency endpoints, acyclic dependency graph, enough eligible candidates per seat count).
+  - `config_json` surfaced through the `Poll` domain model and `PollDao`; `metadata_json` surfaced through the `PollOption` domain model and `PollOptionDao` — both via backward-compatible constructors that default to `"{}"`.
+  - Tests for the parser, validator, and `config_json`/`metadata_json` persistence/defaulting.
 
 ### Changed
 
 - `BallotService` and `IntegrityVerificationService` now delegate canonical payload construction to the shared `BallotCanonicalizer` instead of duplicating private builder methods. Canonical output is unchanged (byte-for-byte identical, `rule_snapshot_version=v2`), so existing stored ballot hashes and proof commitments continue to verify.
+- `Poll` now carries `configJson` and `PollOption` now carries `metadataJson`, both read from existing columns. Existing call sites are unaffected via backward-compatible constructors.
+- Gson is used for election-definition parsing. It is `compileOnly` (provided by the Paper runtime) and on the test classpath only; it is **not** shaded into the plugin jar.
 - Project version bumped to `2.2.0`.
 
 ### Notes
 
-- No database schema changes.
+- No database schema changes. `config_json` and `metadata_json` already existed in the schema and are now surfaced/used.
 - No changes to proof-phrase generation, participation token hashing, GUI/session behaviour, or poll lifecycle.
 - Existing `YES_NO` and `RANKED_SINGLE_WINNER` polls continue to work unchanged.
-- Linked Offices is not implemented yet. The shared canonicalizer is deliberately designed so multi-contest canonicalization can be added later without altering the existing single-contest format.
+- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and GUI flow are deliberately **not** implemented yet. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
 
 ## [2.1.1] - 2026-05-09
 

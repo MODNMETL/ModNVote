@@ -21,10 +21,16 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.5")
 
+    // Gson is provided by the Paper server runtime, so it is compileOnly here and
+    // is NOT shaded into the plugin jar. It is added on the test classpath so the
+    // election-definition parser can be unit-tested without a running server.
+    compileOnly("com.google.code.gson:gson:2.10.1")
+
     implementation("org.xerial:sqlite-jdbc:3.46.0.0")
 
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("com.google.code.gson:gson:2.10.1")
 }
 
 tasks.processResources {
