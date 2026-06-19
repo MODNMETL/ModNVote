@@ -4,7 +4,7 @@
 
 ModNVote is a Minecraft voting and polling plugin for communities that want voting to be easy for players, practical for admins, and verifiable after the fact.
 
-ModNVote 2.0 replaces the original Yes/No-only workflow with a GUI-first, ballot-based polling platform supporting ranked single-winner polls, Yes/No polls, anonymous ballots, poll lifecycle controls, and tamper-evident integrity checks.
+ModNVote 2.x replaces the original Yes/No-only workflow with a GUI-first, ballot-based polling platform supporting ranked single-winner polls, Yes/No polls, anonymous ballots, poll lifecycle controls, tamper-evident integrity checks, Discord-compatible witness publication, and transparent ranked-choice result reporting.
 
 Developed by [MODN METL LTD](https://modnmetl.com).
 
@@ -17,7 +17,7 @@ Developed by [MODN METL LTD](https://modnmetl.com).
 
 ## ModNVote 2.x status
 
-ModNVote 2.0 is the active replacement for the legacy 1.x Yes/No-only plugin.
+ModNVote 2.1.1 is the current active replacement for the legacy 1.x Yes/No-only plugin.
 
 2.x includes:
 
@@ -33,15 +33,17 @@ ModNVote 2.0 is the active replacement for the legacy 1.x Yes/No-only plugin.
 - Poll cloning for repeated or template-based poll setup
 - Optional external witness publication via Discord-compatible webhooks
 - Automatic and manual integrity checkpoint publication
+- Transparent IRV round reporting for ranked single-winner polls
+- Manual closed-result republication with `/modnvote publishresult <pollId>`
 - `/poll` as a short alias for `/modnvote`
 
-2.0 is a clean install target. Migration from legacy 1.x databases is not currently supported.
+2.x is a clean install target. Migration from legacy 1.x databases is not currently supported.
 
 ---
 
 ## Core privacy model
 
-ModNVote 2.0 is designed around one central rule:
+ModNVote 2.x is designed around one central rule:
 
 > Anonymous ballots are the source of truth for vote content.
 
@@ -63,6 +65,7 @@ This means:
 - `/modnvote verify ballot` uses a proof phrase as a bearer-token style verification mechanism.
 - `/poll` may be used as a shorter alias for `/modnvote`.
 - GUI/session state does not directly write ballots or lifecycle state.
+- Witness publication must not include player names, UUIDs, IP addresses, proof phrases, participation receipts, or per-player vote content.
 
 ---
 
@@ -70,7 +73,7 @@ This means:
 
 ### Ranked single-winner polls
 
-Ranked polls let players rank options in preference order. Results are calculated from anonymous ranked ballots.
+Ranked polls let players rank options in preference order. Results are calculated from anonymous ranked ballots using IRV-style transfer rounds.
 
 Admins can configure through the Poll Builder GUI:
 
@@ -100,6 +103,32 @@ Example:
 ```
 
 This creates a DRAFT Yes/No poll and opens the Poll Builder GUI.
+
+---
+
+## Ranked-choice result transparency
+
+Ranked single-winner results are not first-past-the-post results.
+
+For ranked polls:
+
+- First-preference totals are shown as the first IRV round.
+- Later rounds show transfers after eliminations.
+- The winning option may be different from the first-preference leader.
+- Exhausted ballots are reported where applicable.
+- Final winner tally is shown separately from first-preference totals.
+
+In-game result output and Discord witness output are both designed to distinguish:
+
+- Poll winner
+- Final winner tally
+- First Preference Round
+- Final IRV Round
+- IRV Round Breakdown
+- Eliminated option per non-final round
+- Exhausted ballots where applicable
+
+This avoids the misleading situation where a ranked-choice winner is correct but the displayed counts look like first-preference-only totals.
 
 ---
 
@@ -173,7 +202,7 @@ This reopens the Poll Builder for an existing DRAFT poll.
 /modnvote clone <sourcePollId>
 ```
 
-This creates a new DRAFT poll by copying the source poll’s definition and options, then opens the Poll Builder so the clone can be adjusted.
+This creates a new DRAFT poll by copying the source poll's definition and options, then opens the Poll Builder so the clone can be adjusted.
 
 Cloning does not copy ballots, participation records, lifecycle timestamps, proof phrases, or audit history.
 
@@ -206,6 +235,8 @@ For ranked polls:
 /modnvote close <pollId>
 ```
 
+Closing an open poll calculates results and, when enabled, publishes a best-effort poll-closed witness message to configured webhooks.
+
 ### Show results
 
 ```text
@@ -213,6 +244,18 @@ For ranked polls:
 ```
 
 Results are calculated from anonymous ballots only.
+
+For ranked single-winner polls, this shows the poll winner, final winner tally, and round-by-round IRV breakdown.
+
+### Republish a closed poll result
+
+```text
+/modnvote publishresult <pollId>
+```
+
+This republishes a CLOSED poll's current result display to configured witness webhooks.
+
+Use this after upgrading result formatting or correcting public result presentation. The command requires the poll to already be `CLOSED`; it does not reopen or recalculate lifecycle state beyond reading current anonymous ballot results.
 
 ### Publish a manual integrity checkpoint
 
@@ -234,10 +277,12 @@ Supported witness events:
 
 - Poll opened
 - Poll closed, including a public result summary
+- Ranked poll closed, including winner, final IRV round, and IRV round breakdown
 - Automatic integrity checkpoints every configured number of accepted ballots
 - Manual integrity checkpoints via `/modnvote checkpoint <pollId>`
+- Manual closed-result republication via `/modnvote publishresult <pollId>`
 
-Webhook delivery is best-effort and non-blocking. A failed webhook does not cancel voting, poll opening, poll closing, or persistence.
+Webhook delivery is best-effort and non-blocking. A failed webhook does not cancel voting, poll opening, poll closing, result calculation, or persistence.
 
 Configure webhook publication in `config.yml`:
 
@@ -250,12 +295,12 @@ publication:
   #
   # To enable Discord publication, change it to a YAML list:
   # discord_webhooks:
-  #   - "https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN"
+  #   - "DISCORD_WEBHOOK_URL_PLACEHOLDER"
   #
   # Multiple webhooks are supported:
   # discord_webhooks:
-  #   - "https://discord.com/api/webhooks/FIRST_WEBHOOK_ID/FIRST_WEBHOOK_TOKEN"
-  #   - "https://discord.com/api/webhooks/SECOND_WEBHOOK_ID/SECOND_WEBHOOK_TOKEN"
+  #   - "FIRST_DISCORD_WEBHOOK_URL_PLACEHOLDER"
+  #   - "SECOND_DISCORD_WEBHOOK_URL_PLACEHOLDER"
   #
   # Never commit real webhook URLs to source control.
   discord_webhooks: []
@@ -320,6 +365,7 @@ Normal admin-facing commands:
 /modnvote open <pollId>
 /modnvote close <pollId>
 /modnvote result <pollId>
+/modnvote publishresult <pollId>
 /modnvote checkpoint <pollId>
 ```
 
@@ -345,6 +391,7 @@ Short alias examples:
 /poll status
 /poll guide
 /poll vote <pollId>
+/poll publishresult <pollId>
 ```
 
 Some older low-level authoring commands may remain callable as recovery tools, but normal poll setup should use the GUI builder.
@@ -362,7 +409,7 @@ Common permissions include:
 | `modnvote.admin.poll.create` | Create, clone, edit, inspect, checkpoint, and manage draft polls |
 | `modnvote.admin.poll.list` | List polls |
 | `modnvote.admin.poll.open` | Open polls for voting |
-| `modnvote.admin.poll.close` | Close polls |
+| `modnvote.admin.poll.close` | Close polls and republish closed poll results |
 | `modnvote.admin.reload` | Reload plugin configuration |
 | `modnvote.verify` | Use verification commands |
 | `modnvote.testvote` | Access test vote tooling where enabled |
@@ -389,7 +436,24 @@ The Poll Builder and voting GUI are designed to remain intuitive across Java and
 
 ## Architecture overview
 
-ModNVote 2.0 uses a service-authoritative design.
+ModNVote 2.x uses a service-authoritative design.
+
+### Command layer
+
+Responsible for:
+
+- Parsing user input
+- Checking permissions
+- Displaying formatted output
+- Delegating business logic to services
+
+Not responsible for:
+
+- Writing ballots directly
+- Writing lifecycle state directly
+- Calculating results independently
+- Reconstructing ballot logic
+- Bypassing validation
 
 ### GUI/session layer
 
@@ -412,10 +476,12 @@ Not responsible for:
 Responsible for:
 
 - Poll creation
+- Poll cloning
 - Poll validation
 - Lifecycle transitions
 - Option mutation
 - Ballot submission
+- Result calculation
 - Integrity and audit enforcement
 
 ### Persistence layer
@@ -425,8 +491,20 @@ Responsible for:
 - Poll definitions
 - Poll options
 - Anonymous ballots
+- Ballot preferences
 - Participation records
 - Audit records
+
+### Presentation/publication layer
+
+Responsible for:
+
+- Formatting in-game result output
+- Formatting Discord witness result fields
+- Publishing privacy-safe webhook events
+- Keeping ranked-choice public result wording clear and non-misleading
+
+`ResultDisplayFormatter` is the canonical result presentation helper. Future result-display changes should generally go through that class rather than duplicating formatting in command or publication code.
 
 ---
 
@@ -450,7 +528,7 @@ The builder keeps polls in DRAFT until required fields are complete and the admi
 
 ## Integrity and audit model
 
-ModNVote 2.0 includes audit and verification features intended to make election data tamper-evident.
+ModNVote 2.x includes audit and verification features intended to make election data tamper-evident.
 
 Integrity checks include:
 
@@ -462,21 +540,22 @@ Integrity checks include:
 
 The goal is not to identify how someone voted. The goal is to verify that the stored election data remains internally consistent and that a voter can verify their own ballot proof phrase.
 
-Witness publication can optionally publish poll-level lifecycle and checkpoint events to configured webhooks. These events are privacy-safe and do not include voter identity, proof phrases, participation receipts, IP data, or per-player vote content.
+Witness publication can optionally publish poll-level lifecycle, result, and checkpoint events to configured webhooks. These events are privacy-safe and do not include voter identity, proof phrases, participation receipts, IP data, or per-player vote content.
 
 ---
 
 ## Installation
 
-ModNVote 2.x requires a clean install (No upgrade path from v1.x).
+ModNVote 2.x requires a clean install. There is no supported upgrade path from v1.x databases.
 
 1. Stop the server.
 2. Remove any legacy ModNVote 1.x jar.
 3. Back up and remove old ModNVote 1.x database/config files if present.
-4. Install the 2.0 jar into `/plugins/`.
+4. Install the current ModNVote 2.x jar into `/plugins/`.
 5. Start the server.
 6. Configure permissions.
-7. Create and test a new poll.
+7. Configure witness publication if desired.
+8. Create and test a new poll.
 
 ### Requirements
 
@@ -501,6 +580,8 @@ gradlew.bat clean build
 
 The Java source/target level should remain Java 21 unless explicitly changed.
 
+The release jar is produced by the Shadow plugin under `build/libs/`.
+
 ---
 
 ## Development notes
@@ -511,6 +592,39 @@ The Java source/target level should remain Java 21 unless explicitly changed.
 - GUI features should remain Folia-aware through `ModNScheduler`.
 - Results must always come from anonymous ballots only.
 - Participation verification must never reveal vote content.
+- Witness publication must remain best-effort and privacy-safe.
+- Ranked-choice result wording must not make first-preference totals look like final results.
+- Read `CURRENT_STATE.md` before starting a new implementation session.
+
+---
+
+## Recommended smoke test
+
+After significant changes, test a representative flow:
+
+```text
+/modnvote status
+/modnvote create ranked_single_winner 3
+/modnvote create yes_no
+/modnvote edit <draftPollId>
+/modnvote open <readyPollId>
+/modnvote vote <openPollId>
+/modnvote close <openPollId>
+/modnvote result <closedPollId>
+/modnvote publishresult <closedPollId>
+/modnvote checkpoint <pollId>
+/modnvote mypolls
+/modnvote verify participation <pollId>
+/modnvote verify ballot <pollId> <proofPhrase>
+```
+
+Also verify alias behavior:
+
+```text
+/poll status
+/poll vote <pollId>
+/poll publishresult <closedPollId>
+```
 
 ---
 
