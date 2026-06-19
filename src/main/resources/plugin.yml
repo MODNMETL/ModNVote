@@ -11,7 +11,7 @@ commands:
     description: ModNVote 2.0 root command
     aliases:
       - poll
-    usage: "/modnvote <status|reload|list|create|clone|checkpoint|show|option|validate|validate-definition|ready|open|close|result|mypolls|verify|vote|testvote>"
+    usage: "/modnvote <status|reload|list|create|clone|checkpoint|show|option|validate|validate-definition|config|ready|open|close|result|mypolls|verify|vote|testvote>"
     permission: modnvote.use
 
 permissions:

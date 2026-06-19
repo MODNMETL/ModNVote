@@ -10,6 +10,8 @@ import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.PollDao;
 import com.modnmetl.modnvote.storage.PollOptionDao;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.time.Instant;
@@ -34,12 +36,30 @@ public final class PollService {
     private final PollDao pollDao;
     private final PollOptionDao pollOptionDao;
     private final AuditEventDao auditEventDao;
+    private final ElectionDefinitionService electionDefinitionService = new ElectionDefinitionService();
 
     public PollService(DatabaseManager databaseManager,
                        PlatformAdapter platformAdapter,
                        Logger logger) {
         this.databaseManager = Objects.requireNonNull(databaseManager, "databaseManager");
         this.platformAdapter = Objects.requireNonNull(platformAdapter, "platformAdapter");
+        this.logger = Objects.requireNonNull(logger, "logger");
+        this.pollDao = new PollDao(databaseManager);
+        this.pollOptionDao = new PollOptionDao(databaseManager);
+        this.auditEventDao = new AuditEventDao(databaseManager);
+    }
+
+    /**
+     * Headless constructor for lifecycle/authoring operations that do not schedule
+     * any platform work. The {@link PlatformAdapter} is optional here because none
+     * of the poll authoring, validation, or lifecycle methods touch it; this keeps
+     * the service unit-testable without a running server. Production wiring should
+     * continue to use the full constructor.
+     */
+    public PollService(DatabaseManager databaseManager,
+                       Logger logger) {
+        this.databaseManager = Objects.requireNonNull(databaseManager, "databaseManager");
+        this.platformAdapter = null;
         this.logger = Objects.requireNonNull(logger, "logger");
         this.pollDao = new PollDao(databaseManager);
         this.pollOptionDao = new PollOptionDao(databaseManager);
@@ -75,7 +95,7 @@ public final class PollService {
         requireNonBlank(createdBy, "createdBy");
         Objects.requireNonNull(pollType, "pollType");
 
-        if (!isSupportedAuthoringType(pollType)) {
+        if (!isSupportedAuthoringType(pollType) && pollType != PollType.LINKED_OFFICES) {
             throw new PollServiceException("Poll type " + pollType.name() + " is not yet supported for command authoring.");
         }
 
@@ -404,6 +424,69 @@ public final class PollService {
         }
     }
 
+    /**
+     * Sets the {@code config_json} definition on a DRAFT poll.
+     *
+     * Only {@link PollType#LINKED_OFFICES} polls may carry a config definition.
+     * Other poll types reject updates so their existing behaviour is unchanged.
+     * For linked-offices polls the supplied JSON must parse and validate through
+     * {@link ElectionDefinitionService} before anything is persisted; an invalid
+     * definition is rejected and the database is not written.
+     *
+     * The audit payload deliberately excludes the raw definition (which may be
+     * large); it records only the poll id, actor, declared model, a SHA-256 hash
+     * of the definition bytes, and the definition byte length. No voter identity
+     * or ballot content is involved.
+     */
+    public void updatePollConfigJson(long pollId, String configJson, String actor) throws PollServiceException {
+        requireNonBlank(actor, "actor");
+        requireNonBlank(configJson, "configJson");
+
+        Poll poll = requireDraftPoll(pollId);
+
+        if (poll.pollType() != PollType.LINKED_OFFICES) {
+            throw new PollServiceException(
+                    "config_json definitions are only supported for LINKED_OFFICES polls.");
+        }
+
+        ElectionDefinitionService.ElectionDefinitionValidationResult validation =
+                electionDefinitionService.validate(configJson);
+        if (!validation.valid()) {
+            String detail = validation.issues().isEmpty()
+                    ? "definition is not valid."
+                    : String.join("; ", validation.issues());
+            throw new PollServiceException("Invalid linked offices definition: " + detail);
+        }
+
+        String model = validation.rawModel().orElse("");
+        String configHash = sha256Hex(configJson);
+        int configBytes = configJson.getBytes(StandardCharsets.UTF_8).length;
+
+        try (Connection connection = databaseManager.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                pollDao.updatePollConfigJson(connection, pollId, configJson);
+                auditEventDao.insertPollEvent(
+                        connection,
+                        pollId,
+                        "POLL_CONFIG_UPDATED",
+                        "actor=" + actor + ";poll_id=" + pollId
+                                + ";model=" + model
+                                + ";config_hash=" + configHash
+                                + ";config_bytes=" + configBytes
+                );
+                connection.commit();
+            } catch (Exception e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            throw new PollServiceException("Failed to update config for poll #" + pollId, e);
+        }
+    }
+
     public long addOption(long pollId,
                           String key,
                           String displayName,
@@ -673,6 +756,16 @@ public final class PollService {
                 if (!options.isEmpty() && poll.maxRankings() > options.size()) {
                     issues.add("maxRankings must not exceed the number of options.");
                 }
+            } else if (poll.pollType() == PollType.LINKED_OFFICES) {
+                ElectionDefinitionService.ElectionDefinitionValidationResult validation =
+                        electionDefinitionService.validate(poll.configJson());
+                if (!validation.valid()) {
+                    if (validation.issues().isEmpty()) {
+                        issues.add("Linked offices definition is not valid.");
+                    } else {
+                        issues.addAll(validation.issues());
+                    }
+                }
             } else {
                 issues.add("Poll type " + poll.pollType().name() + " is not yet supported by the authoring workflow.");
             }
@@ -730,6 +823,9 @@ public final class PollService {
             Poll poll = pollDao.findPollById(pollId);
             if (poll == null) {
                 throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            }
+            if (poll.pollType() == PollType.LINKED_OFFICES) {
+                throw new PollServiceException("Linked Offices voting is not implemented yet.");
             }
             if (poll.status() != PollStatus.READY) {
                 throw new PollServiceException("Poll #" + pollId + " is not in READY state.");
@@ -879,6 +975,7 @@ public final class PollService {
         return switch (pollType) {
             case YES_NO -> "Untitled yes/no poll";
             case RANKED_SINGLE_WINNER -> "Untitled ranked poll";
+            case LINKED_OFFICES -> "Linked Offices Election";
             default -> "Untitled poll";
         };
     }
@@ -896,6 +993,7 @@ public final class PollService {
         String prefix = switch (pollType) {
             case YES_NO -> "yes-no-draft";
             case RANKED_SINGLE_WINNER -> "ranked-draft";
+            case LINKED_OFFICES -> "linked-offices-draft";
             default -> "poll-draft";
         };
 
@@ -910,6 +1008,16 @@ public final class PollService {
         byte[] bytes = new byte[32];
         SECURE_RANDOM.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(bytes);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to hash config payload", e);
+        }
     }
 
     private String requireNonBlank(String value, String fieldName) throws PollServiceException {

@@ -77,10 +77,29 @@ Tranche 2B added read-only admin definition validation (still no voting):
   command, the vote session layer, `ResultService`, and authoring/lifecycle
   (cannot be created or readied for voting). Existing types/data stay compatible.
 
+Tranche 2C added linked-offices authoring + lifecycle readiness (still no voting):
+
+- `/modnvote create linked_offices` creates a DRAFT, non-votable poll
+  (`PollService.createPoll` now accepts `LINKED_OFFICES`; default `config_json`
+  is `"{}"`, no default options).
+- `/modnvote config <pollId> set <json>` and `/modnvote config <pollId> import
+  <file>` store a definition via `PollService.updatePollConfigJson` /
+  `PollDao.updatePollConfigJson` (writes only `config_json`). Definitions are
+  parsed+validated first; invalid ones are rejected with no write. File import
+  uses `LinkedOfficesDefinitionFileLoader`, reading UTF-8 from
+  `plugins/ModNVote/definitions` with path-traversal rejection. Config writes are
+  allowed only for `LINKED_OFFICES` polls and only while DRAFT.
+- A `POLL_CONFIG_UPDATED` audit event stores poll id, actor, declared model, a
+  SHA-256 hash of the definition, and its byte length — never the raw JSON.
+- `validatePollDefinition`/`readyPoll` accept `LINKED_OFFICES` only with a valid
+  definition; an explicit `openPoll` guard rejects it even when READY.
+- Example: `docs/examples/linked-offices-mayor-council.json` (example only).
+
 Explicitly NOT done in this groundwork:
 
-- `PollType.LINKED_OFFICES` exists but is reserved/non-votable; there is NO
-  linked-offices voting, submission, counting, or result calculation.
+- `PollType.LINKED_OFFICES` is authorable/readyable but remains non-votable;
+  there is NO linked-offices voting, submission, counting, or result calculation,
+  and it cannot be opened.
 - No `anonymous_ballot_contest_responses` table or any schema change.
 - No multi-contest ballot submission, counting pipeline, or IRV extraction.
 - No GUI/session flow for linked offices, and no proof-phrase or
@@ -202,6 +221,9 @@ All commands use `/modnvote`; `/poll` is a direct alias for the same command exe
 /modnvote list
 /modnvote show <pollId>
 /modnvote validate-definition <pollId>
+/modnvote create linked_offices
+/modnvote config <pollId> set <json>
+/modnvote config <pollId> import <file>
 /modnvote delete <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>

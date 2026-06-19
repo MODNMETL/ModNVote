@@ -1,0 +1,31 @@
+{
+  "_comment": "EXAMPLE ONLY. Generic Linked Offices definition for a Mayor (IRV) plus a Council (approval top-N). Office and candidate keys are arbitrary identifiers; no office name is hardcoded anywhere in the plugin. Copy this file into plugins/ModNVote/definitions and import it with /modnvote config <pollId> import linked-offices-mayor-council.json after creating a LINKED_OFFICES poll. Linked Offices voting is not implemented yet; this only demonstrates a valid definition.",
+  "model": "LINKED_OFFICES",
+  "offices": {
+    "mayor": {
+      "displayName": "Mayor",
+      "method": "IRV",
+      "seats": 1,
+      "allowAbstain": true,
+      "candidates": ["alice", "bob", "carol"]
+    },
+    "council": {
+      "displayName": "Council",
+      "method": "APPROVAL_TOP_N",
+      "seats": 4,
+      "maxSelections": 4,
+      "allowAbstain": true,
+      "candidates": ["alice", "bob", "carol", "dave", "emma", "frank", "grace"],
+      "excludeWinnersFrom": ["mayor"]
+    }
+  },
+  "candidateDefinitions": {
+    "alice": { "displayName": "Alice", "eligibleFor": ["mayor", "council"] },
+    "bob":   { "displayName": "Bob",   "eligibleFor": ["mayor", "council"] },
+    "carol": { "displayName": "Carol", "eligibleFor": ["mayor", "council"] },
+    "dave":  { "displayName": "Dave",  "eligibleFor": ["council"] },
+    "emma":  { "displayName": "Emma",  "eligibleFor": ["council"] },
+    "frank": { "displayName": "Frank", "eligibleFor": ["council"] },
+    "grace": { "displayName": "Grace", "eligibleFor": ["council"] }
+  }
+}

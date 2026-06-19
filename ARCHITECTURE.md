@@ -127,10 +127,25 @@ which parses and validates a poll's definition and returns a structured result
 (it performs no persistence, lifecycle, or identity work). The admin command
 `/modnvote validate-definition <pollId>` uses it for read-only validation.
 
+Admins can author a linked-offices definition without enabling voting:
+
+- `/modnvote create linked_offices` creates a DRAFT, non-votable poll.
+- `/modnvote config <pollId> set <json>` / `import <file>` store a definition in
+  `polls.config_json` via `PollService.updatePollConfigJson`. The JSON is parsed
+  and validated first; invalid definitions are rejected without any write. File
+  import uses `LinkedOfficesDefinitionFileLoader`, which reads UTF-8 JSON from
+  `plugins/ModNVote/definitions` and rejects path traversal. A
+  `POLL_CONFIG_UPDATED` audit event records only poll id, actor, declared model,
+  a SHA-256 hash of the definition, and its byte length — never the raw content.
+- `validatePollDefinition` / `readyPoll` accept `LINKED_OFFICES` only when its
+  definition validates, so such a poll can reach READY only with a valid
+  definition.
+
 `PollType.LINKED_OFFICES` is a reserved, **non-votable** type. It is guarded out
-of the vote command, the vote session layer, `ResultService`, and
-authoring/lifecycle, so no accidental voting path can exist until a later tranche
-deliberately enables it.
+of the vote command, the vote session layer, `ResultService`, and `openPoll`
+(which rejects it even when READY), so no accidental voting path can exist until
+a later tranche deliberately enables it. Config definitions are accepted only for
+linked-offices polls and only while DRAFT; other poll types reject config writes.
 
 ---
 
@@ -229,6 +244,7 @@ Typical events:
 
 - `POLL_CREATED`
 - `POLL_UPDATED`
+- `POLL_CONFIG_UPDATED`
 - `POLL_READY`
 - `POLL_OPENED`
 - `POLL_CLOSED`

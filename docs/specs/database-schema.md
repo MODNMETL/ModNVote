@@ -97,6 +97,12 @@ no schema change is required to use them.
   simply `"{}"`. From 2.2.0 it is surfaced through the `Poll` domain model and
   `PollDao`, and is the home for the generic linked-offices election definition
   (offices, candidates, dependencies) parsed by `ElectionDefinitionParser`.
+  From Tranche 2C it is also written: `PollDao.updatePollConfigJson` updates only
+  this column, and `PollService.updatePollConfigJson` writes it only for
+  `LINKED_OFFICES` polls in DRAFT, only after the definition parses and validates.
+  Each successful write records a `POLL_CONFIG_UPDATED` audit event containing the
+  poll id, actor, declared model, a SHA-256 hash of the definition, and its byte
+  length — never the raw definition JSON.
 - `poll_options.metadata_json` — an opaque JSON payload for per-option/candidate
   metadata (for example, the offices a candidate is eligible for). Defaults to
   `"{}"`. From 2.2.0 it is surfaced through the `PollOption` domain model and
@@ -110,7 +116,8 @@ Privacy note:
 
 Status note (2.2.0):
 
-- As of the 2.2.0 definition groundwork, these columns are surfaced, parsed, and
-  validated, but linked-offices **voting is not implemented**. There is no
-  multi-contest ballot content table (for example, no
+- As of the 2.2.0 groundwork (through Tranche 2C), these columns are surfaced,
+  parsed, validated, and — for `config_json` on DRAFT `LINKED_OFFICES` polls —
+  written via authoring commands, but linked-offices **voting is not
+  implemented**. There is no multi-contest ballot content table (for example, no
   `anonymous_ballot_contest_responses`) and no change to the tables above.

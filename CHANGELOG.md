@@ -24,6 +24,14 @@ Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranch
   - `/modnvote validate-definition <pollId>` admin command (permission `modnvote.admin.poll.create`): reads `config_json`, validates it, and reports valid/invalid + issues, missing/non-linked model, or poll-not-found. Read-only — never changes status, writes the database, or opens a GUI.
   - Reserved, **non-votable** `PollType.LINKED_OFFICES`. Guards reject it from voting (vote command + session layer), result calculation (`ResultService`), and authoring/lifecycle (cannot be created or readied for voting). Existing `PollType` values and stored data remain compatible.
   - Tests for the service (valid/empty/malformed/unknown-model/structurally-invalid) and guards (result rejection, YES_NO still works, no vote session for linked offices, `PollType` parsing backward compatible).
+- **Tranche 2C — linked offices authoring + lifecycle readiness (still non-votable):**
+  - Admins can now create a `LINKED_OFFICES` poll in DRAFT (`/modnvote create linked_offices`), give it a definition, validate it, and mark it READY — but it still **cannot be opened, voted, or resulted**.
+  - `/modnvote config <pollId> set <json>` and `/modnvote config <pollId> import <file>` set a linked-offices definition on a DRAFT poll. Inline JSON is joined from the remaining arguments; file import reads UTF-8 JSON from `plugins/ModNVote/definitions/<file>` with path-traversal rejection. Definitions are parsed and validated before anything is written; invalid definitions are rejected and not persisted.
+  - `PollService.updatePollConfigJson(pollId, configJson, actor)` and `PollDao.updatePollConfigJson(...)` write only `config_json`. Config definitions are accepted only for `LINKED_OFFICES` polls and only while DRAFT; other poll types reject config updates. A `POLL_CONFIG_UPDATED` audit event records poll id, actor, declared model, a SHA-256 hash of the definition, and its byte length — never the raw definition.
+  - Lifecycle readiness: `validatePollDefinition` and `readyPoll` now accept `LINKED_OFFICES` only when its `config_json` parses and validates through `ElectionDefinitionService`. An explicit `openPoll` guard rejects `LINKED_OFFICES` even when READY ("Linked Offices voting is not implemented yet"), in addition to the existing vote/session/result guards.
+  - `/modnvote validate-definition <pollId>` now warns when a poll's type and its declared config model disagree.
+  - Example definition `docs/examples/linked-offices-mayor-council.json` (generic Mayor IRV + Council approval top-N, example only).
+  - New `LinkedOfficesDefinitionFileLoader` (safe, Bukkit-free file reader) with path-traversal tests; service tests for config update (valid/invalid/non-draft/non-linked/audit), creation, and lifecycle readiness/open guard; a DAO config-update persistence test.
 
 ### Changed
 
@@ -37,7 +45,7 @@ Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranch
 - No database schema changes. `config_json` and `metadata_json` already existed in the schema and are now surfaced/used.
 - No changes to proof-phrase generation, participation token hashing, GUI/session behaviour, or poll lifecycle.
 - Existing `YES_NO` and `RANKED_SINGLE_WINNER` polls continue to work unchanged.
-- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and GUI flow are deliberately **not** implemented yet. Tranche 2B adds read-only definition validation only; admins can validate `config_json` definitions before any future voting support exists. The reserved `PollType.LINKED_OFFICES` is non-votable and guarded out of every voting/result path. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
+- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and GUI flow are deliberately **not** implemented yet. Through Tranche 2C admins can create a `LINKED_OFFICES` poll, set/import and validate its `config_json` definition, and mark it READY — but it cannot be opened, voted, or resulted. The reserved `PollType.LINKED_OFFICES` is non-votable and guarded out of every voting/result/open path. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
 
 ## [2.1.1] - 2026-05-09
 

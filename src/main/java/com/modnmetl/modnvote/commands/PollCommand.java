@@ -10,6 +10,7 @@ import com.modnmetl.modnvote.presentation.ResultDisplayFormatter;
 import com.modnmetl.modnvote.publication.WitnessPublicationService;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.ElectionDefinitionService;
+import com.modnmetl.modnvote.service.LinkedOfficesDefinitionFileLoader;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
 import com.modnmetl.modnvote.service.PollServiceException;
@@ -26,6 +27,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -148,7 +151,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage("§cUsage: /" + label + " create <yes_no|ranked_single_winner> [optionCount]");
+                    sender.sendMessage("§cUsage: /" + label + " create <yes_no|ranked_single_winner|linked_offices> [optionCount]");
                     return true;
                 }
 
@@ -222,6 +225,18 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
                         sender.sendMessage("§aCreated DRAFT Yes/No poll §f#" + pollId + "§a.");
                         sender.sendMessage("§7Poll Builder opened. Click fields to edit them.");
+                        return true;
+                    }
+
+                    if (pollType == PollType.LINKED_OFFICES) {
+                        long linkedPollId = pollService.createPoll(sender.getName(), pollType);
+
+                        sender.sendMessage("§aCreated DRAFT Linked Offices poll §f#" + linkedPollId + "§a.");
+                        sender.sendMessage("§7Set its definition with §e/" + label + " config " + linkedPollId
+                                + " set <json> §7or §e/" + label + " config " + linkedPollId + " import <file>§7.");
+                        sender.sendMessage("§7Then §e/" + label + " validate-definition " + linkedPollId
+                                + " §7and §e/" + label + " ready " + linkedPollId + "§7.");
+                        sender.sendMessage("§8(Linked Offices voting is not implemented yet; the poll cannot be opened.)");
                         return true;
                     }
 
@@ -431,6 +446,46 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     handleValidateDefinition(sender, pollId);
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.validate_failed",
+                            Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "config" -> {
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 3) {
+                    sender.sendMessage("§cUsage: /" + label + " config <pollId> <set <json>|import <file>>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    String action = args[2].toLowerCase(Locale.ROOT);
+
+                    switch (action) {
+                        case "set" -> {
+                            if (args.length < 4) {
+                                sender.sendMessage("§cUsage: /" + label + " config " + args[1] + " set <json>");
+                                return true;
+                            }
+                            String json = joinArgs(args, 3);
+                            applyLinkedOfficesConfig(sender, pollId, json);
+                        }
+                        case "import" -> {
+                            if (args.length < 4) {
+                                sender.sendMessage("§cUsage: /" + label + " config " + args[1] + " import <file>");
+                                return true;
+                            }
+                            String filename = args[3];
+                            String json = linkedOfficesDefinitionLoader().read(filename);
+                            applyLinkedOfficesConfig(sender, pollId, json);
+                        }
+                        default -> sender.sendMessage("§cUsage: /" + label + " config <pollId> <set <json>|import <file>>");
+                    }
+                } catch (PollServiceException e) {
+                    sender.sendMessage(messages.format("errors.edit_failed",
                             Map.of("reason", e.getMessage())));
                 }
                 return true;
@@ -975,6 +1030,34 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
+     * Builds the safe loader for admin-supplied definition files, rooted at
+     * {@code plugins/ModNVote/definitions}. Path traversal is rejected by the loader.
+     */
+    private LinkedOfficesDefinitionFileLoader linkedOfficesDefinitionLoader() {
+        Path baseDir = new File(plugin.getDataFolder(), "definitions").toPath();
+        return new LinkedOfficesDefinitionFileLoader(baseDir);
+    }
+
+    /**
+     * Validates and stores a linked-offices definition on a DRAFT poll via the
+     * service layer, then reports a short summary. The service rejects invalid
+     * definitions without writing the database; nothing is opened or voted here.
+     */
+    private void applyLinkedOfficesConfig(CommandSender sender, long pollId, String json) throws PollServiceException {
+        pollService.updatePollConfigJson(pollId, json, sender.getName());
+
+        ElectionDefinitionService.ElectionDefinitionValidationResult result =
+                electionDefinitionService.validate(json);
+
+        sender.sendMessage("§aSaved Linked Offices definition for poll §f#" + pollId + "§a.");
+        result.definition().ifPresent(definition -> sender.sendMessage(
+                "§7Offices: §f" + definition.contests().size()
+                        + " §7| Candidates: §f" + definition.candidates().size()
+                        + " §7| Dependencies: §f" + definition.dependencies().size()));
+        sender.sendMessage("§8(Definition stored. Linked Offices voting is not implemented yet.)");
+    }
+
+    /**
      * Read-only admin validation of a poll's linked-offices definition.
      * Does not change poll status, write to the database, or open any GUI.
      */
@@ -987,11 +1070,19 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§6Linked Offices definition check for poll §f#" + pollId + " §6- §b" + poll.title());
 
         String model = result.rawModel().orElse(null);
+        boolean linkedType = poll.pollType() == PollType.LINKED_OFFICES;
         if (model == null) {
             sender.sendMessage("§7No election model is present in this poll's config_json.");
             sender.sendMessage("§7This poll does not carry a Linked Offices definition.");
         } else if (!"LINKED_OFFICES".equals(model)) {
             sender.sendMessage("§7Config model is §f" + model + "§7, which is not a Linked Offices definition.");
+        }
+
+        if (!linkedType && "LINKED_OFFICES".equals(model)) {
+            sender.sendMessage("§eWarning: this poll's type is §f" + poll.pollType().name()
+                    + "§e, but its config declares a LINKED_OFFICES definition. The config does not match the poll type.");
+        } else if (linkedType && !"LINKED_OFFICES".equals(model)) {
+            sender.sendMessage("§eWarning: this is a LINKED_OFFICES poll but its config does not declare a LINKED_OFFICES definition.");
         }
 
         if (result.valid()) {
@@ -1162,6 +1253,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " list §7- List polls");
         sender.sendMessage("§e/" + label + " show <pollId> §7- Show poll details");
         sender.sendMessage("§e/" + label + " validate-definition <pollId> §7- Validate a linked-offices config definition (read-only)");
+        sender.sendMessage("§e/" + label + " config <pollId> set <json> §7- Set a linked-offices definition on a DRAFT poll");
+        sender.sendMessage("§e/" + label + " config <pollId> import <file> §7- Import a linked-offices definition from plugins/ModNVote/definitions");
         sender.sendMessage("§e/" + label + " open <pollId> §7- Open a ready poll for voting");
         sender.sendMessage("§e/" + label + " close <pollId> §7- Close an open poll");
         sender.sendMessage("§e/" + label + " result <pollId> §7- Show results");
@@ -1304,7 +1397,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             return index == 1;
         }
 
-        if (("set".equals(root) || "delete".equals(root)) && sender.hasPermission("modnvote.admin.poll.create")) {
+        if (("set".equals(root) || "delete".equals(root) || "config".equals(root))
+                && sender.hasPermission("modnvote.admin.poll.create")) {
             return index == 1;
         }
 
@@ -1373,7 +1467,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             case "close" -> loadPollIdCompletions(PollStatus.OPEN);
             case "result", "publishresult" -> loadPollIdCompletions(PollStatus.CLOSED);
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
-            case "edit", "validate", "ready", "set", "option" -> loadPollIdCompletions(PollStatus.DRAFT);
+            case "edit", "validate", "ready", "set", "option", "config" -> loadPollIdCompletions(PollStatus.DRAFT);
             case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
             case "show", "clone", "checkpoint", "validate-definition" -> loadPollIdCompletions();
             default -> loadPollIdCompletions();
@@ -1437,6 +1531,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 completions.add("guide");
                 completions.add("show");
                 completions.add("validate-definition");
+                completions.add("config");
                 completions.add("delete");
             }
             if (sender.hasPermission("modnvote.admin.poll.open")) {
@@ -1473,6 +1568,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (args[0].equalsIgnoreCase("create") && sender.hasPermission("modnvote.admin.poll.create")) {
                 completions.add("yes_no");
                 completions.add("ranked_single_winner");
+                completions.add("linked_offices");
                 return filterCompletions(completions, args[1]);
             }
 
@@ -1516,6 +1612,11 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         List.of("title", "description", "maxrankings", "allowpartial"),
                         args[2]
                 );
+            }
+
+            if (args[0].equalsIgnoreCase("config")
+                    && sender.hasPermission("modnvote.admin.poll.create")) {
+                return filterCompletions(List.of("set", "import"), args[2]);
             }
 
             if (args[0].equalsIgnoreCase("poll") && sender.hasPermission("modnvote.admin.poll.create")) {

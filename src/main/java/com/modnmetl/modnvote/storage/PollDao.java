@@ -172,6 +172,20 @@ public final class PollDao {
         return null;
     }
 
+    /**
+     * Updates only the {@code config_json} column for a poll. No other columns
+     * are touched and no schema change is involved.
+     */
+    public void updatePollConfigJson(Connection connection, long pollId, String configJson) throws SQLException {
+        String sql = "UPDATE polls SET config_json = ? WHERE poll_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, configJson);
+            ps.setLong(2, pollId);
+            ps.executeUpdate();
+        }
+    }
+
     public void updatePollStatus(Connection connection, long pollId, PollStatus status) throws SQLException {
         String sql = "UPDATE polls SET status = ? WHERE poll_id = ?";
 

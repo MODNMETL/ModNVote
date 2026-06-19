@@ -362,6 +362,9 @@ Normal admin-facing commands:
 /modnvote list
 /modnvote show <pollId>
 /modnvote validate-definition <pollId>
+/modnvote create linked_offices
+/modnvote config <pollId> set <json>
+/modnvote config <pollId> import <file>
 /modnvote delete <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>
@@ -370,7 +373,9 @@ Normal admin-facing commands:
 /modnvote checkpoint <pollId>
 ```
 
-`/modnvote validate-definition <pollId>` is a read-only admin check that parses and validates a linked-offices election definition stored in a poll's `config_json`. Linked Offices voting is not implemented yet — this command only validates definitions; it never changes poll status, writes to the database, or opens a GUI.
+`/modnvote validate-definition <pollId>` is a read-only admin check that parses and validates a linked-offices election definition stored in a poll's `config_json`. It also warns if a poll's type and its declared config model disagree.
+
+`/modnvote create linked_offices` creates a DRAFT, non-votable Linked Offices poll. `/modnvote config <pollId> set <json>` stores an inline definition, and `/modnvote config <pollId> import <file>` imports one from `plugins/ModNVote/definitions/<file>` (UTF-8 JSON, path-traversal rejected). Definitions are validated before they are saved; invalid definitions are rejected without writing. A valid Linked Offices poll can be marked READY, but **Linked Offices voting is not implemented yet** — such polls cannot be opened, voted, or resulted. See `docs/examples/linked-offices-mayor-council.json` for an example definition.
 
 Player-facing commands:
 
