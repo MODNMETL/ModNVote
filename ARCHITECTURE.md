@@ -140,6 +140,17 @@ Admins can author a linked-offices definition without enabling voting:
 - `validatePollDefinition` / `readyPoll` accept `LINKED_OFFICES` only when its
   definition validates, so such a poll can reach READY only with a valid
   definition.
+- `/modnvote edit-definition <pollId>` opens an in-game builder GUI
+  (`ui.builder.election`) that **edits the `ElectionDefinition` only**. The GUI is
+  not a source of truth: it loads by parsing `config_json` into a Bukkit-free edit
+  buffer (`LinkedOfficesBuilderState`), and Save serializes the buffer
+  (`ElectionDefinitionSerializer`) and writes it back exclusively through
+  `PollService.updatePollConfigJson` — it never writes the DAO directly. Validation
+  reuses `ElectionDefinitionService`, so there is no duplicate validation logic in
+  the GUI. The serializer is the deterministic, order-stable inverse of the parser
+  (`parse(serialize(x))` equals `x`). The builder edits offices, candidates, and
+  EXCLUDE_WINNERS dependencies; it implements no voting, ballot storage, counting,
+  or result calculation, and is not a voter GUI.
 
 `PollType.LINKED_OFFICES` is a reserved, **non-votable** type. It is guarded out
 of the vote command, the vote session layer, `ResultService`, and `openPoll`

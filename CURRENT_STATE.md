@@ -95,6 +95,20 @@ Tranche 2C added linked-offices authoring + lifecycle readiness (still no voting
   definition; an explicit `openPoll` guard rejects it even when READY.
 - Example: `docs/examples/linked-offices-mayor-council.json` (example only).
 
+Tranche 2D added an in-game admin builder GUI for the definition (still no voting):
+
+- `/modnvote edit-definition <pollId>` opens a GUI to edit a `LINKED_OFFICES`
+  poll's `ElectionDefinition` (offices, candidates, EXCLUDE_WINNERS dependencies),
+  with Validate and Save buttons. Code lives in `ui.builder.election`.
+- The GUI is an editor for `ElectionDefinition`, **not** a source of truth. It
+  loads by parsing `config_json` into a Bukkit-free `LinkedOfficesBuilderState`;
+  Save serializes via `ElectionDefinitionSerializer` and writes **only** through
+  `PollService.updatePollConfigJson` (no DAO bypass). Validate reuses
+  `ElectionDefinitionService`. Invalid definitions cannot be saved.
+- `ElectionDefinitionSerializer` is the deterministic, order-stable inverse of
+  `ElectionDefinitionParser` (`parse(serialize(x))` equals `x`).
+- The JSON `config set`/`import` paths from Tranche 2C remain supported.
+
 Explicitly NOT done in this groundwork:
 
 - `PollType.LINKED_OFFICES` is authorable/readyable but remains non-votable;
@@ -102,8 +116,8 @@ Explicitly NOT done in this groundwork:
   and it cannot be opened.
 - No `anonymous_ballot_contest_responses` table or any schema change.
 - No multi-contest ballot submission, counting pipeline, or IRV extraction.
-- No GUI/session flow for linked offices, and no proof-phrase or
-  participation-token changes.
+- The linked-offices GUI edits definition data only; there is NO linked-offices
+  voter GUI/session flow, and no proof-phrase or participation-token changes.
 
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
 be added later without altering the existing single-contest format.
@@ -224,6 +238,7 @@ All commands use `/modnvote`; `/poll` is a direct alias for the same command exe
 /modnvote create linked_offices
 /modnvote config <pollId> set <json>
 /modnvote config <pollId> import <file>
+/modnvote edit-definition <pollId>
 /modnvote delete <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>

@@ -32,6 +32,12 @@ Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranch
   - `/modnvote validate-definition <pollId>` now warns when a poll's type and its declared config model disagree.
   - Example definition `docs/examples/linked-offices-mayor-council.json` (generic Mayor IRV + Council approval top-N, example only).
   - New `LinkedOfficesDefinitionFileLoader` (safe, Bukkit-free file reader) with path-traversal tests; service tests for config update (valid/invalid/non-draft/non-linked/audit), creation, and lifecycle readiness/open guard; a DAO config-update persistence test.
+- **Tranche 2D — linked offices admin builder GUI (definition editing only, still non-votable):**
+  - `/modnvote edit-definition <pollId>` opens an in-game GUI builder/editor for a `LINKED_OFFICES` poll's `ElectionDefinition`. Screens: Main (counts + validity), Offices (list/create/edit/delete), Office editor (key, display name, seats, counting method, max selections, allow-abstain), Candidates (list/create/edit/delete), Candidate editor (key, display name, eligible offices), Dependencies (list/add/delete EXCLUDE_WINNERS), plus Validate and Save.
+  - The GUI is an editor for `ElectionDefinition`, never a separate source of truth. It loads an existing definition by parsing `config_json`, and Save serializes the edit buffer and writes it **only** through `PollService.updatePollConfigJson` (no DAO bypass). Validate reuses `ElectionDefinitionService` (no duplicated validation logic). Invalid definitions cannot be saved. The JSON `set`/`import` paths from Tranche 2C remain fully supported.
+  - New `ElectionDefinitionSerializer` (`domain.election`) — deterministic, order-stable inverse of `ElectionDefinitionParser`; `parse(serialize(x))` equals `x` (including `excludeWinnersFrom` dependency round-tripping).
+  - Bukkit-free, unit-tested core: `LinkedOfficesBuilderState` (edit buffer), `LinkedOfficesBuilderService` (validate/serialize/load/save bridge to `PollService`), `LinkedOfficesBuilderSession`. GUI rendering/click/chat handling live in `ui.builder.election` and reuse the Folia-aware `ModNScheduler`.
+  - Tests: serializer (round-trip, deterministic ordering, dependency serialization, empty definition), builder state (office/candidate create+delete, derived membership, dependency add/remove, valid/invalid validation state), and builder-service integration (valid save persists via `PollService`, invalid save rejected, save honours `PollService` guards, load round-trips, blank config opens empty buffer).
 
 ### Changed
 
@@ -45,7 +51,7 @@ Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranch
 - No database schema changes. `config_json` and `metadata_json` already existed in the schema and are now surfaced/used.
 - No changes to proof-phrase generation, participation token hashing, GUI/session behaviour, or poll lifecycle.
 - Existing `YES_NO` and `RANKED_SINGLE_WINNER` polls continue to work unchanged.
-- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and GUI flow are deliberately **not** implemented yet. Through Tranche 2C admins can create a `LINKED_OFFICES` poll, set/import and validate its `config_json` definition, and mark it READY — but it cannot be opened, voted, or resulted. The reserved `PollType.LINKED_OFFICES` is non-votable and guarded out of every voting/result/open path. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
+- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and result calculation are deliberately **not** implemented yet. Through Tranche 2D admins can create a `LINKED_OFFICES` poll, author its definition (via JSON `set`/`import` or the in-game `edit-definition` builder GUI), validate it, and mark it READY — but it cannot be opened, voted, or resulted. The builder GUI edits definition data only; it is not a voter GUI. The reserved `PollType.LINKED_OFFICES` is non-votable and guarded out of every voting/result/open path. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
 
 ## [2.1.1] - 2026-05-09
 

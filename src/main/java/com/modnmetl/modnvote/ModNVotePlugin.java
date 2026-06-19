@@ -19,6 +19,12 @@ import com.modnmetl.modnvote.ui.builder.PollBuilderInputPromptManager;
 import com.modnmetl.modnvote.ui.builder.PollBuilderListener;
 import com.modnmetl.modnvote.ui.builder.PollBuilderRenderer;
 import com.modnmetl.modnvote.ui.builder.PollBuilderSessionManager;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderChatListener;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderListener;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderRenderer;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderService;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderSessionManager;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesInputPromptManager;
 import com.modnmetl.modnvote.ui.feedback.VoteSoundService;
 import com.modnmetl.modnvote.ui.format.BallotSummaryFormatter;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
@@ -70,6 +76,11 @@ public final class ModNVotePlugin extends JavaPlugin {
     private PollBuilderInputPromptManager pollBuilderInputPromptManager;
     private PollBuilderRenderer pollBuilderRenderer;
 
+    private LinkedOfficesBuilderSessionManager linkedOfficesBuilderSessionManager;
+    private LinkedOfficesInputPromptManager linkedOfficesInputPromptManager;
+    private LinkedOfficesBuilderRenderer linkedOfficesBuilderRenderer;
+    private LinkedOfficesBuilderService linkedOfficesBuilderService;
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -119,6 +130,11 @@ public final class ModNVotePlugin extends JavaPlugin {
             this.pollBuilderSessionManager = new PollBuilderSessionManager();
             this.pollBuilderInputPromptManager = new PollBuilderInputPromptManager();
             this.pollBuilderRenderer = new PollBuilderRenderer(pollService);
+
+            this.linkedOfficesBuilderSessionManager = new LinkedOfficesBuilderSessionManager();
+            this.linkedOfficesInputPromptManager = new LinkedOfficesInputPromptManager();
+            this.linkedOfficesBuilderRenderer = new LinkedOfficesBuilderRenderer();
+            this.linkedOfficesBuilderService = new LinkedOfficesBuilderService(pollService);
 
             registerCommands();
             registerListeners();
@@ -236,6 +252,20 @@ public final class ModNVotePlugin extends JavaPlugin {
                 new PollBuilderChatListener(pollBuilderInputPromptManager),
                 this
         );
+        getServer().getPluginManager().registerEvents(
+                new LinkedOfficesBuilderListener(
+                        linkedOfficesBuilderSessionManager,
+                        linkedOfficesInputPromptManager,
+                        linkedOfficesBuilderService,
+                        scheduler,
+                        linkedOfficesBuilderRenderer
+                ),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new LinkedOfficesBuilderChatListener(linkedOfficesInputPromptManager),
+                this
+        );
     }
 
     private void saveBundledResourceIfMissing(String resourcePath) {
@@ -298,6 +328,18 @@ public final class ModNVotePlugin extends JavaPlugin {
 
     public PollBuilderRenderer getPollBuilderRenderer() {
         return Objects.requireNonNull(pollBuilderRenderer, "pollBuilderRenderer");
+    }
+
+    public LinkedOfficesBuilderSessionManager getLinkedOfficesBuilderSessionManager() {
+        return Objects.requireNonNull(linkedOfficesBuilderSessionManager, "linkedOfficesBuilderSessionManager");
+    }
+
+    public LinkedOfficesBuilderRenderer getLinkedOfficesBuilderRenderer() {
+        return Objects.requireNonNull(linkedOfficesBuilderRenderer, "linkedOfficesBuilderRenderer");
+    }
+
+    public LinkedOfficesBuilderService getLinkedOfficesBuilderService() {
+        return Objects.requireNonNull(linkedOfficesBuilderService, "linkedOfficesBuilderService");
     }
 
     public YesNoInventoryVoteRenderer getYesNoInventoryVoteRenderer() {

@@ -17,6 +17,7 @@ import com.modnmetl.modnvote.service.PollServiceException;
 import com.modnmetl.modnvote.service.ResultService;
 import com.modnmetl.modnvote.storage.PollOptionDao;
 import com.modnmetl.modnvote.ui.builder.PollBuilderSession;
+import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderSession;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
@@ -487,6 +488,45 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 } catch (PollServiceException e) {
                     sender.sendMessage(messages.format("errors.edit_failed",
                             Map.of("reason", e.getMessage())));
+                }
+                return true;
+            }
+            case "edit-definition" -> {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage(messages.get("general.players_only"));
+                    return true;
+                }
+                if (!sender.hasPermission("modnvote.admin.poll.create")) {
+                    sender.sendMessage(messages.get("general.no_permission"));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage("§cUsage: /" + label + " edit-definition <pollId>");
+                    return true;
+                }
+
+                try {
+                    long pollId = parsePollId(args[1]);
+                    Poll poll = requirePoll(pollId);
+
+                    if (poll.pollType() != PollType.LINKED_OFFICES) {
+                        sender.sendMessage("§cThe definition builder is only available for LINKED_OFFICES polls.");
+                        return true;
+                    }
+
+                    LinkedOfficesBuilderSession session = plugin.getLinkedOfficesBuilderService()
+                            .openSession(player.getUniqueId(), pollId, poll.configJson());
+                    plugin.getLinkedOfficesBuilderSessionManager().createOrReplaceSession(session);
+                    plugin.getLinkedOfficesBuilderRenderer().open(player, session);
+
+                    sender.sendMessage("§aOpened the Linked Offices builder for poll §f#" + pollId + "§a.");
+                    if (poll.status() != PollStatus.DRAFT) {
+                        sender.sendMessage("§7Poll is " + poll.status().name()
+                                + "; saving requires DRAFT. You can review/repair the definition here.");
+                    }
+                    sender.sendMessage("§8Linked Offices voting is not implemented yet; this edits the definition only.");
+                } catch (PollServiceException e) {
+                    sender.sendMessage("§cUnable to open the Linked Offices builder: " + e.getMessage());
                 }
                 return true;
             }
@@ -1255,6 +1295,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " validate-definition <pollId> §7- Validate a linked-offices config definition (read-only)");
         sender.sendMessage("§e/" + label + " config <pollId> set <json> §7- Set a linked-offices definition on a DRAFT poll");
         sender.sendMessage("§e/" + label + " config <pollId> import <file> §7- Import a linked-offices definition from plugins/ModNVote/definitions");
+        sender.sendMessage("§e/" + label + " edit-definition <pollId> §7- Open the in-game Linked Offices definition builder (DRAFT)");
         sender.sendMessage("§e/" + label + " open <pollId> §7- Open a ready poll for voting");
         sender.sendMessage("§e/" + label + " close <pollId> §7- Close an open poll");
         sender.sendMessage("§e/" + label + " result <pollId> §7- Show results");
@@ -1389,6 +1430,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         String root = args[0].toLowerCase(Locale.ROOT);
 
         if ("show".equals(root) || "validate".equals(root) || "validate-definition".equals(root)
+                || "edit-definition".equals(root)
                 || "ready".equals(root)
                 || "open".equals(root) || "close".equals(root)
                 || "result".equals(root) || "publishresult".equals(root)
@@ -1469,7 +1511,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             case "vote" -> loadPollIdCompletions(PollStatus.OPEN);
             case "edit", "validate", "ready", "set", "option", "config" -> loadPollIdCompletions(PollStatus.DRAFT);
             case "delete" -> loadPollIdCompletions(List.of(PollStatus.DRAFT, PollStatus.READY));
-            case "show", "clone", "checkpoint", "validate-definition" -> loadPollIdCompletions();
+            case "show", "clone", "checkpoint", "validate-definition", "edit-definition" -> loadPollIdCompletions();
             default -> loadPollIdCompletions();
         };
     }
@@ -1532,6 +1574,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 completions.add("show");
                 completions.add("validate-definition");
                 completions.add("config");
+                completions.add("edit-definition");
                 completions.add("delete");
             }
             if (sender.hasPermission("modnvote.admin.poll.open")) {
