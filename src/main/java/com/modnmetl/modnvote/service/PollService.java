@@ -30,6 +30,8 @@ public final class PollService {
     private static final int MAX_TITLE_LENGTH = 48;
     private static final int MAX_DESCRIPTION_LENGTH = 240;
     private static final int DRAFT_SLUG_RANDOM_BYTES = 4;
+    private static final String LINKED_OFFICES_OPTION_GUARD_MESSAGE =
+            "LINKED_OFFICES candidates are managed through config_json and ElectionDefinition, not legacy poll options.";
     private final DatabaseManager databaseManager;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
@@ -498,6 +500,7 @@ public final class PollService {
         requireNonBlank(actor, "actor");
 
         Poll poll = requireDraftPoll(pollId);
+        rejectLegacyOptionsForLinkedOffices(poll);
 
         try {
             List<PollOption> existing = pollOptionDao.findOptionsByPollId(pollId);
@@ -559,7 +562,8 @@ public final class PollService {
         requireNonBlank(displayName, "displayName");
         requireNonBlank(actor, "actor");
 
-        requireDraftPoll(pollId);
+        Poll poll = requireDraftPoll(pollId);
+        rejectLegacyOptionsForLinkedOffices(poll);
         PollOption option = requireOptionInPoll(pollId, optionId);
 
         try (Connection connection = databaseManager.getConnection()) {
@@ -592,7 +596,8 @@ public final class PollService {
         Objects.requireNonNull(description, "description");
         requireNonBlank(actor, "actor");
 
-        requireDraftPoll(pollId);
+        Poll poll = requireDraftPoll(pollId);
+        rejectLegacyOptionsForLinkedOffices(poll);
         requireOptionInPoll(pollId, optionId);
 
         try (Connection connection = databaseManager.getConnection()) {
@@ -628,6 +633,7 @@ public final class PollService {
         }
 
         Poll poll = requireDraftPoll(pollId);
+        rejectLegacyOptionsForLinkedOffices(poll);
         requireOptionInPoll(pollId, optionId);
 
         if (poll.pollType() == PollType.YES_NO) {
@@ -662,6 +668,7 @@ public final class PollService {
         requireNonBlank(actor, "actor");
 
         Poll poll = requireDraftPoll(pollId);
+        rejectLegacyOptionsForLinkedOffices(poll);
         requireOptionInPoll(pollId, optionId);
 
         if (poll.pollType() == PollType.YES_NO) {
@@ -964,6 +971,19 @@ public final class PollService {
     private void requireRankedPoll(Poll poll) throws PollServiceException {
         if (poll.pollType() != PollType.RANKED_SINGLE_WINNER) {
             throw new PollServiceException("This setting can only be changed for ranked single-winner polls.");
+        }
+    }
+
+    /**
+     * Blocks the legacy {@code poll_options} authoring workflow for
+     * {@link PollType#LINKED_OFFICES} polls. Linked-offices candidates have a
+     * single source of truth — the {@code ElectionDefinition} stored in
+     * {@code polls.config_json} — so option mutations would create orphaned state
+     * that the election model ignores.
+     */
+    private void rejectLegacyOptionsForLinkedOffices(Poll poll) throws PollServiceException {
+        if (poll.pollType() == PollType.LINKED_OFFICES) {
+            throw new PollServiceException(LINKED_OFFICES_OPTION_GUARD_MESSAGE);
         }
     }
 
