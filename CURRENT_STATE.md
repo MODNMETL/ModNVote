@@ -1,6 +1,6 @@
 # CURRENT_STATE — ModNVote
 
-This file is the primary handoff document for new development sessions.
+This is the primary handoff document for new development sessions.
 
 Read this after:
 
@@ -9,100 +9,264 @@ Read this after:
 3. `CHANGELOG.md`
 4. `Project-Context.txt` if present in the active context upload
 
+If this file disagrees with code, verify against the code and resolve the disagreement before editing.
+
+---
+
 ## Baseline
 
 - Branch: `main`
-- Release: `v2.0.0`
+- Current release: `v2.1.1`
 - Java target: 21
-- Platform target: Paper 1.21.x, Folia-aware by design through `ModNScheduler`
-- Build: `gradlew.bat clean build`
+- Platform target: Paper 1.21.x
+- Folia-aware scheduling: through `ModNScheduler`
+- Build command, Unix/macOS: `./gradlew clean build`
+- Build command, Windows: `gradlew.bat clean build`
+- Release jar: produced by `shadowJar` as `build/libs/modnvote-<version>.jar`
 
-## Proven v2.0.0 state
+`build.gradle.kts` is authoritative for the current plugin version.
 
-ModNVote 2.0 has replaced the legacy Yes/No-only workflow.
+---
 
-Working and tested:
+## Current product state
+
+ModNVote 2.x is a clean-install, privacy-first, auditable voting plugin for Paper servers.
+
+The legacy 1.x Yes/No-only workflow has been replaced by a GUI-first ballot platform supporting:
+
+- Ranked single-winner polls
+- Yes/No polls
+- Anonymous ballot storage
+- Identity-aware participation tracking without joining identity to vote content
+- Ballot proof-phrase verification
+- Tamper-evident audit records
+- External witness publication through Discord-compatible webhooks
+- Automatic and manual integrity checkpoints
+- Transparent ranked-choice result reporting
+
+Migration from legacy 1.x databases is not currently supported.
+
+---
+
+## Proven implemented state
+
+The following are implemented and should be treated as current behavior unless code inspection proves otherwise.
+
+### Poll authoring and lifecycle
 
 - GUI Poll Builder for ranked single-winner polls
 - GUI Poll Builder for Yes/No polls
 - `/modnvote create ranked_single_winner <optionCount>`
 - `/modnvote create yes_no`
 - `/modnvote edit <draftPollId>`
+- `/modnvote clone <sourcePollId>`
 - `/modnvote guide`
-- Builder title/description editing through chat prompts
-- Builder option name/description editing through chat prompts
+- Builder title editing through chat prompts
+- Builder description editing through chat prompts
+- Builder option name editing through chat prompts
+- Builder option description editing through chat prompts
 - Ranked builder Allow Partial toggle
 - Ranked builder Max Rankings cycle control
 - Builder READY validation and transition
 - Builder Cancel closes without deleting draft
+- Poll deletion for DRAFT/READY polls
+- `/poll` alias for `/modnvote`
+
+### Voting
+
 - Ranked voting GUI
 - Yes/No voting GUI
 - Mandatory vote confirmation
 - Anonymous ballot submission
-- Participation verification
-- Ballot proof-phrase verification
-- Result display from anonymous ballots only
 - Join notifications for open unvoted polls
 - Pane-less Java/Bedrock-friendly GUI design
 
+### Verification and integrity
+
+- `/modnvote mypolls`
+- `/modnvote verify participation <pollId>`
+- `/modnvote verify ballot <pollId> <proofPhrase>`
+- Participation verification
+- Ballot proof-phrase verification
+- Audit chain verification
+- Ballot hash and commitment verification
+- Result display from anonymous ballots only
+
+### Witness publication
+
+- Configurable Discord-compatible webhook publication
+- Best-effort poll-opened witness publication
+- Best-effort poll-closed witness publication
+- Automatic integrity checkpoints at configured accepted-ballot intervals
+- Manual checkpoint publication through `/modnvote checkpoint <pollId>`
+- Manual closed-result republication through `/modnvote publishresult <pollId>`
+
+Webhook delivery is intentionally best-effort and must never block or roll back poll lifecycle, voting, closing, or persistence.
+
+---
+
 ## Core invariants
 
+Do not break these.
+
 - Anonymous ballots are the source of truth for vote content.
-- Participation records are identity-aware but separate.
+- Participation records are identity-aware but separate from vote content.
 - Identity and vote content must not be joinable.
 - Results must come from anonymous ballots only.
 - `/verify participation` must not reveal vote content.
 - `/verify ballot` is proof-phrase bearer-token ballot verification.
+- Proof phrases must not be derived from player identity.
 - GUI/session layer must not write ballots or lifecycle state directly.
 - Service layer owns validation, lifecycle, and persistence authority.
 - GUI/session work must remain Folia-aware through `ModNScheduler`.
+- Witness publication must be privacy-safe and must not include voter identity, proof phrases, participation receipts, IP data, or per-player vote content.
+- Webhook failures must be logged safely without exposing full webhook URLs.
+
+---
 
 ## Command surface
 
-Normal admin workflow:
+All commands use `/modnvote`; `/poll` is a direct alias for the same command executor and tab completer.
 
-- `/modnvote guide`
-- `/modnvote create ranked_single_winner <optionCount>`
-- `/modnvote create yes_no`
-- `/modnvote edit <draftPollId>`
-- `/modnvote list`
-- `/modnvote show <pollId>`
-- `/modnvote delete <pollId>`
-- `/modnvote open <pollId>`
-- `/modnvote close <pollId>`
-- `/modnvote result <pollId>`
-- 
-  Alias:
+### Normal admin workflow
 
-- `/poll` is a direct alias of `/modnvote` for all commands.
+```text
+/modnvote guide
+/modnvote create ranked_single_winner <optionCount>
+/modnvote create yes_no
+/modnvote edit <draftPollId>
+/modnvote clone <sourcePollId>
+/modnvote list
+/modnvote show <pollId>
+/modnvote delete <pollId>
+/modnvote open <pollId>
+/modnvote close <pollId>
+/modnvote result <pollId>
+/modnvote checkpoint <pollId>
+/modnvote publishresult <pollId>
+```
 
-Player workflow:
+### Player workflow
 
-- `/modnvote vote <pollId>`
-- `/modnvote mypolls`
-- `/modnvote verify participation <pollId>`
-- `/modnvote verify ballot <pollId> <proofPhrase>`
+```text
+/modnvote vote <pollId>
+/modnvote mypolls
+/modnvote verify participation <pollId>
+/modnvote verify ballot <pollId> <proofPhrase>
+```
 
-Hidden/recovery authoring commands may remain callable:
+### Utility commands
 
-- `set`
-- `option`
-- `validate`
-- `ready`
-- `rankedpolldemo`
+```text
+/modnvote status
+/modnvote reload
+```
 
-## Important implementation notes
+### Hidden or recovery authoring commands
 
-- `PollCommand.java` is large. Prefer manual/local edits unless doing a fresh full-file replacement with extreme care.
-- Small files such as builder renderer/listener/input prompt classes can be handled repo-direct with full-file replacements.
-- Never write snippet-only placeholder files to the repo.
-- Always fetch/read current canonical files before edits.
-- Keep Gradle Java source/target at Java 21 unless explicitly agreed.
-- Do not commit `.gradle/`.
+These may remain callable but are not the preferred normal workflow:
 
-## Current known config stub
+```text
+/modnvote set <pollId> <field> <value>
+/modnvote option <add|edit|move|remove> ...
+/modnvote validate <pollId>
+/modnvote ready <pollId>
+/modnvote rankedpolldemo
+```
 
-`config.yml` includes:
+Prefer the GUI Poll Builder for normal authoring.
+
+---
+
+## Result model
+
+Results are calculated by `ResultService` from anonymous ballots only.
+
+### Yes/No polls
+
+Yes/No polls use canonical service-managed options and straightforward tally output.
+
+### Ranked single-winner polls
+
+Ranked single-winner polls use IRV-style transfer rounds.
+
+Important points for future sessions:
+
+- First-preference totals are not necessarily the final result.
+- A candidate can win after transfers even if they did not lead the first-preference round.
+- The public result output must make this clear.
+- `ResultService.PollResult` includes ranked-choice round data, final winner tally, and exhausted ballot count.
+- `ResultService.RankedChoiceRound` snapshots each IRV round.
+- Empty ranked polls must not resolve to a winner.
+
+### Canonical presentation layer
+
+`ResultDisplayFormatter` is the shared result presentation helper.
+
+Use it for:
+
+- in-game result output
+- Discord witness result fields
+- future result-display paths where practical
+
+Do not duplicate ranked-choice result formatting in command or publication code unless there is a deliberate reason.
+
+Current ranked output should distinguish:
+
+- poll winner
+- final winner tally
+- first preference round
+- final IRV round
+- full IRV round breakdown
+- eliminated option per non-final round
+- exhausted ballots where applicable
+
+This was added to avoid the previous failure mode where the winner was correct but the displayed counts looked like first-preference-only totals.
+
+---
+
+## Witness publication model
+
+Witness publication is handled by the publication layer, with command/lifecycle code invoking it after successful state changes.
+
+Expected events:
+
+- poll opened
+- poll closed with result summary
+- automatic integrity checkpoint
+- manual integrity checkpoint
+- manual closed-result republication
+
+Design rules:
+
+- Best-effort only.
+- Use asynchronous webhook delivery.
+- Log failures.
+- Never block or roll back voting, lifecycle transitions, or persistence because a webhook failed.
+- Never log full webhook URLs.
+- Keep payloads privacy-safe.
+
+Manual result republication:
+
+```text
+/modnvote publishresult <pollId>
+```
+
+This is intended for republishing corrected/updated closed-poll result formatting to configured witness webhooks. It requires the poll to be `CLOSED`.
+
+Manual checkpoint publication:
+
+```text
+/modnvote checkpoint <pollId>
+```
+
+This publishes a privacy-safe integrity snapshot, not per-player vote content.
+
+---
+
+## Config surface
+
+`config.yml` includes publication controls similar to:
 
 ```yaml
 publication:
@@ -110,123 +274,173 @@ publication:
   publish_poll_opened: true
   publish_poll_closed: true
   publish_checkpoints: true
+
+integrity:
+  checkpoint_interval_ballots: 25
+  canonicalization_version: 1
 ```
 
-As of v2.0.0 this is configuration only. External witness publication is not implemented yet.
+Rules:
 
-## Immediate 2.1.0 backlog
+- `discord_webhooks: []` disables external publication.
+- One or more Discord-compatible webhook URLs can be configured.
+- Real webhook URLs must never be committed.
+- Automatic checkpoints require publication to be enabled and at least one webhook configured.
+- `checkpoint_interval_ballots <= 0` disables automatic interval checkpoints.
 
-### 1. Poll clone command
+---
 
-Add:
+## Important implementation notes
+
+- `PollCommand.java` is large. Prefer targeted local edits unless doing a fresh full-file replacement with extreme care.
+- Always fetch/read current canonical files before editing.
+- Never write snippet-only placeholder files to the repo.
+- Keep Gradle Java source/target at Java 21 unless explicitly agreed.
+- Do not commit `.gradle/`.
+- Prefer changes that build after each tranche.
+- Use service-layer APIs for poll lifecycle, validation, persistence, results, and verification.
+- GUI/session code must delegate authoritative mutations to services.
+- Result display changes should generally go through `ResultDisplayFormatter`.
+- Witness publication changes should preserve privacy and best-effort delivery semantics.
+
+---
+
+## Main source map
+
+Key files and areas for future sessions:
 
 ```text
-/modnvote clone <sourcePollId>
+src/main/java/com/modnmetl/modnvote/ModNVotePlugin.java
 ```
 
-Desired behavior:
+Plugin bootstrap, dependency wiring, command registration, configuration reload, listener registration.
 
-- Requires admin create permission.
-- Player-only if opening the builder immediately.
-- Source poll may be DRAFT, READY, OPEN, or CLOSED.
-- Creates a new DRAFT poll.
-- Opens the Poll Builder for the new poll.
-
-Clone should copy:
-
-- poll type
-- title
-- description
-- maxRankings
-- seatCount
-- allowPartialRanking
-- requiresConfirmation
-- option keys
-- option display names
-- option descriptions
-- option display order
-
-Clone must not copy:
-
-- source poll ID
-- slug
-- status
-- opensAt/closesAt
-- participation secret
-- anonymous ballots
-- ballot preferences
-- participation records
-- audit event history
-- proof phrases or commitments
-
-Service method direction:
-
-```java
-public long clonePoll(long sourcePollId, String actor) throws PollServiceException
+```text
+src/main/java/com/modnmetl/modnvote/commands/PollCommand.java
 ```
 
-Insert the cloned poll and options in one transaction and emit a fresh `POLL_CLONED` audit event.
+Root `/modnvote` and `/poll` command executor/tab completer.
 
-### 2. External witness publication
+```text
+src/main/java/com/modnmetl/modnvote/service/PollService.java
+```
 
-Implement Discord webhook publication using the ModNEquine market webhook as the reference pattern.
+Poll creation, cloning, lifecycle, option mutation, validation.
 
-Reference repo/class:
+```text
+src/main/java/com/modnmetl/modnvote/service/BallotService.java
+```
 
-- `MODNMETL/ModNEquine`
-- `src/main/java/com/modnmetl/modnequine/market/MarketDiscordWebhookService.java`
+Ballot submission and participation/ballot verification.
 
-Design rules:
+```text
+src/main/java/com/modnmetl/modnvote/service/ResultService.java
+```
 
-- Best-effort only.
-- Use Java `HttpClient.sendAsync`.
-- Log failures.
-- Never block or roll back poll lifecycle, voting, closing, or persistence because a webhook failed.
-- Never log full webhook URLs.
+Result calculation, including ranked-choice IRV rounds.
 
-Initial events:
+```text
+src/main/java/com/modnmetl/modnvote/presentation/ResultDisplayFormatter.java
+```
 
-- poll opened
-- poll closed
+Canonical result display formatting for in-game and Discord-facing output.
 
-Later/manual checkpoint:
+```text
+src/main/java/com/modnmetl/modnvote/publication/WitnessPublicationService.java
+```
 
-- integrity checkpoint publication
-
-Suggested class:
+High-level witness publication orchestration.
 
 ```text
 src/main/java/com/modnmetl/modnvote/publication/DiscordWitnessPublicationService.java
 ```
 
-Wire through `ModNVotePlugin`, then call from command/lifecycle flow after successful service-layer state changes.
-
-### 3. Optional checkpoint command
-
-Possible command:
+Discord-compatible webhook delivery.
 
 ```text
+src/main/java/com/modnmetl/modnvote/integrity/
+```
+
+Integrity canonicalization, hashing, audit verification support.
+
+```text
+src/main/java/com/modnmetl/modnvote/ui/
+```
+
+Builder, voting GUI, session, renderer, and listener code.
+
+```text
+src/main/resources/plugin.yml
+```
+
+Bukkit/Paper command metadata, aliases, and permissions.
+
+```text
+src/main/resources/config.yml
+```
+
+Default plugin configuration.
+
+```text
+src/main/resources/messages.yml
+```
+
+Message strings used by the command/UI layer.
+
+---
+
+## Known technical debt and caution areas
+
+- `PollCommand.java` is large and mixes many command branches; keep changes small and verify tab-completion/help updates when adding commands.
+- Some low-level authoring commands remain as recovery paths even though GUI builder is preferred.
+- Result output is user-facing and witness-facing; avoid wording that makes first-preference totals look like final ranked-choice totals.
+- Any future multi-winner/STV work must not reuse single-winner IRV assumptions blindly.
+- Publication should remain decoupled from lifecycle persistence.
+- Avoid introducing identity-to-ballot joins for convenience reporting.
+
+---
+
+## Recommended smoke test
+
+After significant changes, run:
+
+```text
+/modnvote status
+/modnvote create ranked_single_winner 3
+/modnvote create yes_no
+/modnvote edit <draftPollId>
+/modnvote open <readyPollId>
+/modnvote vote <openPollId>
+/modnvote close <openPollId>
+/modnvote result <closedPollId>
+/modnvote publishresult <closedPollId>
 /modnvote checkpoint <pollId>
+/modnvote mypolls
+/modnvote verify participation <pollId>
+/modnvote verify ballot <pollId> <proofPhrase>
 ```
 
-or:
+Also verify:
 
 ```text
-/modnvote publish checkpoint <pollId>
+/poll status
+/poll vote <pollId>
 ```
 
-Use this to publish an integrity snapshot to configured webhooks.
+and tab completion for common admin commands.
 
-## Recommended 2.1.0 tranche order
-
-1. `clonePoll` service method and `/modnvote clone`
-2. Discord witness publication service foundation
-3. Poll opened/closed publication
-4. Manual checkpoint publication
-5. README/CHANGELOG update for 2.1.0
+---
 
 ## New-session rule
 
 Do not rely on prior chat memory if repo docs and code can answer the question.
+
+When starting a new session:
+
+1. Read `README.md`.
+2. Read `ARCHITECTURE.md`.
+3. Read `CHANGELOG.md`.
+4. Read this file.
+5. Inspect current code before editing, especially if the task touches commands, result calculation, witness publication, or persistence.
 
 If docs and code disagree, resolve the disagreement explicitly before editing.
