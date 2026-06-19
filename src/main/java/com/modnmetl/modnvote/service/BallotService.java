@@ -6,6 +6,7 @@ import com.modnmetl.modnvote.domain.BallotPreference;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
+import com.modnmetl.modnvote.service.canonical.BallotCanonicalizer;
 import com.modnmetl.modnvote.storage.AnonymousBallotDao;
 import com.modnmetl.modnvote.storage.AnonymousBallotPreferenceDao;
 import com.modnmetl.modnvote.storage.AuditEventDao;
@@ -78,6 +79,7 @@ public final class BallotService {
     private final AnonymousBallotDao anonymousBallotDao;
     private final AnonymousBallotPreferenceDao anonymousBallotPreferenceDao;
     private final AuditEventDao auditEventDao;
+    private final BallotCanonicalizer ballotCanonicalizer;
 
     public BallotService(DatabaseManager databaseManager,
                          PlatformAdapter platformAdapter,
@@ -91,6 +93,7 @@ public final class BallotService {
         this.anonymousBallotDao = new AnonymousBallotDao(databaseManager);
         this.anonymousBallotPreferenceDao = new AnonymousBallotPreferenceDao(databaseManager);
         this.auditEventDao = new AuditEventDao(databaseManager);
+        this.ballotCanonicalizer = new BallotCanonicalizer();
     }
 
     public boolean isInitialized() {
@@ -286,7 +289,7 @@ public final class BallotService {
                 orderedOptionIds.add(preference.optionId());
             }
 
-            String canonicalAnonymousBallotPayload = buildCanonicalAnonymousBallotPayload(
+            String canonicalAnonymousBallotPayload = ballotCanonicalizer.canonicalAnonymousBallotPayload(
                     poll,
                     orderedOptionIds,
                     ballot.submittedAt()
@@ -394,7 +397,7 @@ public final class BallotService {
         String participationTokenHash = deriveParticipationTokenHash(poll, identityKey);
         List<BallotPreference> preferences = toPreferences(orderedOptionIds);
 
-        String canonicalAnonymousBallotPayload = buildCanonicalAnonymousBallotPayload(
+        String canonicalAnonymousBallotPayload = ballotCanonicalizer.canonicalAnonymousBallotPayload(
                 poll,
                 orderedOptionIds,
                 submittedAt
@@ -569,20 +572,6 @@ public final class BallotService {
         }
     }
 
-    private String buildCanonicalAnonymousBallotPayload(Poll poll,
-                                                        List<Long> orderedOptionIds,
-                                                        Instant submittedAt) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("poll_id=").append(poll.pollId()).append('\n');
-        sb.append("poll_type=").append(poll.pollType().name()).append('\n');
-        sb.append("submitted_at=").append(submittedAt.toEpochMilli()).append('\n');
-        sb.append("rule_snapshot_version=v2").append('\n');
-        sb.append("max_rankings=").append(poll.maxRankings()).append('\n');
-        sb.append("allow_partial_ranking=").append(poll.allowPartialRanking()).append('\n');
-        sb.append("ordered_option_ids=").append(joinOptionIds(orderedOptionIds));
-        return sb.toString();
-    }
-
     private String buildAuditPayload(long pollId,
                                      long anonymousBallotId,
                                      String ballotHash,
@@ -592,17 +581,6 @@ public final class BallotService {
         sb.append("anonymous_ballot_id=").append(anonymousBallotId).append(';');
         sb.append("ballot_hash=").append(ballotHash).append(';');
         sb.append("submitted_at=").append(submittedAt.toEpochMilli());
-        return sb.toString();
-    }
-
-    private String joinOptionIds(List<Long> orderedOptionIds) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < orderedOptionIds.size(); i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(orderedOptionIds.get(i));
-        }
         return sb.toString();
     }
 

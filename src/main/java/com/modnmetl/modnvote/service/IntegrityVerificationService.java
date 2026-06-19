@@ -3,6 +3,7 @@ package com.modnmetl.modnvote.service;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
+import com.modnmetl.modnvote.service.canonical.BallotCanonicalizer;
 import com.modnmetl.modnvote.storage.AnonymousBallotDao;
 import com.modnmetl.modnvote.storage.AnonymousBallotPreferenceDao;
 import com.modnmetl.modnvote.storage.AuditEventDao;
@@ -35,6 +36,10 @@ import java.util.stream.Collectors;
  *   bridged via shared receipt linkage
  * - integrity therefore checks aggregate record consistency, not cross-table
  *   per-ballot linkage
+ *
+ * Canonicalization note:
+ * - recount/verification reuses the shared {@link BallotCanonicalizer} so the
+ *   integrity layer can never silently drift from the submission layer.
  */
 public final class IntegrityVerificationService {
 
@@ -47,6 +52,7 @@ public final class IntegrityVerificationService {
     private final AnonymousBallotDao anonymousBallotDao;
     private final AnonymousBallotPreferenceDao anonymousBallotPreferenceDao;
     private final AuditEventDao auditEventDao;
+    private final BallotCanonicalizer ballotCanonicalizer;
 
     public IntegrityVerificationService(DatabaseManager databaseManager,
                                         PlatformAdapter platformAdapter,
@@ -60,6 +66,7 @@ public final class IntegrityVerificationService {
         this.anonymousBallotDao = new AnonymousBallotDao(databaseManager);
         this.anonymousBallotPreferenceDao = new AnonymousBallotPreferenceDao(databaseManager);
         this.auditEventDao = new AuditEventDao(databaseManager);
+        this.ballotCanonicalizer = new BallotCanonicalizer();
     }
 
     public boolean isInitialized() {
@@ -168,7 +175,7 @@ public final class IntegrityVerificationService {
                     continue;
                 }
 
-                String recomputedHash = sha256(buildCanonicalAnonymousBallotPayload(
+                String recomputedHash = sha256(ballotCanonicalizer.canonicalAnonymousBallotPayload(
                         poll,
                         orderedOptionIds,
                         ballot.submittedAt()
@@ -201,31 +208,6 @@ public final class IntegrityVerificationService {
             logger.warning("Failed to verify poll integrity for poll #" + pollId + ": " + e.getMessage());
             throw new PollServiceException("Failed to verify poll integrity for poll #" + pollId, e);
         }
-    }
-
-    private String buildCanonicalAnonymousBallotPayload(Poll poll,
-                                                        List<Long> rankedOptionIds,
-                                                        java.time.Instant submittedAt) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("poll_id=").append(poll.pollId()).append('\n');
-        sb.append("poll_type=").append(poll.pollType().name()).append('\n');
-        sb.append("submitted_at=").append(submittedAt.toEpochMilli()).append('\n');
-        sb.append("rule_snapshot_version=v2").append('\n');
-        sb.append("max_rankings=").append(poll.maxRankings()).append('\n');
-        sb.append("allow_partial_ranking=").append(poll.allowPartialRanking()).append('\n');
-        sb.append("ordered_option_ids=").append(joinOptionIds(rankedOptionIds));
-        return sb.toString();
-    }
-
-    private String joinOptionIds(List<Long> rankedOptionIds) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < rankedOptionIds.size(); i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(rankedOptionIds.get(i));
-        }
-        return sb.toString();
     }
 
     private String sha256(String input) {

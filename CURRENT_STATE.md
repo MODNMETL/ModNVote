@@ -17,6 +17,7 @@ If this file disagrees with code, verify against the code and resolve the disagr
 
 - Branch: `main`
 - Current release: `v2.1.1`
+- In development: `2.2.0` (Linked Offices development stretch; groundwork only so far — see CHANGELOG and the "2.2.0 groundwork" section below)
 - Java target: 21
 - Platform target: Paper 1.21.x
 - Folia-aware scheduling: through `ModNScheduler`
@@ -25,6 +26,37 @@ If this file disagrees with code, verify against the code and resolve the disagr
 - Release jar: produced by `shadowJar` as `build/libs/modnvote-<version>.jar`
 
 `build.gradle.kts` is authoritative for the current plugin version.
+
+---
+
+## 2.2.0 groundwork (in progress)
+
+The 2.2.0 stretch targets a generic Linked Offices election model (multiple
+contests resolved from a single anonymous ballot). That feature is **not yet
+implemented**.
+
+Completed groundwork so far:
+
+- Extracted a shared `BallotCanonicalizer` (`service.canonical`) as the single
+  source of truth for anonymous-ballot canonical payload construction. Both
+  `BallotService` (submission) and `IntegrityVerificationService`
+  (recount/verification) now use it instead of duplicated private builders.
+  Canonical output is byte-for-byte unchanged (`rule_snapshot_version=v2`), so
+  existing stored ballot hashes and proof commitments still verify.
+- Added a test foundation under `src/test`:
+  - golden/stability tests locking the canonical payload format for existing
+    `YES_NO` and `RANKED_SINGLE_WINNER` ballots
+  - schema privacy/non-joinability regression tests over the live schema
+- Bumped the project version to `2.2.0`.
+
+Explicitly NOT done in this groundwork:
+
+- No `LINKED_OFFICES` poll type.
+- No `anonymous_ballot_contest_responses` table or any schema change.
+- No GUI/session, lifecycle, proof-phrase, or participation-token changes.
+
+The canonicalizer is intentionally shaped so multi-contest canonicalization can
+be added later without altering the existing single-contest format.
 
 ---
 
@@ -302,6 +334,7 @@ Rules:
 - GUI/session code must delegate authoritative mutations to services.
 - Result display changes should generally go through `ResultDisplayFormatter`.
 - Witness publication changes should preserve privacy and best-effort delivery semantics.
+- Anonymous-ballot canonical payloads must go through `BallotCanonicalizer` (`service.canonical`); never re-inline a private canonical builder in a service.
 
 ---
 
@@ -334,6 +367,13 @@ src/main/java/com/modnmetl/modnvote/service/BallotService.java
 Ballot submission and participation/ballot verification.
 
 ```text
+src/main/java/com/modnmetl/modnvote/service/canonical/BallotCanonicalizer.java
+```
+
+Shared canonical anonymous-ballot payload construction used by both
+`BallotService` and `IntegrityVerificationService`.
+
+```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java
 ```
 
@@ -352,22 +392,17 @@ src/main/java/com/modnmetl/modnvote/publication/WitnessPublicationService.java
 High-level witness publication orchestration.
 
 ```text
-src/main/java/com/modnmetl/modnvote/publication/DiscordWitnessPublicationService.java
-```
-
-Discord-compatible webhook delivery.
-
-```text
-src/main/java/com/modnmetl/modnvote/integrity/
-```
-
-Integrity canonicalization, hashing, audit verification support.
-
-```text
 src/main/java/com/modnmetl/modnvote/ui/
 ```
 
 Builder, voting GUI, session, renderer, and listener code.
+
+```text
+src/test/java/com/modnmetl/modnvote/
+```
+
+Test foundation (added in the 2.2.0 groundwork): canonicalizer golden/stability
+tests and schema privacy/non-joinability tests.
 
 ```text
 src/main/resources/plugin.yml

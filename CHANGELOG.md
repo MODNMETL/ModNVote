@@ -2,6 +2,31 @@
 
 All notable changes to ModNVote are documented in this file.
 
+## [2.2.0] - Unreleased
+
+### Summary
+
+Groundwork for the ModNVote 2.2.0 development stretch. This is preparation only; the Linked Offices election model is **not** implemented in this tranche.
+
+### Added
+
+- Shared `BallotCanonicalizer` (`service.canonical`) as the single source of truth for anonymous-ballot canonical payload construction, used by both `BallotService` (submission) and `IntegrityVerificationService` (recount/verification).
+- Test foundation under `src/test`:
+  - golden/stability tests that lock the canonical payload format byte-for-byte for existing `YES_NO` and `RANKED_SINGLE_WINNER` ballots
+  - schema privacy/non-joinability regression tests asserting anonymous vote-content tables carry no identity columns and share no per-voter linking column with participation records
+
+### Changed
+
+- `BallotService` and `IntegrityVerificationService` now delegate canonical payload construction to the shared `BallotCanonicalizer` instead of duplicating private builder methods. Canonical output is unchanged (byte-for-byte identical, `rule_snapshot_version=v2`), so existing stored ballot hashes and proof commitments continue to verify.
+- Project version bumped to `2.2.0`.
+
+### Notes
+
+- No database schema changes.
+- No changes to proof-phrase generation, participation token hashing, GUI/session behaviour, or poll lifecycle.
+- Existing `YES_NO` and `RANKED_SINGLE_WINNER` polls continue to work unchanged.
+- Linked Offices is not implemented yet. The shared canonicalizer is deliberately designed so multi-contest canonicalization can be added later without altering the existing single-contest format.
+
 ## [2.1.1] - 2026-05-09
 
 ### Added

@@ -88,6 +88,23 @@ Responsibilities:
 
 All validation must occur here.
 
+#### Anonymous-ballot canonicalization
+
+Canonical anonymous-ballot payload construction is centralized in a single
+shared component, `BallotCanonicalizer` (`service.canonical`).
+
+- It produces the exact byte sequence that is hashed to form the anonymous
+  ballot hash and the ballot commitment hash.
+- Both the submission path (`BallotService`) and the recount/verification path
+  (`IntegrityVerificationService`) use it, so the two layers can never silently
+  drift apart.
+- It depends only on poll rule context and anonymous, ordered option-id content.
+  It is independent of player identity, UUID, name, IP address, session state,
+  and participation records.
+- The canonical format is versioned (`rule_snapshot_version`) and must not change
+  without an intentional version bump, or previously stored ballot hashes would
+  fail verification.
+
 ---
 
 ### Persistence (DAO) layer
@@ -217,6 +234,7 @@ Typical events:
 Planned extensions include:
 
 - Multi-winner STV
+- Linked Offices election model (multiple contests in one anonymous ballot)
 - Expanded audit tooling
 - Exportable verification data
 - Advanced result visualisation
