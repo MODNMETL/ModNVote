@@ -1,6 +1,56 @@
 # Changelog
 
 All notable changes to ModNVote are documented in this file.
+
+## [2.1.1] - 2026-05-09
+
+### Added
+
+- Transparent round-by-round IRV result reporting for `RANKED_SINGLE_WINNER` polls.
+- Final IRV round reporting so public output distinguishes first-preference totals from the decisive final round.
+- Ranked-choice elimination tracking in result output.
+- Exhausted ballot reporting where applicable.
+- Shared result presentation formatter for in-game and Discord-facing result output.
+- `/modnvote publishresult <pollId>` for manually republishing a CLOSED poll result to configured witness webhooks.
+- Tab-completion support for the `publishresult` command and CLOSED poll-id completions.
+
+### Changed
+
+- Ranked-choice `/modnvote result <pollId>` output now shows:
+  - poll winner
+  - final winner tally
+  - first preference round
+  - each IRV round
+  - eliminated option per non-final round
+  - exhausted ballots where applicable
+- Discord poll-closed witness messages for ranked polls now publish:
+  - winner
+  - final IRV round
+  - full IRV round breakdown
+- Ranked-choice result display no longer presents first-preference totals as a generic final “Result Summary”.
+- In-game ranked winner wording changed to `Poll winner:` for clarity.
+- `ResultService.PollResult` now includes ranked-choice round snapshots, final winner tally, and exhausted ballot count.
+
+### Fixed
+
+- Fixed misleading ranked-choice result presentation where the reported winner was correct but only first-preference counts were shown.
+- Fixed empty ranked polls being able to resolve to a winner when no ballots had been cast.
+- Fixed `publishresult` discoverability by adding it to command help/tab-completion metadata.
+
+### Notes
+
+- Existing ranked poll results can be republished after upgrading with:
+
+```text
+/modnvote publishresult <pollId>
+```
+
+- Example:
+
+```text
+/modnvote publishresult 2
+```
+
 ## [2.1.0] - 2026-04-26
 
 ### Added
@@ -24,8 +74,8 @@ All notable changes to ModNVote are documented in this file.
 
 - Witness publication does not include player names, UUIDs, IP addresses, proof phrases, participation receipts, or per-player vote content.
 - Webhook delivery failures are logged without exposing full webhook URLs and do not affect poll lifecycle or ballot persistence.
-## [2.0.0] - 2026-04-25
 
+## [2.0.0] - 2026-04-25
 
 ### Summary
 
