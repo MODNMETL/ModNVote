@@ -361,6 +361,7 @@ Normal admin-facing commands:
 /modnvote clone <sourcePollId>
 /modnvote list
 /modnvote show <pollId>
+/modnvote validate-definition <pollId>
 /modnvote delete <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>
@@ -368,6 +369,8 @@ Normal admin-facing commands:
 /modnvote publishresult <pollId>
 /modnvote checkpoint <pollId>
 ```
+
+`/modnvote validate-definition <pollId>` is a read-only admin check that parses and validates a linked-offices election definition stored in a poll's `config_json`. Linked Offices voting is not implemented yet — this command only validates definitions; it never changes poll status, writes to the database, or opens a GUI.
 
 Player-facing commands:
 

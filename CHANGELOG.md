@@ -19,6 +19,11 @@ Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranch
   - `ElectionDefinitionValidator` enforcing generic structural rules (unique keys, non-blank names, seats, IRV single-seat, approval `maxSelections`, candidate eligibility, dependency endpoints, acyclic dependency graph, enough eligible candidates per seat count).
   - `config_json` surfaced through the `Poll` domain model and `PollDao`; `metadata_json` surfaced through the `PollOption` domain model and `PollOptionDao` — both via backward-compatible constructors that default to `"{}"`.
   - Tests for the parser, validator, and `config_json`/`metadata_json` persistence/defaulting.
+- **Tranche 2B — read-only admin definition validation:**
+  - `ElectionDefinitionService` (`service`) — a read-only boundary that parses and validates a poll's `config_json`, returning a structured `ElectionDefinitionValidationResult` (`valid`, optional `definition`, `issues`, optional `rawModel`) instead of throwing. No persistence, lifecycle, identity, or ballot involvement.
+  - `/modnvote validate-definition <pollId>` admin command (permission `modnvote.admin.poll.create`): reads `config_json`, validates it, and reports valid/invalid + issues, missing/non-linked model, or poll-not-found. Read-only — never changes status, writes the database, or opens a GUI.
+  - Reserved, **non-votable** `PollType.LINKED_OFFICES`. Guards reject it from voting (vote command + session layer), result calculation (`ResultService`), and authoring/lifecycle (cannot be created or readied for voting). Existing `PollType` values and stored data remain compatible.
+  - Tests for the service (valid/empty/malformed/unknown-model/structurally-invalid) and guards (result rejection, YES_NO still works, no vote session for linked offices, `PollType` parsing backward compatible).
 
 ### Changed
 
@@ -32,7 +37,7 @@ Groundwork for the ModNVote 2.2.0 development stretch, delivered in small tranch
 - No database schema changes. `config_json` and `metadata_json` already existed in the schema and are now surfaced/used.
 - No changes to proof-phrase generation, participation token hashing, GUI/session behaviour, or poll lifecycle.
 - Existing `YES_NO` and `RANKED_SINGLE_WINNER` polls continue to work unchanged.
-- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and GUI flow are deliberately **not** implemented yet. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
+- Linked Offices voting, multi-contest anonymous-ballot storage, counting, and GUI flow are deliberately **not** implemented yet. Tranche 2B adds read-only definition validation only; admins can validate `config_json` definitions before any future voting support exists. The reserved `PollType.LINKED_OFFICES` is non-votable and guarded out of every voting/result path. The definition layer is generic so later tranches can parse, validate, and execute elections without rework.
 
 ## [2.1.1] - 2026-05-09
 

@@ -122,6 +122,16 @@ an `ElectionDefinitionParser` (from `polls.config_json`) and an
   existing `polls.config_json` / `poll_options.metadata_json` columns and carry
   no voter identity.
 
+The service layer exposes a read-only boundary, `ElectionDefinitionService`,
+which parses and validates a poll's definition and returns a structured result
+(it performs no persistence, lifecycle, or identity work). The admin command
+`/modnvote validate-definition <pollId>` uses it for read-only validation.
+
+`PollType.LINKED_OFFICES` is a reserved, **non-votable** type. It is guarded out
+of the vote command, the vote session layer, `ResultService`, and
+authoring/lifecycle, so no accidental voting path can exist until a later tranche
+deliberately enables it.
+
 ---
 
 ### Persistence (DAO) layer

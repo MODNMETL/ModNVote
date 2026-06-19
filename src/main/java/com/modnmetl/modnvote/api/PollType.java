@@ -12,5 +12,14 @@ public enum PollType {
     SINGLE_CHOICE,
     RANKED_SINGLE_WINNER,
     RANKED_MULTI_WINNER_STV,
-    COMBINED_EXECUTIVE_AND_COUNCIL
+    COMBINED_EXECUTIVE_AND_COUNCIL,
+    /**
+     * Generic linked-offices election (multiple contests in one election).
+     *
+     * Reserved and intentionally NON-VOTABLE as of 2.2.0: admins can validate a
+     * linked-offices definition, but there is no authoring, voting, submission,
+     * counting, or result path for this type yet. Guards in the command, ballot,
+     * and result layers reject it.
+     */
+    LINKED_OFFICES
 }

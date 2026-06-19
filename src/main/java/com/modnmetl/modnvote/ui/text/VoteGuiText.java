@@ -170,6 +170,7 @@ public final class VoteGuiText {
             case SINGLE_CHOICE -> "Single Choice";
             case RANKED_MULTI_WINNER_STV -> "STV";
             case COMBINED_EXECUTIVE_AND_COUNCIL -> "Executive + Council";
+            case LINKED_OFFICES -> "Linked Offices";
         };
     }
 

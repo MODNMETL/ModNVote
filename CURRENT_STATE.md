@@ -65,12 +65,26 @@ Tranche 2A added the generic election-definition/config layer (definition only, 
 - Gson is used for parsing as a `compileOnly` (Paper-provided) + test-only
   dependency; it is not shaded into the plugin jar.
 
+Tranche 2B added read-only admin definition validation (still no voting):
+
+- `ElectionDefinitionService` (`service`) parses+validates a poll's `config_json`
+  and returns a structured `ElectionDefinitionValidationResult` (no throwing, no
+  persistence, no identity/ballot involvement).
+- `/modnvote validate-definition <pollId>` admin command (permission
+  `modnvote.admin.poll.create`) reports valid/invalid + issues. Read-only: no
+  status change, no DB write, no GUI.
+- Reserved, NON-VOTABLE `PollType.LINKED_OFFICES`. It is guarded out of the vote
+  command, the vote session layer, `ResultService`, and authoring/lifecycle
+  (cannot be created or readied for voting). Existing types/data stay compatible.
+
 Explicitly NOT done in this groundwork:
 
-- No `LINKED_OFFICES` poll type (definitions validate the `model` string only).
+- `PollType.LINKED_OFFICES` exists but is reserved/non-votable; there is NO
+  linked-offices voting, submission, counting, or result calculation.
 - No `anonymous_ballot_contest_responses` table or any schema change.
 - No multi-contest ballot submission, counting pipeline, or IRV extraction.
-- No GUI/session, lifecycle, proof-phrase, or participation-token changes.
+- No GUI/session flow for linked offices, and no proof-phrase or
+  participation-token changes.
 
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
 be added later without altering the existing single-contest format.
@@ -187,6 +201,7 @@ All commands use `/modnvote`; `/poll` is a direct alias for the same command exe
 /modnvote clone <sourcePollId>
 /modnvote list
 /modnvote show <pollId>
+/modnvote validate-definition <pollId>
 /modnvote delete <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>
