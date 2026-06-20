@@ -7,6 +7,7 @@ import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
 import com.modnmetl.modnvote.service.canonical.BallotCanonicalizer;
+import com.modnmetl.modnvote.service.canonical.BallotHashingService;
 import com.modnmetl.modnvote.storage.AnonymousBallotDao;
 import com.modnmetl.modnvote.storage.AnonymousBallotPreferenceDao;
 import com.modnmetl.modnvote.storage.AuditEventDao;
@@ -15,10 +16,6 @@ import com.modnmetl.modnvote.storage.ParticipationRecordDao;
 import com.modnmetl.modnvote.storage.PollDao;
 import com.modnmetl.modnvote.storage.PollOptionDao;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.time.Instant;
@@ -45,7 +42,6 @@ import java.util.logging.Logger;
  */
 public final class BallotService {
 
-    private static final String PARTICIPATION_TOKEN_ALGORITHM = "HmacSHA256";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
@@ -557,19 +553,7 @@ public final class BallotService {
     }
 
     private String deriveParticipationTokenHash(Poll poll, String identityKey) {
-        try {
-            String input = poll.pollId() + "\n" + identityKey;
-            Mac mac = Mac.getInstance(PARTICIPATION_TOKEN_ALGORITHM);
-            SecretKeySpec secretKeySpec = new SecretKeySpec(
-                    poll.participationSecret().getBytes(StandardCharsets.UTF_8),
-                    PARTICIPATION_TOKEN_ALGORITHM
-            );
-            mac.init(secretKeySpec);
-            byte[] bytes = mac.doFinal(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to derive participation token hash", e);
-        }
+        return BallotHashingService.deriveParticipationTokenHash(poll, identityKey);
     }
 
     private String buildAuditPayload(long pollId,
@@ -586,17 +570,17 @@ public final class BallotService {
 
     private String buildParticipationReceiptHash(long pollId,
                                                  String participationReceipt) {
-        return sha256("participation_receipt\n" + pollId + "\n" + participationReceipt);
+        return BallotHashingService.buildParticipationReceiptHash(pollId, participationReceipt);
     }
 
     private String buildBallotProofHash(long pollId,
                                         String ballotProofPhrase) {
-        return sha256("ballot_proof\n" + pollId + "\n" + ballotProofPhrase);
+        return BallotHashingService.buildBallotProofHash(pollId, ballotProofPhrase);
     }
 
     private String buildBallotCommitmentHash(String ballotProofPhrase,
                                              String canonicalAnonymousBallotPayload) {
-        return sha256("ballot_commitment\n" + ballotProofPhrase + "\n" + canonicalAnonymousBallotPayload);
+        return BallotHashingService.buildBallotCommitmentHash(ballotProofPhrase, canonicalAnonymousBallotPayload);
     }
 
     private String generateOpaqueReceipt() {
@@ -619,13 +603,7 @@ public final class BallotService {
     }
 
     private String sha256(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to hash ballot payload", e);
-        }
+        return BallotHashingService.sha256(input);
     }
 
     private String requireNonBlank(String value, String fieldName) throws PollServiceException {

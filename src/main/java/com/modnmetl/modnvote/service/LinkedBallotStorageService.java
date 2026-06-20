@@ -10,20 +10,18 @@ import com.modnmetl.modnvote.domain.election.execution.CanonicalContestResponse;
 import com.modnmetl.modnvote.domain.election.execution.LinkedElectionBallot;
 import com.modnmetl.modnvote.domain.election.execution.LinkedElectionCanonicalModel;
 import com.modnmetl.modnvote.service.canonical.BallotCanonicalizer;
+import com.modnmetl.modnvote.service.canonical.BallotHashingService;
 import com.modnmetl.modnvote.storage.AnonymousBallotContestResponseDao;
 import com.modnmetl.modnvote.storage.AnonymousBallotDao;
 import com.modnmetl.modnvote.storage.AuditEventDao;
 import com.modnmetl.modnvote.storage.DatabaseManager;
 import com.modnmetl.modnvote.storage.ParticipationRecordDao;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
@@ -41,8 +39,9 @@ import java.util.Objects;
  * vote-content-blind) and exactly one anonymous ballot (content-bearing,
  * identity-free) per stored ballot, plus the anonymous contest-response rows. The
  * content rows link only to {@code anonymous_ballot_id} and carry no identity.
- * The hashing semantics (participation token, proof, commitment) are identical to
- * {@link BallotService}'s single-contest path so the two layers stay consistent.
+ * Hashing (participation token, proof, commitment) is delegated to the shared
+ * {@link BallotHashingService}, the same helper {@link BallotService} uses, so the
+ * two layers can never drift apart on hash derivation.
  *
  * <p>State requirement: as a storage primitive (not a real submission), this does
  * not require the poll to be {@code OPEN}; it only requires a {@code LINKED_OFFICES}
@@ -50,7 +49,6 @@ import java.util.Objects;
  */
 public final class LinkedBallotStorageService {
 
-    private static final String PARTICIPATION_TOKEN_ALGORITHM = "HmacSHA256";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final DatabaseManager databaseManager;
@@ -119,14 +117,16 @@ public final class LinkedBallotStorageService {
         List<AnonymousBallotContestResponseDao.NewContestResponse> responseRows =
                 toContestResponseRows(canonicalBallot);
 
-        String ballotHash = sha256(canonicalPayload);
+        String ballotHash = BallotHashingService.sha256(canonicalPayload);
 
-        String participationTokenHash = deriveParticipationTokenHash(poll, identityKey);
+        String participationTokenHash = BallotHashingService.deriveParticipationTokenHash(poll, identityKey);
         String participationReceipt = generateOpaqueReceipt();
-        String participationReceiptHash = buildParticipationReceiptHash(poll.pollId(), participationReceipt);
+        String participationReceiptHash =
+                BallotHashingService.buildParticipationReceiptHash(poll.pollId(), participationReceipt);
 
-        String ballotProofHash = buildBallotProofHash(poll.pollId(), ballotProofPhrase);
-        String ballotCommitmentHash = buildBallotCommitmentHash(ballotProofPhrase, canonicalPayload);
+        String ballotProofHash = BallotHashingService.buildBallotProofHash(poll.pollId(), ballotProofPhrase);
+        String ballotCommitmentHash =
+                BallotHashingService.buildBallotCommitmentHash(ballotProofPhrase, canonicalPayload);
 
         try (Connection connection = databaseManager.getConnection()) {
             connection.setAutoCommit(false);
@@ -216,23 +216,7 @@ public final class LinkedBallotStorageService {
         return rows;
     }
 
-    // --- Hashing (identical semantics to BallotService) -----------------------
-
-    private String deriveParticipationTokenHash(Poll poll, String identityKey) {
-        try {
-            String input = poll.pollId() + "\n" + identityKey;
-            Mac mac = Mac.getInstance(PARTICIPATION_TOKEN_ALGORITHM);
-            SecretKeySpec secretKeySpec = new SecretKeySpec(
-                    poll.participationSecret().getBytes(StandardCharsets.UTF_8),
-                    PARTICIPATION_TOKEN_ALGORITHM
-            );
-            mac.init(secretKeySpec);
-            byte[] bytes = mac.doFinal(input.getBytes(StandardCharsets.UTF_8));
-            return java.util.HexFormat.of().formatHex(bytes);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to derive participation token hash", e);
-        }
-    }
+    // --- Audit payload + receipt generation -----------------------------------
 
     private String buildAuditPayload(long pollId, long anonymousBallotId, String ballotHash, Instant submittedAt) {
         return "poll_id=" + pollId + ';'
@@ -241,32 +225,10 @@ public final class LinkedBallotStorageService {
                 + "submitted_at=" + submittedAt.toEpochMilli();
     }
 
-    private String buildParticipationReceiptHash(long pollId, String participationReceipt) {
-        return sha256("participation_receipt\n" + pollId + "\n" + participationReceipt);
-    }
-
-    private String buildBallotProofHash(long pollId, String ballotProofPhrase) {
-        return sha256("ballot_proof\n" + pollId + "\n" + ballotProofPhrase);
-    }
-
-    private String buildBallotCommitmentHash(String ballotProofPhrase, String canonicalPayload) {
-        return sha256("ballot_commitment\n" + ballotProofPhrase + "\n" + canonicalPayload);
-    }
-
     private String generateOpaqueReceipt() {
         byte[] bytes = new byte[24];
         SECURE_RANDOM.nextBytes(bytes);
-        return java.util.HexFormat.of().formatHex(bytes);
-    }
-
-    private String sha256(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            return java.util.HexFormat.of().formatHex(bytes);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to hash ballot payload", e);
-        }
+        return HexFormat.of().formatHex(bytes);
     }
 
     private String requireNonBlank(String value, String fieldName) throws PollServiceException {
