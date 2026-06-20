@@ -76,6 +76,7 @@ public final class BallotService {
     private final AnonymousBallotPreferenceDao anonymousBallotPreferenceDao;
     private final AuditEventDao auditEventDao;
     private final BallotCanonicalizer ballotCanonicalizer;
+    private final LinkedOfficesProofVerifier linkedOfficesProofVerifier;
 
     public BallotService(DatabaseManager databaseManager,
                          PlatformAdapter platformAdapter,
@@ -90,6 +91,7 @@ public final class BallotService {
         this.anonymousBallotPreferenceDao = new AnonymousBallotPreferenceDao(databaseManager);
         this.auditEventDao = new AuditEventDao(databaseManager);
         this.ballotCanonicalizer = new BallotCanonicalizer();
+        this.linkedOfficesProofVerifier = new LinkedOfficesProofVerifier(databaseManager);
     }
 
     public boolean isInitialized() {
@@ -313,6 +315,41 @@ public final class BallotService {
             throw e;
         } catch (Exception e) {
             logger.warning("Failed to verify ballot proof for poll #" + pollId + ": " + e.getMessage());
+            throw new PollServiceException("Failed to verify ballot proof for poll #" + pollId, e);
+        }
+    }
+
+    /**
+     * Identity-free bearer-token proof verification for LINKED_OFFICES ballots.
+     *
+     * <p>The single-contest {@link #verifyBallotProof} path (YES_NO /
+     * RANKED_SINGLE_WINNER) is deliberately left unchanged: it cannot represent
+     * multi-contest content, so linked-offices proof verification has its own entry
+     * point and its own {@link LinkedOfficeBallotProofVerificationResult}.
+     *
+     * <p>The real work lives in the standalone, Bukkit-free
+     * {@link LinkedOfficesProofVerifier}; this method only resolves and type-checks
+     * the poll and delegates. It reveals anonymous ballot content to the holder of
+     * the proof phrase but never touches the participation layer or voter identity.
+     */
+    public LinkedOfficeBallotProofVerificationResult verifyLinkedOfficeBallotProof(long pollId,
+                                                                                  String ballotProofPhrase)
+            throws PollServiceException {
+        requireNonBlank(ballotProofPhrase, "ballotProofPhrase");
+
+        try {
+            Poll poll = pollDao.findPollById(pollId);
+            if (poll == null) {
+                throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            }
+            if (poll.pollType() != PollType.LINKED_OFFICES) {
+                throw new PollServiceException("Poll #" + pollId + " is not a LINKED_OFFICES poll.");
+            }
+            return linkedOfficesProofVerifier.verify(poll, ballotProofPhrase);
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warning("Failed to verify linked-offices ballot proof for poll #" + pollId + ": " + e.getMessage());
             throw new PollServiceException("Failed to verify ballot proof for poll #" + pollId, e);
         }
     }

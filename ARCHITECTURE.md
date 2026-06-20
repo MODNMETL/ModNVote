@@ -302,9 +302,9 @@ voter GUI, vote session, player voting command, counting, or result calculation.
   ineligible candidate), and any recomputed-vs-stored hash mismatch.
 - **Commitment boundary.** Only `ballot_hash` is recomputed.
   `ballot_commitment_hash` binds the voter's proof phrase, which integrity does not
-  possess, so commitment recomputation stays in the bearer-token proof path; there
-  is no linked-office proof-phrase bypass, and linked-office bearer-token
-  proof-phrase verification is deferred to a later tranche.
+  possess, so commitment recomputation stays in the bearer-token proof path (now
+  implemented for linked offices in Tranche 2I, below); there is no linked-office
+  proof-phrase bypass in the integrity layer.
 - **Reconstructor hardening.** Because stored rows are recount input,
   `LinkedBallotReconstructor` no longer silently accepts malformed rows: it throws
   `LinkedBallotReconstructionException` for offices that mix response types,
@@ -313,6 +313,47 @@ voter GUI, vote session, player voting command, counting, or result calculation.
 - **Privacy.** Integrity failure messages carry only poll id, anonymous ballot id,
   failure type, and hashes — never voter identity — so verification cannot become a
   back-channel that re-links identity to vote content.
+
+#### Linked offices proof verification (bearer-token, verification only)
+
+Tranche 2I adds bearer-token proof-phrase verification for linked-offices
+anonymous ballots — the path the 2H commitment boundary deferred. It is
+verification only — **no schema changes** (it consumes the 2G schema) and still no
+voter GUI, vote session, player voting command, counting, or result calculation.
+
+- **Entry point.** `BallotService.verifyLinkedOfficeBallotProof(pollId, proofPhrase)`
+  resolves and type-checks the poll, then delegates to `LinkedOfficesProofVerifier`.
+  The single-contest `verifyBallotProof` (YES_NO / RANKED) path and its
+  `BallotProofVerificationResult` are untouched; linked offices has its own entry
+  point and result because a flat option-id list cannot represent multi-contest
+  content.
+- **Why a standalone verifier.** `LinkedOfficesProofVerifier` is a Bukkit-free
+  collaborator constructed with only a `DatabaseManager` (the same pattern as
+  `LinkedBallotStorageService` / `LinkedOfficesIntegrityVerifier`), so it is fully
+  unit-testable; `BallotService` cannot be constructed in tests (its
+  `PlatformAdapter` exposes Bukkit types, Paper API is `compileOnly`).
+- **Proof loop.** The phrase is hashed to `ballot_proof_hash`
+  (`BallotHashingService.buildBallotProofHash`); the matching anonymous ballot is
+  loaded and confirmed to belong to the poll; the definition is parsed + validated
+  from `config_json`; the ballot's `anonymous_ballot_contest_responses` rows are
+  reconstructed (`LinkedBallotReconstructor`) and re-canonicalised
+  (`BallotCanonicalizer.canonicalLinkedOfficesBallotPayload`); then **both** the
+  recomputed `ballot_hash` and the phrase-bound `ballot_commitment_hash`
+  (`BallotHashingService.buildBallotCommitmentHash`) are compared to the stored
+  values. A match proves the held phrase commits to that exact stored ballot.
+- **Result.** `LinkedOfficeBallotProofVerificationResult` (nested `OfficeResponse`)
+  exposes anonymous content only — poll id, anonymous ballot id, `submitted_at`, a
+  `verified` flag, the anonymous `ballot_hash`, and per-office response content
+  (office key, response type, ordered candidate keys) on success, with an
+  identity-free `failureReason` on failure (and no content). Reported failures:
+  phrase not found, mismatched/non-linked poll, invalid `config_json`, missing
+  rows, reconstruction/canonicalization failure, and `ballot_hash`/commitment
+  mismatch.
+- **Privacy.** Proof verification is bearer-token based: the holder of the phrase
+  legitimately sees the anonymous ballot content on success, but the verifier reads
+  only content keyed by `anonymous_ballot_id`, never joins `participation_records`,
+  and never reveals voter identity (no UUID/name/IP/Floodgate id/participation
+  token/receipt) in any result or failure reason.
 
 ---
 

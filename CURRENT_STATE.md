@@ -241,6 +241,39 @@ Explicitly NOT done by Tranche 2H:
   deferred** to a later tranche (the existing single-contest proof path is
   untouched).
 
+Tranche 2I completed the linked-offices proof loop the 2H commitment boundary
+deferred, with **no schema changes** (it consumes the 2G schema) and still no
+voting, counting, or results:
+
+- New `BallotService.verifyLinkedOfficeBallotProof(pollId, ballotProofPhrase)`
+  resolves and type-checks the poll, then delegates to the new, Bukkit-free
+  `LinkedOfficesProofVerifier`. The verifier hashes the phrase to
+  `ballot_proof_hash`, loads the matching anonymous ballot, reconstructs it from
+  its `anonymous_ballot_contest_responses` rows, re-canonicalises it, and compares
+  **both** the recomputed `ballot_hash` and the phrase-bound
+  `ballot_commitment_hash` to the stored values — proving the held phrase commits
+  to that exact stored ballot. The single-contest `verifyBallotProof` path and
+  its `BallotProofVerificationResult` are unchanged.
+- Result type `LinkedOfficeBallotProofVerificationResult` (nested `OfficeResponse`)
+  exposes anonymous content only: poll id, anonymous ballot id, `submitted_at`, a
+  `verified` flag, the anonymous `ballot_hash`, per-office response content (office
+  key, response type, ordered candidate keys, populated only on success), and an
+  identity-free `failureReason` on failure. Bearer-token semantics: success
+  reveals the anonymous content to the phrase holder, but never voter identity.
+- Failures reported (identity-free, no content): proof phrase not found,
+  mismatched/non-linked poll, invalid `config_json`, missing contest rows,
+  reconstruction/canonicalization failure, and `ballot_hash`/commitment mismatch.
+
+Explicitly NOT done by Tranche 2I:
+
+- No voter GUI, vote session, player voting command, counting, IRV/approval
+  tallying, dependency-outcome application, or result calculation. No schema
+  changes. No production command is wired to the new linked-offices proof method
+  yet. Existing single-contest proof verification, canonical payloads,
+  participation-token hashing, and proof-phrase generation are unchanged. The
+  verifier reads only anonymous content keyed by `anonymous_ballot_id` and never
+  joins `participation_records`, preserving identity↔content non-joinability.
+
 ---
 
 ## Current product state
@@ -613,9 +646,26 @@ type: `LINKED_OFFICES` polls are delegated to the standalone, Bukkit-free
 reconstructs each anonymous ballot from its `anonymous_ballot_contest_responses`
 rows, re-canonicalises it, recomputes `ballot_hash`, and compares it to the
 stored hash. Verification only — no counting, results, or voter GUI; only
-`ballot_hash` is recomputed (commitment/proof-phrase verification stays in the
-bearer-token proof path, and linked-office proof-phrase verification is
-deferred).
+`ballot_hash` is recomputed (commitment recomputation lives in the bearer-token
+proof path below).
+
+```text
+src/main/java/com/modnmetl/modnvote/service/LinkedOfficesProofVerifier.java
+src/main/java/com/modnmetl/modnvote/service/LinkedOfficeBallotProofVerificationResult.java
+```
+
+Linked-offices bearer-token proof verification (Tranche 2I). `BallotService`
+gains `verifyLinkedOfficeBallotProof(pollId, proofPhrase)`, which resolves +
+type-checks the poll and delegates to the standalone, Bukkit-free
+`LinkedOfficesProofVerifier`. The verifier hashes the phrase to
+`ballot_proof_hash`, loads the matching anonymous ballot, reconstructs it from its
+`anonymous_ballot_contest_responses` rows, re-canonicalises it, and compares
+**both** the recomputed `ballot_hash` and the phrase-bound
+`ballot_commitment_hash` to the stored values. `LinkedOfficeBallotProofVerificationResult`
+exposes anonymous content only (per-office response keys on success; identity-free
+`failureReason` otherwise) and never reveals voter identity. Verification only —
+no counting, results, or voter GUI; no production command is wired to it yet. The
+single-contest `verifyBallotProof` path is unchanged.
 
 ```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java
