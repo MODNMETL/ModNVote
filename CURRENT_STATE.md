@@ -144,6 +144,30 @@ Explicitly NOT done in this groundwork:
   submission, no persistence, no counting/tallying, and no participation/privacy
   changes. Nothing constructs or stores a `LinkedElectionBallot` in production.
 
+Tranche 2F added the linked-offices canonical payload (the deterministic hashing
+input), still with no voting, storage, or counting:
+
+- New `BallotCanonicalizer.canonicalLinkedOfficesBallotPayload(Poll,
+  ElectionDefinition, LinkedElectionBallot, Instant)` builds a deterministic,
+  versioned text payload for a multi-contest ballot — the exact bytes a later
+  tranche will hash for ballot hash / commitment / proof-phrase / recount.
+- It uses its own version `rule_snapshot_version=linked_offices_v1`, separate
+  from the single-contest `v2`; the existing `YES_NO` / `RANKED_SINGLE_WINNER`
+  canonical payloads are unchanged byte-for-byte.
+- It validates the ballot via `LinkedElectionBallotValidator` first and throws
+  `IllegalArgumentException` for an invalid ballot (and for a non-`LINKED_OFFICES`
+  poll, or a definition that does not match the ballot's own); it never hashes an
+  invalid ballot. Ordering comes from `LinkedElectionCanonicalModel` (contest
+  order, ranked preserved, approval normalised). The payload carries no player
+  UUID/name/IP, session state, or participation token.
+
+Explicitly NOT done by Tranche 2F:
+
+- Nothing in production calls `canonicalLinkedOfficesBallotPayload`; there is no
+  submission, no multi-contest storage, no vote session, no counting, and no
+  result calculation. No schema/`SchemaInitializer`/`anonymous_ballot*` changes,
+  and no proof-phrase or participation-token changes.
+
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
 be added later without altering the existing single-contest format.
 
@@ -465,7 +489,11 @@ src/main/java/com/modnmetl/modnvote/service/canonical/BallotCanonicalizer.java
 ```
 
 Shared canonical anonymous-ballot payload construction used by both
-`BallotService` and `IntegrityVerificationService`.
+`BallotService` and `IntegrityVerificationService`. Tranche 2F added a separate
+`canonicalLinkedOfficesBallotPayload(...)` method (version `linked_offices_v1`)
+that builds the deterministic hashing input for a multi-contest linked-offices
+ballot; it validates first, is not yet wired to any production path, and leaves
+the single-contest `v2` output byte-for-byte unchanged.
 
 ```text
 src/main/java/com/modnmetl/modnvote/domain/election/

@@ -198,6 +198,42 @@ This layer is Bukkit-free and fully unit-tested. Nothing in production
 constructs or stores a `LinkedElectionBallot`; the anonymous-ballot and
 participation/privacy models are untouched.
 
+#### Linked offices canonical payload (hashing input only)
+
+`BallotCanonicalizer` gains a second, independent method,
+`canonicalLinkedOfficesBallotPayload(Poll, ElectionDefinition,
+LinkedElectionBallot, Instant)`, which produces the deterministic byte sequence a
+later tranche will hash for a multi-contest linked-offices ballot (ballot hash,
+ballot commitment, proof-phrase verification, recount). It computes no hashes,
+stores nothing, and is not yet called from any production path.
+
+- **Separation from single-contest output.** The existing
+  `canonicalAnonymousBallotPayload` format and its `rule_snapshot_version=v2` are
+  untouched. The linked-offices payload is built by a distinct method with its own
+  version, `rule_snapshot_version=linked_offices_v1`, so existing `YES_NO` /
+  `RANKED_SINGLE_WINNER` payloads (and therefore all stored ballot hashes and
+  proof commitments) remain byte-for-byte identical.
+- **Validation gate.** Unlike `LinkedElectionCanonicalModel` (which is defensive
+  and will canonicalise even a malformed ballot for ordering tests), the payload
+  builder requires a valid ballot. It runs `LinkedElectionBallotValidator` first
+  and throws `IllegalArgumentException` (naming the failing issue codes/messages)
+  for an invalid ballot; it also rejects a non-`LINKED_OFFICES` poll and a
+  `definition` that does not match the ballot's own definition. Invalid ballots can
+  never produce a hashable payload.
+- **Determinism and ordering.** Contest responses are emitted in definition
+  contest order via `LinkedElectionCanonicalModel`; ranked preferences are
+  preserved (significant); approval selections are normalised to contest candidate
+  order (selection order not significant). Input ordering of responses or approval
+  selections does not change the payload or its hash.
+- **Privacy.** The payload depends only on poll rule context, the election
+  definition, and anonymous ballot content. It contains no player UUID, name, IP
+  address, session state, or participation token — the same invariants as the
+  single-contest payload.
+
+This is the hashing input only: there is still no ballot submission, no
+multi-contest storage, no vote session, no counting, and no result calculation
+for linked offices.
+
 ---
 
 ### Persistence (DAO) layer
