@@ -274,6 +274,39 @@ Explicitly NOT done by Tranche 2I:
   verifier reads only anonymous content keyed by `anonymous_ballot_id` and never
   joins `participation_records`, preserving identity↔content non-joinability.
 
+Tranche 2J wired the already-built linked-offices verification into the existing
+commands, with **no schema changes** and no new verification logic, and still no
+voting, counting, or results:
+
+- `/modnvote verify ballot <pollId> <proofPhrase>` now routes `LINKED_OFFICES`
+  polls to `BallotService.verifyLinkedOfficeBallotProof` (Tranche 2I) and renders
+  the result through the new, Bukkit-free `LinkedOfficeProofDisplayFormatter`. The
+  `YES_NO`/`RANKED_SINGLE_WINNER` branch of `handleBallotVerification` is unchanged
+  byte-for-byte; the linked-offices case is an early route added at the top.
+- On success the command shows the poll id, `submitted_at`, the anonymous
+  `ballot_hash`, and per-office responses (office key, response type, ordered
+  candidate keys — ranked offices numbered, approval offices bulleted). On a
+  not-found phrase or a failed verification it shows an identity-free message plus
+  the identity-free `failureReason`, and **no** office/candidate content.
+- Linked-office **integrity** verification needed no command change: it was already
+  reachable generically via `/modnvote verify participation <pollId>`
+  (`IntegrityVerificationService.verifyPollIntegrity` delegates `LINKED_OFFICES` to
+  `LinkedOfficesIntegrityVerifier` since Tranche 2H). Command help text was updated
+  to say `verify participation` covers all poll types and `verify ballot` covers
+  yes/no, ranked, and linked-offices proof phrases.
+
+Explicitly NOT done by Tranche 2J:
+
+- No voting, vote session, voter GUI, player linked-offices voting command,
+  counting, IRV/approval tallying, dependency-outcome application, or result
+  calculation. No schema changes, no new verification logic, no new command,
+  permission, or tab-completion entry (the existing `modnvote.verify` permission
+  and `verify ballot`/`verify participation` arguments are reused). Existing
+  single-contest proof/integrity command output, canonical payloads,
+  participation-token hashing, and proof-phrase generation are unchanged. Command
+  output is structurally incapable of echoing voter identity or the proof phrase,
+  preserving identity↔content non-joinability.
+
 ---
 
 ## Current product state
@@ -664,8 +697,24 @@ type-checks the poll and delegates to the standalone, Bukkit-free
 `ballot_commitment_hash` to the stored values. `LinkedOfficeBallotProofVerificationResult`
 exposes anonymous content only (per-office response keys on success; identity-free
 `failureReason` otherwise) and never reveals voter identity. Verification only —
-no counting, results, or voter GUI; no production command is wired to it yet. The
-single-contest `verifyBallotProof` path is unchanged.
+no counting, results, or voter GUI. The single-contest `verifyBallotProof` path is
+unchanged.
+
+```text
+src/main/java/com/modnmetl/modnvote/presentation/LinkedOfficeProofDisplayFormatter.java
+```
+
+Linked-offices proof verification command output (Tranche 2J). A Bukkit-free,
+unit-tested formatter that turns a `LinkedOfficeBallotProofVerificationResult` into
+in-game chat lines. `/modnvote verify ballot` now branches on poll type:
+`LINKED_OFFICES` polls call `BallotService.verifyLinkedOfficeBallotProof` and print
+these lines (poll id, `submitted_at`, anonymous `ballot_hash`, and per-office
+responses — ranked numbered, approval bulleted, on success; an identity-free
+message and reason with no content on not-found/failure), while the
+`YES_NO`/`RANKED_SINGLE_WINNER` rendering is unchanged. Linked-office integrity
+remains reachable via `verify participation`. The formatter only reads anonymous
+content already on the result and is incapable of emitting voter identity or the
+proof phrase. Command access only — no voting, counting, or results.
 
 ```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java

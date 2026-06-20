@@ -6,10 +6,12 @@ import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.presentation.LinkedOfficeProofDisplayFormatter;
 import com.modnmetl.modnvote.presentation.ResultDisplayFormatter;
 import com.modnmetl.modnvote.publication.WitnessPublicationService;
 import com.modnmetl.modnvote.service.BallotService;
 import com.modnmetl.modnvote.service.ElectionDefinitionService;
+import com.modnmetl.modnvote.service.LinkedOfficeBallotProofVerificationResult;
 import com.modnmetl.modnvote.service.LinkedOfficesDefinitionFileLoader;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
@@ -1189,6 +1191,14 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                                           String ballotProofPhrase) throws PollServiceException {
         Poll poll = requirePoll(pollId);
 
+        // Linked-offices ballots carry multi-contest content that the single-contest
+        // proof path cannot represent, so they route to the dedicated bearer-token
+        // verifier. YES_NO / RANKED_SINGLE_WINNER verification below is unchanged.
+        if (poll.pollType() == PollType.LINKED_OFFICES) {
+            handleLinkedOfficeBallotVerification(sender, poll, pollId, ballotProofPhrase);
+            return;
+        }
+
         BallotService.BallotProofVerificationResult verificationResult =
                 ballotService.verifyBallotProof(pollId, ballotProofPhrase);
 
@@ -1250,6 +1260,23 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private void handleLinkedOfficeBallotVerification(CommandSender sender,
+                                                      Poll poll,
+                                                      long pollId,
+                                                      String ballotProofPhrase) throws PollServiceException {
+        LinkedOfficeBallotProofVerificationResult verificationResult =
+                ballotService.verifyLinkedOfficeBallotProof(pollId, ballotProofPhrase);
+
+        sender.sendMessage(messages.formatRaw("verify.ballot_header", Map.of(
+                "poll_id", String.valueOf(pollId),
+                "title", poll.title()
+        )));
+
+        for (String line : LinkedOfficeProofDisplayFormatter.formatInGame(verificationResult)) {
+            sender.sendMessage(line);
+        }
+    }
+
     private void handleResultDisplay(CommandSender sender,
                                      long pollId) throws PollServiceException {
         ResultService.PollResult result = resultService.getPollResult(pollId);
@@ -1302,8 +1329,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " publishresult <pollId> §7- Republish a CLOSED poll result to witness webhooks.");
         sender.sendMessage("§e/" + label + " vote <pollId> §7- Vote in an open poll");
         sender.sendMessage("§e/" + label + " mypolls §7- Show polls you have participated in");
-        sender.sendMessage("§e/" + label + " verify participation <pollId> §7- Verify your participation");
-        sender.sendMessage("§e/" + label + " verify ballot <pollId> <proofPhrase> §7- Verify a ballot proof phrase");
+        sender.sendMessage("§e/" + label + " verify participation <pollId> §7- Verify your participation and the poll's integrity (all poll types)");
+        sender.sendMessage("§e/" + label + " verify ballot <pollId> <proofPhrase> §7- Verify a ballot proof phrase (yes/no, ranked, or linked offices)");
     }
 
     private void sendGuide(CommandSender sender, String label) {

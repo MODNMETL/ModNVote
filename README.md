@@ -333,7 +333,7 @@ integrity:
 /modnvote verify participation <pollId>
 ```
 
-This confirms whether the player participated in a poll and reports integrity status. It does not reveal vote content.
+This confirms whether the player participated in a poll and reports integrity status (audit chain, ballot hashes, record counts) for any poll type, including Linked Offices. It does not reveal vote content.
 
 ### Verify a ballot proof phrase
 
@@ -343,7 +343,9 @@ This confirms whether the player participated in a poll and reports integrity st
 
 This checks whether a proof phrase matches a stored anonymous ballot and verifies the ballot integrity data.
 
-Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify that ballot reference.
+For Yes/No and ranked single-winner polls it reports the verified selection or ranking. For Linked Offices polls it reports the verified per-office responses (each office's response type and ordered candidate keys). On a non-matching phrase or a failed check it reports an identity-free failure and shows no ballot content.
+
+Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify that ballot reference and see its anonymous content. Verification never reveals voter identity (player name, UUID, IP, Floodgate id) or participation receipts.
 
 ---
 

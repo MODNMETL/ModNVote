@@ -355,6 +355,38 @@ voter GUI, vote session, player voting command, counting, or result calculation.
   and never reveals voter identity (no UUID/name/IP/Floodgate id/participation
   token/receipt) in any result or failure reason.
 
+#### Linked offices verification command wiring (command access only)
+
+Tranche 2J exposes the already-built linked-offices verification through the
+existing `/modnvote verify` command — **no schema changes**, no new verification
+logic, and still no voting, counting, or results.
+
+- **Proof phrase command.** `PollCommand.handleBallotVerification` branches on poll
+  type: `LINKED_OFFICES` polls route to `BallotService.verifyLinkedOfficeBallotProof`
+  (Tranche 2I); `YES_NO` / `RANKED_SINGLE_WINNER` keep their existing inline
+  rendering byte-for-byte. The new branch is an early route added at the top of the
+  handler, so the single-contest path is untouched. No new command, permission, or
+  tab-completion entry is added — the existing `modnvote.verify` permission and the
+  `verify ballot` / `verify participation` arguments are reused.
+- **Thin handler + Bukkit-free formatter.** Rendering lives in
+  `presentation.LinkedOfficeProofDisplayFormatter`, a Bukkit-free helper (the same
+  pattern as `ResultDisplayFormatter`) that turns a
+  `LinkedOfficeBallotProofVerificationResult` into chat lines, so command output is
+  unit-testable without a server. The handler only forwards each line. On success
+  it shows poll id, `submitted_at`, the anonymous `ballot_hash`, and per-office
+  responses (ranked offices numbered, approval offices bulleted); on a not-found
+  phrase or failed verification it shows an identity-free message and the
+  identity-free `failureReason` with no office/candidate content.
+- **Integrity command.** Linked-office integrity needed no change: it is already
+  reachable via `/modnvote verify participation <pollId>`, which calls
+  `IntegrityVerificationService.verifyPollIntegrity` (delegating `LINKED_OFFICES` to
+  `LinkedOfficesIntegrityVerifier` since Tranche 2H) and renders the generic
+  `IntegrityVerificationResult` (audit chain / ballot hashes / record counts /
+  overall + issues).
+- **Privacy.** The formatter only reads anonymous content already present on the
+  result; it has no access to identity material and is structurally incapable of
+  echoing voter identity or the proof phrase, in both success and failure cases.
+
 ---
 
 ### Persistence (DAO) layer
