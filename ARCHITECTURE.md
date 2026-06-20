@@ -387,6 +387,40 @@ logic, and still no voting, counting, or results.
   result; it has no access to identity material and is structurally incapable of
   echoing voter identity or the proof phrase, in both success and failure cases.
 
+#### Linked offices counting and result calculation (results only)
+
+Tranche 2K implements deterministic linked-offices counting over already-stored
+anonymous ballots — **no schema changes**, and still no voter GUI, vote session, or
+ballot submission path.
+
+- **Result domain model.** `domain.election.results` holds immutable, anonymous
+  result records: `LinkedElectionResult` (poll id/title, completeness, counted /
+  skipped counts, per-contest results, issues), `ContestResult` (office, method,
+  seats, winners, candidate results, excluded keys, exhausted ballots, IRV rounds,
+  issues), `CandidateResult`, `IrvRoundResult`, and `CandidateTally`. They carry
+  office/candidate keys and counts only — never voter identity.
+- **Pure calculator.** `LinkedElectionCountingService` (`domain.election.results`)
+  is database-free and Bukkit-free. It counts contests in the topological order from
+  `ElectionDependencyEvaluator`, applies `EXCLUDE_WINNERS` (a source office's winners
+  are removed from a dependent office before it is counted, which forces the source
+  to count first), and is generic — no office/candidate name is hardcoded. IRV
+  (single-seat) elects on a strict majority of active ballots, eliminating the
+  lowest tally with a deterministic latest-in-contest-order tie-break and exhausting
+  ballots with no continuing candidate; approval top-N ranks by score then contest
+  order. A dependency cycle is reported and the result marked incomplete rather than
+  pretending success.
+- **Loader collaborator.** `LinkedElectionResultService` (`service`) is a Bukkit-free
+  collaborator (holds only a `DatabaseManager`, like `LinkedOfficesIntegrityVerifier`)
+  that loads `anonymous_ballots` + `anonymous_ballot_contest_responses`, reconstructs
+  each ballot via `LinkedBallotReconstructor`, skips and reports any unreconstructable
+  ballot, and runs the calculator. It reads only anonymous content + the election
+  definition; it never reads or joins `participation_records`.
+- **ResultService integration.** `ResultService.getLinkedElectionResult(pollId)`
+  (CLOSED polls only) returns a `LinkedElectionResult`; the single-contest
+  `getPollResult` path and `PollResult` shape are unchanged. `/modnvote result`
+  branches on poll type and renders `LINKED_OFFICES` through the Bukkit-free
+  `presentation.LinkedElectionResultDisplayFormatter`.
+
 ---
 
 ### Persistence (DAO) layer
@@ -472,6 +506,12 @@ Results must be derived from anonymous ballots only.
 The system must not:
 - use participation records to reconstruct votes
 - expose identity-linked vote data
+
+Single-contest results (`YES_NO`, `RANKED_SINGLE_WINNER`) flow through
+`ResultService.getPollResult` → `PollResult`. Linked-offices results (Tranche 2K)
+flow through `ResultService.getLinkedElectionResult` → `LinkedElectionResult`
+(multi-contest), counted by the pure `LinkedElectionCountingService`. Both paths
+read anonymous content only.
 
 ---
 

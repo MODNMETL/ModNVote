@@ -309,6 +309,54 @@ Explicitly NOT done by Tranche 2J:
 
 ---
 
+### 2.2.0 groundwork — Tranche 2K (counting and result calculation)
+
+Tranche 2K implemented deterministic linked-offices counting and result
+calculation over already-stored anonymous ballots, with **no schema changes** and
+still **no voter GUI, vote session, or ballot submission path**:
+
+- New result domain model under `domain.election.results`: `LinkedElectionResult`,
+  `ContestResult`, `CandidateResult`, `IrvRoundResult`, `CandidateTally` — all
+  immutable, anonymous (office/candidate keys + counts only), Bukkit-free.
+- `LinkedElectionCountingService` (`domain.election.results`) — a pure,
+  database-free, deterministic calculator. It counts contests in the topological
+  order from `ElectionDependencyEvaluator`, applies `EXCLUDE_WINNERS` (source-office
+  winners removed from a dependent office before it is counted), and produces a
+  `LinkedElectionResult`. Generic — no office/candidate name hardcoded.
+  - **IRV** (single-seat ranked): each ballot counts toward its highest-ranked
+    continuing candidate; strict majority of active (non-exhausted) ballots elects;
+    otherwise the lowest tally is eliminated, ties broken by eliminating the tied
+    candidate **latest** in contest order (earlier-defined candidates survive);
+    ballots with no continuing ranked candidate exhaust; rounds are recorded.
+  - **Approval top-N**: distinct eligible approvals score candidates; winners are
+    the first `seats` by score desc then contest order asc; approvals for excluded
+    candidates ignored; too few eligible candidates fills what it can and reports an
+    issue.
+  - A dependency cycle (or unresolved reference) is reported and the result marked
+    incomplete; it does not pretend success.
+- `LinkedElectionResultService` (`service`) — Bukkit-free collaborator (holds only a
+  `DatabaseManager`, like `LinkedOfficesIntegrityVerifier`) that loads anonymous
+  ballots + contest responses, reconstructs each via `LinkedBallotReconstructor`,
+  skips and reports any that cannot be reconstructed, and runs the counting service.
+- `ResultService.getLinkedElectionResult(pollId)` (CLOSED polls only) exposes the
+  linked result; `/modnvote result <pollId>` branches on poll type and renders
+  `LINKED_OFFICES` through the new Bukkit-free `LinkedElectionResultDisplayFormatter`
+  (offices, method/seats, winners, candidate tallies, IRV rounds, dependency
+  exclusions, issues). The single-contest `getPollResult` path and its rendering are
+  unchanged.
+
+Explicitly NOT done by Tranche 2K:
+
+- No voter GUI, vote session, or player linked-offices voting/submission command —
+  this counts already-stored anonymous content only. No schema changes, no changes
+  to canonical payloads, proof-phrase generation, or participation-token hashing.
+  Counting reads only `anonymous_ballots`, `anonymous_ballot_contest_responses`, and
+  the election definition; it never reads or joins `participation_records` identity
+  fields, and the result exposes no voter identity. Existing `YES_NO`/
+  `RANKED_SINGLE_WINNER` result behaviour is unchanged (regression-locked).
+
+---
+
 ## Current product state
 
 ModNVote 2.x is a clean-install, privacy-first, auditable voting plugin for Paper servers.
@@ -484,6 +532,25 @@ Important points for future sessions:
 - `ResultService.PollResult` includes ranked-choice round data, final winner tally, and exhausted ballot count.
 - `ResultService.RankedChoiceRound` snapshots each IRV round.
 - Empty ranked polls must not resolve to a winner.
+
+### Linked offices polls (Tranche 2K)
+
+Linked-offices results are calculated by `LinkedElectionResultService` (loading and
+reconstructing anonymous ballots) plus the pure `LinkedElectionCountingService`,
+reached through `ResultService.getLinkedElectionResult(pollId)` and rendered by
+`LinkedElectionResultDisplayFormatter`. The single-contest `PollResult` shape is not
+reused — a linked election produces a multi-contest `LinkedElectionResult`.
+
+Important points for future sessions:
+
+- Contests are counted in dependency order; `EXCLUDE_WINNERS` removes a source
+  office's winners from a dependent office before it is counted.
+- IRV is single-seat; approval is top-N. Tie-breaks are deterministic from contest
+  candidate order (IRV eliminates the latest-in-order tied candidate; approval ranks
+  by score desc then order asc). No office/candidate name is hardcoded.
+- Counting is over anonymous content only; it never touches participation/identity.
+- Voting/submission for linked offices still does not exist — only counting of
+  already-stored anonymous ballots.
 
 ### Canonical presentation layer
 

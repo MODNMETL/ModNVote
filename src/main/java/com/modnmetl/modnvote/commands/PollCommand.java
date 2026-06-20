@@ -6,6 +6,8 @@ import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
+import com.modnmetl.modnvote.presentation.LinkedElectionResultDisplayFormatter;
 import com.modnmetl.modnvote.presentation.LinkedOfficeProofDisplayFormatter;
 import com.modnmetl.modnvote.presentation.ResultDisplayFormatter;
 import com.modnmetl.modnvote.publication.WitnessPublicationService;
@@ -1279,6 +1281,19 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
 
     private void handleResultDisplay(CommandSender sender,
                                      long pollId) throws PollServiceException {
+        Poll poll = requirePoll(pollId);
+
+        // Linked-offices polls produce a multi-contest result the single-contest
+        // PollResult shape cannot represent, so they route to the dedicated
+        // calculator and formatter. YES_NO / RANKED_SINGLE_WINNER are unchanged.
+        if (poll.pollType() == PollType.LINKED_OFFICES) {
+            LinkedElectionResult result = resultService.getLinkedElectionResult(pollId);
+            for (String line : LinkedElectionResultDisplayFormatter.formatInGame(result)) {
+                sender.sendMessage(line);
+            }
+            return;
+        }
+
         ResultService.PollResult result = resultService.getPollResult(pollId);
 
         for (String line : ResultDisplayFormatter.formatInGame(result)) {

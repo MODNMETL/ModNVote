@@ -4,6 +4,7 @@ import com.modnmetl.modnvote.api.PollStatus;
 import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
 import com.modnmetl.modnvote.storage.AnonymousBallotDao;
 import com.modnmetl.modnvote.storage.AnonymousBallotPreferenceDao;
 import com.modnmetl.modnvote.storage.DatabaseManager;
@@ -40,6 +41,7 @@ public final class ResultService {
     private final PollOptionDao pollOptionDao;
     private final AnonymousBallotDao anonymousBallotDao;
     private final AnonymousBallotPreferenceDao anonymousBallotPreferenceDao;
+    private final LinkedElectionResultService linkedElectionResultService;
 
     public ResultService(DatabaseManager databaseManager,
                          Logger logger) {
@@ -49,6 +51,7 @@ public final class ResultService {
         this.pollOptionDao = new PollOptionDao(databaseManager);
         this.anonymousBallotDao = new AnonymousBallotDao(databaseManager);
         this.anonymousBallotPreferenceDao = new AnonymousBallotPreferenceDao(databaseManager);
+        this.linkedElectionResultService = new LinkedElectionResultService(databaseManager);
     }
 
     public PollResult getPollResult(long pollId) throws PollServiceException {
@@ -83,6 +86,38 @@ public final class ResultService {
             throw e;
         } catch (Exception e) {
             logger.warning("Failed to build result for poll #" + pollId + ": " + e.getMessage());
+            throw new PollServiceException("Failed to build result for poll #" + pollId, e);
+        }
+    }
+
+    /**
+     * Computes the result of a {@code LINKED_OFFICES} poll from its anonymous
+     * ballot content. The single-contest {@link #getPollResult(long)} path is
+     * unchanged; this is a separate entry point because a linked election produces
+     * a multi-contest {@link LinkedElectionResult} that the single-contest
+     * {@link PollResult} shape cannot represent.
+     *
+     * <p>Like the single-contest path, this reads only anonymous ballot content and
+     * never touches participation/identity data, and it does not mutate poll state.
+     */
+    public LinkedElectionResult getLinkedElectionResult(long pollId) throws PollServiceException {
+        try {
+            Poll poll = pollDao.findPollById(pollId);
+            if (poll == null) {
+                throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            }
+            if (poll.pollType() != PollType.LINKED_OFFICES) {
+                throw new PollServiceException("Poll #" + pollId + " is not a LINKED_OFFICES poll.");
+            }
+            if (poll.status() != PollStatus.CLOSED) {
+                throw new PollServiceException(
+                        "Poll #" + pollId + " is still open. Please try again once it has closed.");
+            }
+            return linkedElectionResultService.computeResult(poll);
+        } catch (PollServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warning("Failed to build linked-offices result for poll #" + pollId + ": " + e.getMessage());
             throw new PollServiceException("Failed to build result for poll #" + pollId, e);
         }
     }
