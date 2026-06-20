@@ -168,6 +168,40 @@ Explicitly NOT done by Tranche 2F:
   result calculation. No schema/`SchemaInitializer`/`anonymous_ballot*` changes,
   and no proof-phrase or participation-token changes.
 
+Tranche 2G added anonymous multi-contest ballot **storage infrastructure** and
+wired the 2F canonical payload into hash derivation, still with no voting,
+counting, or results:
+
+- New `anonymous_ballot_contest_responses` table (the first 2.2.0 schema
+  addition): `response_id`, `anonymous_ballot_id`, `office_key`, `response_type`
+  (`RANKED`/`APPROVAL`), `candidate_key`, `rank_position` (ranked only),
+  `selection_order` (approval only, canonical order), `created_at`. Only FK is to
+  `anonymous_ballots` (ON DELETE CASCADE); no identity columns, no
+  `participation_records` link. UNIQUE `(anonymous_ballot_id, office_key,
+  candidate_key)`.
+- New `AnonymousBallotContestResponse` (domain) + `AnonymousBallotContestResponseDao`
+  (insert canonical rows / read by ballot in deterministic order / delete by
+  ballot); no identity-aware queries.
+- New `LinkedBallotStorageService` (Bukkit-free, **not** a voting path, not
+  reachable from any command/session/GUI): validates via
+  `canonicalLinkedOfficesBallotPayload`, derives `ballot_hash =
+  SHA-256(payload)` and `ballot_commitment_hash` (existing proof semantics), and
+  transactionally writes one participation record + one anonymous ballot + the
+  contest-response rows (all-or-nothing). Approval rows stored in canonical
+  contest order. Requires a `LINKED_OFFICES` poll; deliberately does not require
+  `OPEN` (storage primitive — a future real submission path must add it).
+- New `LinkedBallotReconstructor` rebuilds a `LinkedElectionBallot` from stored
+  rows; re-canonicalising reproduces the original payload/hash (recount
+  foundation; no counting).
+
+Explicitly NOT done by Tranche 2G:
+
+- No voter GUI, vote session, player voting command, counting, IRV/approval
+  tallying, dependency-outcome application, or result calculation; nothing in
+  production calls `LinkedBallotStorageService`. Existing `YES_NO`/`RANKED`
+  submission, `anonymous_ballot_preferences`, single-contest canonical payloads,
+  participation-token hashing, and proof-phrase generation are all unchanged.
+
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
 be added later without altering the existing single-contest format.
 
@@ -514,6 +548,20 @@ In-memory linked-offices execution model (Tranche 2E): `ContestVote`
 `ElectionDependencyEvaluator` (no outcomes applied), and
 `LinkedElectionCanonicalModel` (ordering planning for future hashing). Pure
 in-memory types — no submission, persistence, counting, or voter GUI.
+
+```text
+src/main/java/com/modnmetl/modnvote/storage/AnonymousBallotContestResponseDao.java
+src/main/java/com/modnmetl/modnvote/service/LinkedBallotStorageService.java
+src/main/java/com/modnmetl/modnvote/service/LinkedBallotReconstructor.java
+```
+
+Linked-offices anonymous storage (Tranche 2G): DAO for the
+`anonymous_ballot_contest_responses` content table (no identity, FK only to
+`anonymous_ballots`), the Bukkit-free `LinkedBallotStorageService` (validates +
+hashes via `canonicalLinkedOfficesBallotPayload`, transactionally writes one
+participation + one anonymous ballot + contest rows; not a voting path, not
+called in production), and `LinkedBallotReconstructor` (rebuilds a ballot from
+stored rows for recount/debugging). No counting, results, or voter GUI.
 
 ```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java

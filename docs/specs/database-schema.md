@@ -60,6 +60,44 @@ Fields:
 
 ---
 
+### anonymous_ballot_contest_responses
+
+Stores anonymous **multi-contest** vote content for linked-offices ballots
+(Tranche 2G). One anonymous ballot may own many rows — one per candidate within
+each contest response. This table is anonymous vote content only: it carries no
+player UUID, name, IP, Floodgate id, participation token, or receipt, and its
+only foreign key is to `anonymous_ballots`. It has **no** link to
+`participation_records`.
+
+Fields:
+
+- response_id — INTEGER PRIMARY KEY AUTOINCREMENT
+- anonymous_ballot_id — INTEGER NOT NULL, FK → `anonymous_ballots(anonymous_ballot_id)` ON DELETE CASCADE
+- office_key — TEXT NOT NULL (the contest/office)
+- response_type — TEXT NOT NULL (`RANKED` or `APPROVAL`)
+- candidate_key — TEXT NOT NULL
+- rank_position — INTEGER NULL (1-based rank for `RANKED` responses; null for approval)
+- selection_order — INTEGER NULL (1-based index in canonical contest order for
+  `APPROVAL` responses; null for ranked). Canonical order is stored so the rows
+  match the Tranche 2F canonical hash input.
+- created_at — TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+Indexes:
+
+- `idx_ab_contest_responses_ballot` on `(anonymous_ballot_id)`
+- `idx_ab_contest_responses_ballot_office` on `(anonymous_ballot_id, office_key)`
+- `idx_ab_contest_responses_unique_candidate` — UNIQUE on
+  `(anonymous_ballot_id, office_key, candidate_key)` (prevents duplicate candidate
+  rows within one office response)
+
+Status: storage infrastructure only. Written by the internal, Bukkit-free
+`LinkedBallotStorageService` (not a player voting path; not called in
+production). There is no linked-offices voter GUI, vote session, voting command,
+counting, or result calculation. Existing `YES_NO`/`RANKED_SINGLE_WINNER` storage
+in `anonymous_ballot_preferences` is unchanged.
+
+---
+
 ## Removed from ballots
 
 ❌ voter_uuid  

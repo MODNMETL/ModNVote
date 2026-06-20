@@ -231,8 +231,49 @@ stores nothing, and is not yet called from any production path.
   single-contest payload.
 
 This is the hashing input only: there is still no ballot submission, no
-multi-contest storage, no vote session, no counting, and no result calculation
-for linked offices.
+vote session, no counting, and no result calculation for linked offices.
+
+#### Linked offices anonymous storage (infrastructure only)
+
+Tranche 2G adds anonymous storage for multi-contest ballot content and wires the
+canonical payload above into hash derivation. It is infrastructure only: there is
+still no voter GUI, vote session, player voting command, counting, or result
+calculation, and nothing in production stores a linked-offices ballot.
+
+- **Schema.** A new content table `anonymous_ballot_contest_responses` stores one
+  row per candidate within a contest response: `response_id`,
+  `anonymous_ballot_id`, `office_key`, `response_type` (`RANKED`/`APPROVAL`),
+  `candidate_key`, `rank_position` (ranked only), `selection_order` (approval
+  only, canonical order), `created_at`. Its only foreign key is
+  `anonymous_ballot_id → anonymous_ballots(...) ON DELETE CASCADE`. It carries
+  **no** identity column and **no** link to `participation_records`, so one
+  anonymous ballot may own many contest-response rows while remaining on the
+  content side of the privacy split. A UNIQUE index
+  `(anonymous_ballot_id, office_key, candidate_key)` blocks duplicate candidate
+  rows within an office.
+- **DAO/domain.** `AnonymousBallotContestResponse` (domain) and
+  `AnonymousBallotContestResponseDao` (insert canonical rows, read by
+  `anonymous_ballot_id` in deterministic order, delete by ballot) — the
+  multi-contest analogue of `AnonymousBallotPreferenceDao`, with no identity-aware
+  queries and no participation join.
+- **Storage service.** `LinkedBallotStorageService` (service layer, Bukkit-free)
+  validates a ballot via `BallotCanonicalizer.canonicalLinkedOfficesBallotPayload`,
+  derives `ballot_hash = SHA-256(canonical payload)` and `ballot_commitment_hash`
+  with the existing proof-phrase semantics, and writes exactly **one participation
+  record + one anonymous ballot + the contest-response rows** in a single
+  transaction (all-or-nothing). Approval selections are stored in canonical
+  contest order so the rows match the hashed payload. It is **not** a player-facing
+  voting path — it is not reachable from any command, session, or GUI, and as a
+  storage primitive it requires a `LINKED_OFFICES` poll but deliberately does not
+  enforce the `OPEN` lifecycle state (a future real submission path must add it).
+- **Reconstruction.** `LinkedBallotReconstructor` rebuilds an in-memory
+  `LinkedElectionBallot` from stored rows; re-canonicalising it reproduces the
+  original payload and ballot hash. This is the recount/debugging foundation; it
+  performs no counting or result verification.
+
+The privacy invariant is preserved: one participation record + one anonymous
+ballot per stored ballot, with the contest-response rows linked only to the
+anonymous ballot, so identity and vote content remain non-joinable.
 
 ---
 
@@ -248,6 +289,7 @@ Key data domains:
 - Participation records (identity-aware)
 - Anonymous ballots (vote content)
 - Ballot preferences (ranked ordering)
+- Anonymous contest responses (linked-offices multi-contest vote content)
 - Audit events
 
 ---

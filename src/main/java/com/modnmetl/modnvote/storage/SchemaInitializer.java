@@ -124,6 +124,24 @@ public final class SchemaInitializer {
                     """);
 
             // ------------------------------------------------------------------
+            // LINKED-OFFICES ANONYMOUS CONTEST RESPONSES
+            // (multi-contest vote content for one anonymous ballot; NO identity)
+            // ------------------------------------------------------------------
+            statement.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS anonymous_ballot_contest_responses (
+                        response_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        anonymous_ballot_id INTEGER NOT NULL,
+                        office_key TEXT NOT NULL,
+                        response_type TEXT NOT NULL,
+                        candidate_key TEXT NOT NULL,
+                        rank_position INTEGER,
+                        selection_order INTEGER,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (anonymous_ballot_id) REFERENCES anonymous_ballots(anonymous_ballot_id) ON DELETE CASCADE
+                    )
+                    """);
+
+            // ------------------------------------------------------------------
             // AUDIT EVENTS
             // ------------------------------------------------------------------
             statement.executeUpdate("""
@@ -212,6 +230,23 @@ public final class SchemaInitializer {
             statement.executeUpdate("""
                     CREATE INDEX IF NOT EXISTS idx_anonymous_ballot_preferences_option_id
                     ON anonymous_ballot_preferences(option_id)
+                    """);
+
+            statement.executeUpdate("""
+                    CREATE INDEX IF NOT EXISTS idx_ab_contest_responses_ballot
+                    ON anonymous_ballot_contest_responses(anonymous_ballot_id)
+                    """);
+
+            statement.executeUpdate("""
+                    CREATE INDEX IF NOT EXISTS idx_ab_contest_responses_ballot_office
+                    ON anonymous_ballot_contest_responses(anonymous_ballot_id, office_key)
+                    """);
+
+            // Prevents the same candidate appearing twice within one office's
+            // response on a single anonymous ballot.
+            statement.executeUpdate("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_ab_contest_responses_unique_candidate
+                    ON anonymous_ballot_contest_responses(anonymous_ballot_id, office_key, candidate_key)
                     """);
 
             statement.executeUpdate("""
