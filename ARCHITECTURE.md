@@ -275,6 +275,45 @@ The privacy invariant is preserved: one participation record + one anonymous
 ballot per stored ballot, with the contest-response rows linked only to the
 anonymous ballot, so identity and vote content remain non-joinable.
 
+#### Linked offices integrity verification (recount, verification only)
+
+Tranche 2H wires linked-offices stored content into integrity verification. It is
+verification only — **no schema changes** (it consumes the 2G schema) and still no
+voter GUI, vote session, player voting command, counting, or result calculation.
+
+- **Branching.** `IntegrityVerificationService.verifyPollIntegrity` branches on
+  poll type. `YES_NO` / `RANKED_SINGLE_WINNER` use the existing, unchanged
+  single-contest recount (recompute `ballot_hash` from `anonymous_ballot_preferences`).
+  `LINKED_OFFICES` is delegated to `LinkedOfficesIntegrityVerifier`.
+- **Why a standalone verifier.** `LinkedOfficesIntegrityVerifier` is a Bukkit-free
+  collaborator constructed with only a `DatabaseManager` (the same pattern as
+  `LinkedBallotStorageService`), so it is fully unit-testable; the full
+  `IntegrityVerificationService` cannot be constructed in tests because its
+  `PlatformAdapter` exposes Bukkit types and the Paper API is `compileOnly`. The
+  verifier returns the existing `IntegrityVerificationResult`.
+- **Recount.** For a linked-offices poll it parses + validates the definition from
+  `config_json` (via `ElectionDefinitionService`), then for each anonymous ballot
+  loads its `anonymous_ballot_contest_responses` rows, reconstructs the
+  `LinkedElectionBallot` (`LinkedBallotReconstructor`), rebuilds the canonical
+  payload (`BallotCanonicalizer.canonicalLinkedOfficesBallotPayload`), recomputes
+  `ballot_hash` via the shared `BallotHashingService.sha256`, and compares it to
+  the stored hash. Reported failures: missing/invalid `config_json`, a ballot with
+  no rows, rows that cannot reconstruct a valid ballot (unknown office/candidate,
+  ineligible candidate), and any recomputed-vs-stored hash mismatch.
+- **Commitment boundary.** Only `ballot_hash` is recomputed.
+  `ballot_commitment_hash` binds the voter's proof phrase, which integrity does not
+  possess, so commitment recomputation stays in the bearer-token proof path; there
+  is no linked-office proof-phrase bypass, and linked-office bearer-token
+  proof-phrase verification is deferred to a later tranche.
+- **Reconstructor hardening.** Because stored rows are recount input,
+  `LinkedBallotReconstructor` no longer silently accepts malformed rows: it throws
+  `LinkedBallotReconstructionException` for offices that mix response types,
+  missing/non-positive/duplicate ordering positions, duplicate candidate rows, and
+  unknown response types.
+- **Privacy.** Integrity failure messages carry only poll id, anonymous ballot id,
+  failure type, and hashes — never voter identity — so verification cannot become a
+  back-channel that re-links identity to vote content.
+
 ---
 
 ### Persistence (DAO) layer

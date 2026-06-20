@@ -96,6 +96,16 @@ production). There is no linked-offices voter GUI, vote session, voting command,
 counting, or result calculation. Existing `YES_NO`/`RANKED_SINGLE_WINNER` storage
 in `anonymous_ballot_preferences` is unchanged.
 
+Integrity usage (Tranche 2H, no schema change): these rows are the recount input
+for linked-offices integrity verification. `IntegrityVerificationService`
+(delegating to `LinkedOfficesIntegrityVerifier`) reconstructs each anonymous
+ballot from its rows here, re-canonicalises it, and recompares the recomputed
+`ballot_hash` against `anonymous_ballots.ballot_hash`, so an offline edit to these
+rows is detected. The read is by `anonymous_ballot_id` only; it never joins to
+`participation_records`, and integrity failure reports never include identity.
+Only `ballot_hash` is recomputed — `ballot_commitment_hash` (which binds the
+voter's proof phrase) stays in the bearer-token proof path.
+
 ---
 
 ## Removed from ballots

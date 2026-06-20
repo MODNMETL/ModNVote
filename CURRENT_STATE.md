@@ -205,6 +205,42 @@ Explicitly NOT done by Tranche 2G:
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
 be added later without altering the existing single-contest format.
 
+Tranche 2H wired linked-offices stored content into integrity verification, with
+**no schema changes** (it consumes the 2G schema) and still no voting, counting,
+or results:
+
+- `IntegrityVerificationService.verifyPollIntegrity` now branches on poll type:
+  `LINKED_OFFICES` polls are delegated to the new, Bukkit-free
+  `LinkedOfficesIntegrityVerifier`; the single-contest (`YES_NO`/`RANKED`) path is
+  unchanged. For a linked-offices poll the verifier parses + validates the
+  definition from `config_json`, and for each anonymous ballot loads its
+  `anonymous_ballot_contest_responses` rows, reconstructs the
+  `LinkedElectionBallot`, rebuilds the canonical payload, recomputes
+  `ballot_hash = SHA-256(payload)` via the shared `BallotHashingService`, and
+  compares it to the stored hash. Failures: missing/invalid `config_json`, a
+  ballot with no rows, rows that cannot reconstruct a valid ballot (unknown
+  office/candidate, ineligible), and any recomputed-vs-stored hash mismatch —
+  reported with deterministic, identity-free messages (poll id, anonymous ballot
+  id, failure type, expected/actual hash).
+- Only `ballot_hash` is recomputed. `ballot_commitment_hash` binds the voter's
+  proof phrase, which integrity does not hold, so commitment recomputation stays
+  in the bearer-token proof path; there is no linked-office proof-phrase bypass.
+- `LinkedBallotReconstructor` is hardened: it now throws
+  `LinkedBallotReconstructionException` for mixed response types in one office,
+  missing/non-positive/duplicate `rank_position`/`selection_order`, duplicate
+  candidate rows, and unknown response types — it no longer silently repairs
+  malformed stored rows.
+
+Explicitly NOT done by Tranche 2H:
+
+- No voter GUI, vote session, player voting command, counting, IRV/approval
+  tallying, dependency-outcome application, or result calculation. No schema
+  changes. Existing `YES_NO`/`RANKED` integrity behaviour, single-contest
+  canonical payloads, participation-token hashing, and proof-phrase generation
+  are unchanged. **Linked-office bearer-token proof-phrase verification is
+  deferred** to a later tranche (the existing single-contest proof path is
+  untouched).
+
 ---
 
 ## Current product state
@@ -561,7 +597,25 @@ Linked-offices anonymous storage (Tranche 2G): DAO for the
 hashes via `canonicalLinkedOfficesBallotPayload`, transactionally writes one
 participation + one anonymous ballot + contest rows; not a voting path, not
 called in production), and `LinkedBallotReconstructor` (rebuilds a ballot from
-stored rows for recount/debugging). No counting, results, or voter GUI.
+stored rows for recount/debugging; hardened in Tranche 2H to reject malformed
+rows via `LinkedBallotReconstructionException`). No counting, results, or voter
+GUI.
+
+```text
+src/main/java/com/modnmetl/modnvote/service/IntegrityVerificationService.java
+src/main/java/com/modnmetl/modnvote/service/LinkedOfficesIntegrityVerifier.java
+```
+
+Integrity verification / recount. `IntegrityVerificationService` recomputes
+single-contest anonymous-ballot hashes and, since Tranche 2H, branches on poll
+type: `LINKED_OFFICES` polls are delegated to the standalone, Bukkit-free
+`LinkedOfficesIntegrityVerifier`, which parses the definition from `config_json`,
+reconstructs each anonymous ballot from its `anonymous_ballot_contest_responses`
+rows, re-canonicalises it, recomputes `ballot_hash`, and compares it to the
+stored hash. Verification only — no counting, results, or voter GUI; only
+`ballot_hash` is recomputed (commitment/proof-phrase verification stays in the
+bearer-token proof path, and linked-office proof-phrase verification is
+deferred).
 
 ```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java

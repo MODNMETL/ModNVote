@@ -1,5 +1,6 @@
 package com.modnmetl.modnvote.service;
 
+import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
 import com.modnmetl.modnvote.platform.PlatformAdapter;
@@ -53,6 +54,7 @@ public final class IntegrityVerificationService {
     private final AnonymousBallotPreferenceDao anonymousBallotPreferenceDao;
     private final AuditEventDao auditEventDao;
     private final BallotCanonicalizer ballotCanonicalizer;
+    private final LinkedOfficesIntegrityVerifier linkedOfficesIntegrityVerifier;
 
     public IntegrityVerificationService(DatabaseManager databaseManager,
                                         PlatformAdapter platformAdapter,
@@ -67,6 +69,7 @@ public final class IntegrityVerificationService {
         this.anonymousBallotPreferenceDao = new AnonymousBallotPreferenceDao(databaseManager);
         this.auditEventDao = new AuditEventDao(databaseManager);
         this.ballotCanonicalizer = new BallotCanonicalizer();
+        this.linkedOfficesIntegrityVerifier = new LinkedOfficesIntegrityVerifier(databaseManager);
     }
 
     public boolean isInitialized() {
@@ -82,6 +85,14 @@ public final class IntegrityVerificationService {
             Poll poll = pollDao.findPollById(pollId);
             if (poll == null) {
                 throw new PollServiceException("Poll #" + pollId + " does not exist.");
+            }
+
+            // Linked-offices polls store multi-contest anonymous content in a
+            // separate table and verify against a reconstructed canonical payload.
+            // Single-contest (YES_NO / RANKED_SINGLE_WINNER) verification below is
+            // untouched.
+            if (poll.pollType() == PollType.LINKED_OFFICES) {
+                return linkedOfficesIntegrityVerifier.verify(poll);
             }
 
             List<PollOption> pollOptions = pollOptionDao.findOptionsByPollId(pollId);
