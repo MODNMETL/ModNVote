@@ -157,6 +157,46 @@ of the vote command, the vote session layer, `ResultService`, and `openPoll`
 (which rejects it even when READY), so no accidental voting path can exist until
 a later tranche deliberately enables it. Config definitions are accepted only for
 linked-offices polls and only while DRAFT; other poll types reject config writes.
+The legacy `poll_options` authoring methods are rejected for `LINKED_OFFICES`
+polls, so the `ElectionDefinition` in `config_json` is the single source of truth
+for linked-offices candidates.
+
+#### Linked offices execution model (in-memory only)
+
+The `domain.election.execution` package formalises, purely in memory, how a
+linked-offices vote is represented — before the anonymous ballot layer is
+touched. It implements no persistence, schema change, ballot submission,
+counting, or voter GUI; it exists so the shape of a vote, its validation, its
+dependency interpretation, and its canonical ordering are pinned down ahead of
+the storage tranche.
+
+- **Response model:** a sealed `ContestVote` with two shapes —
+  `RankedContestVote` (ordered preferences, for IRV) and `ApprovalContestVote`
+  (selections, for APPROVAL_TOP_N) — plus `LinkedElectionBallot`, an
+  `ElectionDefinition` together with the voter's per-contest responses. All
+  immutable records.
+- **Validation:** `LinkedElectionBallotValidator` checks a ballot against its
+  definition and returns a structured `BallotValidationResult`
+  (`BallotValidationIssue` + `BallotValidationCode`) rather than throwing for
+  ordinary voter mistakes. It enforces office existence, vote-shape/method match,
+  one response per office, candidate existence/uniqueness/eligibility, approval
+  `maxSelections`, and resolvable dependency references.
+- **Dependencies:** `ElectionDependencyEvaluator` interprets the generic
+  dependency rules **without applying any outcomes** — no winners are computed.
+  It provides structural eligibility (`determineCandidatesEligibleForContest`)
+  and a deterministic `DependencyEvaluation` (`evaluateDependencies`) with
+  per-office preceding offices, a topological counting order, and cycle
+  detection.
+- **Canonicalization planning:** `LinkedElectionCanonicalModel` fixes the
+  deterministic ordering for future ballot hashing — contests in definition
+  order, ranked candidate order preserved (significant), approval selections
+  normalised to contest order (not significant), one response per office — and
+  reduces a ballot to a `CanonicalBallot`. This is ordering policy only, **not**
+  the final hash implementation.
+
+This layer is Bukkit-free and fully unit-tested. Nothing in production
+constructs or stores a `LinkedElectionBallot`; the anonymous-ballot and
+participation/privacy models are untouched.
 
 ---
 

@@ -108,6 +108,28 @@ Tranche 2D added an in-game admin builder GUI for the definition (still no votin
 - `ElectionDefinitionSerializer` is the deterministic, order-stable inverse of
   `ElectionDefinitionParser` (`parse(serialize(x))` equals `x`).
 - The JSON `config set`/`import` paths from Tranche 2C remain supported.
+- Hardening: the legacy `poll_options` authoring methods are rejected for
+  `LINKED_OFFICES` polls, so the `ElectionDefinition` in `config_json` is the
+  single source of truth for linked-offices candidates.
+
+Tranche 2E added the in-memory execution model for linked-offices votes (still
+no voting, storage, or counting):
+
+- New `domain.election.execution` package, pure in-memory and Bukkit-free:
+  sealed `ContestVote` (`RankedContestVote` / `ApprovalContestVote`) and
+  `LinkedElectionBallot` (an `ElectionDefinition` plus per-contest responses).
+- `LinkedElectionBallotValidator` validates a ballot against its definition and
+  returns a structured `BallotValidationResult` (never throws for ordinary voter
+  mistakes): office exists, vote shape matches the contest method, no duplicate
+  response per office, candidates exist/unique/eligible, approval within
+  `maxSelections`, and definition dependency references resolve.
+- `ElectionDependencyEvaluator` interprets dependency rules **without applying
+  outcomes** (`determineCandidatesEligibleForContest`, `evaluateDependencies` →
+  deterministic `DependencyEvaluation` with counting order and cycle detection).
+- `LinkedElectionCanonicalModel` fixes the deterministic ordering for future
+  ballot hashing (contest order from the definition; ranked order preserved;
+  approval normalised to contest order) and produces a `CanonicalBallot`. This
+  is canonicalization planning, NOT the final hash implementation.
 
 Explicitly NOT done in this groundwork:
 
@@ -118,6 +140,9 @@ Explicitly NOT done in this groundwork:
 - No multi-contest ballot submission, counting pipeline, or IRV extraction.
 - The linked-offices GUI edits definition data only; there is NO linked-offices
   voter GUI/session flow, and no proof-phrase or participation-token changes.
+- The Tranche 2E execution model is pure in-memory types only: no ballot
+  submission, no persistence, no counting/tallying, and no participation/privacy
+  changes. Nothing constructs or stores a `LinkedElectionBallot` in production.
 
 The canonicalizer is intentionally shaped so multi-contest canonicalization can
 be added later without altering the existing single-contest format.
@@ -450,6 +475,17 @@ Generic linked-offices election definition layer (Tranche 2A): immutable
 definition model, `ElectionDefinitionParser`, and `ElectionDefinitionValidator`.
 Definition/config only — no voting, persistence of multi-contest content,
 counting, or GUI.
+
+```text
+src/main/java/com/modnmetl/modnvote/domain/election/execution/
+```
+
+In-memory linked-offices execution model (Tranche 2E): `ContestVote`
+(`RankedContestVote`/`ApprovalContestVote`), `LinkedElectionBallot`,
+`LinkedElectionBallotValidator` (structured `BallotValidationResult`),
+`ElectionDependencyEvaluator` (no outcomes applied), and
+`LinkedElectionCanonicalModel` (ordering planning for future hashing). Pure
+in-memory types — no submission, persistence, counting, or voter GUI.
 
 ```text
 src/main/java/com/modnmetl/modnvote/service/ResultService.java
