@@ -29,6 +29,10 @@ publication:
   # Never commit real webhook URLs to source control.
   discord_webhooks: []
   publish_poll_opened: true
+  # Controls ALL closed-poll result publication: yes/no, ranked single-winner, and
+  # linked-offices elections all publish their closed result through this one flag
+  # (on close and on /modnvote publishresult). Set to false to suppress every
+  # closed-result witness embed regardless of poll type.
   publish_poll_closed: true
   publish_checkpoints: true
 

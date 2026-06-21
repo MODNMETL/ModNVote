@@ -76,7 +76,8 @@ public final class ResultService {
                 case YES_NO -> buildYesNoResult(poll, options, ballots);
                 case RANKED_SINGLE_WINNER -> buildRankedSingleWinnerResult(poll, options, ballots);
                 case LINKED_OFFICES -> throw new PollServiceException(
-                        "Linked Offices result calculation is not implemented yet."
+                        "Linked Offices polls produce a multi-contest result; use the linked-offices "
+                                + "result path (getLinkedElectionResult) instead of the single-contest result."
                 );
                 default -> throw new PollServiceException(
                         "Poll type " + poll.pollType().name() + " does not yet have a public result display."

@@ -23,8 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Guards confirming that the reserved, non-votable {@link PollType#LINKED_OFFICES}
- * cannot reach voting/result paths, and that existing types are unaffected.
+ * Guards confirming that {@link PollType#LINKED_OFFICES} — which is fully votable as
+ * of 2.2.0 through its own dedicated multi-contest paths — never leaks into the
+ * single-contest result and vote-session paths (which cannot represent a
+ * multi-contest election), and that the existing single-contest types are
+ * unaffected. Linked-offices voting, counting, results and witness publication are
+ * covered by the dedicated linked-offices service and lifecycle tests.
  */
 class LinkedOfficesGuardTest {
 
@@ -52,7 +56,7 @@ class LinkedOfficesGuardTest {
 
         ResultService resultService = new ResultService(db, LOGGER);
         PollServiceException ex = assertThrows(PollServiceException.class, () -> resultService.getPollResult(pollId));
-        assertTrue(ex.getMessage().contains("Linked Offices result calculation is not implemented yet"),
+        assertTrue(ex.getMessage().contains("multi-contest result"),
                 "Unexpected message: " + ex.getMessage());
     }
 

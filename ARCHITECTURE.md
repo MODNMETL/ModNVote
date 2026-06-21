@@ -483,6 +483,30 @@ flow — **no schema changes**, **no privacy-model change**.
   already works for `LINKED_OFFICES` via Tranche 2H integrity verification and is
   unchanged.
 
+#### Linked offices release hardening (Tranche 2N)
+
+Release-hardening pass over the complete `LINKED_OFFICES` lifecycle — no new election
+models, no schema/canonical/counting/hashing changes.
+
+- **`show` rendering.** `PollCommand.renderLinkedOfficesShow` gives `/modnvote show` a
+  linked-offices-specific view (definition validity, office/candidate/dependency counts,
+  brief per-office method/seats/candidate-count list) read from the stored definition via
+  `ElectionDefinitionService`. It shows no `poll_options` section (linked polls have none).
+  `YES_NO`/`RANKED_SINGLE_WINNER` `show` output is unchanged.
+- **Help/guide.** `/modnvote help` lists `create linked_offices`; `/modnvote guide` gained
+  a linked-offices workflow walkthrough (create → configure → validate → ready → open →
+  vote → close → result → publishresult, noting `EXCLUDE_WINNERS` applies at counting time).
+- **End-to-end regression.** `LinkedOfficesLifecycleE2ETest` drives the whole Bukkit-free
+  lifecycle (ready → open → submit ×5 → duplicate rejected → close → result → proof
+  verification → integrity verification → witness payload) and asserts no identity, IP hash,
+  proof phrase, or participation material leaks across result/proof/integrity/witness output.
+- **Stale-message cleanup.** Earlier "not implemented / non-votable" hints in
+  `PollType`, `ResultService.getPollResult`, and the linked-offices builder save flow now
+  describe the shipped votable lifecycle. The single-contest guard tests still assert that
+  linked polls cannot reach the single-contest result/vote-session paths.
+- **Config.** `publication.publish_poll_closed` is the single shared flag for all
+  closed-result publication (documented in `config.yml`); no new key was added.
+
 ---
 
 ### Persistence (DAO) layer

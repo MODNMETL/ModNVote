@@ -229,7 +229,7 @@ public final class LinkedOfficesBuilderListener implements Listener {
                 builderService.save(session.getPollId(), session.getState(), player.getName());
                 scheduler.runForPlayer(player, () -> {
                     player.sendMessage("§aSaved Linked Offices definition for poll §f#" + session.getPollId() + "§a.");
-                    player.sendMessage("§8Voting is not implemented yet; the poll cannot be opened.");
+                    player.sendMessage("§8Validate, mark the poll ready, then open it to let players vote.");
                     session.recordValidation(true, java.util.List.of());
                     session.setCurrentScreen(Screen.MAIN);
                     renderer.open(player, session);

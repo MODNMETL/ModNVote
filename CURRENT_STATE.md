@@ -32,8 +32,16 @@ If this file disagrees with code, verify against the code and resolve the disagr
 ## 2.2.0 groundwork (in progress)
 
 The 2.2.0 stretch targets a generic Linked Offices election model (multiple
-contests resolved from a single anonymous ballot). That feature is **not yet
-implemented**.
+contests resolved from a single anonymous ballot). As of Tranche 2M that feature
+is **implemented end to end**: admins define/validate/ready/open a
+`LINKED_OFFICES` poll, players vote through the GUI, ballots are stored
+anonymously and counted, the multi-contest result renders after close, and the
+closed result publishes to the configured witness webhooks. Tranche 2N is
+release-hardening (lifecycle audit, regression tests, docs/help/show polish, and
+stale-message cleanup) ahead of the 2.2.0 release — see the "2.2.0 release
+readiness" section in CHANGELOG.md. The per-tranche sections below are retained
+as a historical build record; where an early section says "non-votable", read it
+as the state at that tranche, superseded by Tranche 2K–2M.
 
 Completed groundwork so far:
 

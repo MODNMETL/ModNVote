@@ -16,10 +16,15 @@ public enum PollType {
     /**
      * Generic linked-offices election (multiple contests in one election).
      *
-     * Reserved and intentionally NON-VOTABLE as of 2.2.0: admins can validate a
-     * linked-offices definition, but there is no authoring, voting, submission,
-     * counting, or result path for this type yet. Guards in the command, ballot,
-     * and result layers reject it.
+     * Fully votable as of 2.2.0. Admins author a definition (via JSON {@code set},
+     * file {@code import}, or the in-game definition builder), validate it, mark the
+     * poll ready and open it; players vote through {@code /modnvote vote}; ballots are
+     * submitted anonymously and yield a one-time proof phrase; results are computed,
+     * displayed and published after close. Per-office {@code EXCLUDE_WINNERS}
+     * dependencies are applied at counting time, never at voting time. The
+     * single-contest result shape ({@code ResultService#getPollResult}) does not
+     * represent a multi-contest election, so the linked path uses its own
+     * result/witness entry points.
      */
     LINKED_OFFICES
 }

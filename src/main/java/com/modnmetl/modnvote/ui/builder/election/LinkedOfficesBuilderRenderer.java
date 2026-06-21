@@ -78,7 +78,7 @@ public final class LinkedOfficesBuilderRenderer {
                 lore("§7Serialize and save through PollService.",
                         "§7Invalid definitions are rejected.",
                         "§8",
-                        "§8Voting is not implemented yet.")), new Action("SAVE"));
+                        "§8Ready, then open the poll to begin voting.")), new Action("SAVE"));
         bind(inv, session, CLOSE_SLOT, item(Material.RED_WOOL, "§cClose",
                 lore("§7Close the builder. Unsaved edits are discarded.")), new Action("CLOSE"));
 

@@ -1032,6 +1032,14 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§7Description: §8(blank)");
         }
 
+        // Linked-offices polls are defined by a multi-contest election definition,
+        // not by poll_options; show that definition instead of the ranking rules and
+        // the misleading "no options configured" line.
+        if (poll.pollType() == PollType.LINKED_OFFICES) {
+            renderLinkedOfficesShow(sender, poll);
+            return;
+        }
+
         sender.sendMessage("§bRules:");
         sender.sendMessage(" §8- §7Max rankings: §f"
                 + (poll.maxRankings() == 0 ? "ALL OPTIONS" : poll.maxRankings()));
@@ -1050,6 +1058,60 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             if (!option.description().isBlank()) {
                 sender.sendMessage("   §7" + option.description());
             }
+        }
+    }
+
+    /**
+     * Renders the linked-offices view of {@code /modnvote show}: definition validity,
+     * office/candidate/dependency counts, and a brief office list (counting method and
+     * seats per office). No legacy poll_options section is shown — linked-offices polls
+     * carry no poll_options. Reads only the stored definition; touches no ballot content.
+     */
+    private void renderLinkedOfficesShow(CommandSender sender, Poll poll) {
+        ElectionDefinitionService.ElectionDefinitionValidationResult validation =
+                electionDefinitionService.validate(poll.configJson());
+
+        sender.sendMessage("§bLinked Offices Definition:");
+        sender.sendMessage(" §8- §7Definition: " + (validation.valid() ? "§aVALID" : "§cINVALID"));
+
+        if (validation.definition().isEmpty()) {
+            sender.sendMessage(" §8- §7No usable definition stored yet.");
+            sender.sendMessage("   §7Set one with §e/poll config " + poll.pollId() + " set <json>§7 or "
+                    + "§e/poll edit-definition " + poll.pollId() + "§7.");
+            int shown = 0;
+            for (String issue : validation.issues()) {
+                sender.sendMessage("   §8• §c" + issue);
+                if (++shown >= 5) {
+                    break;
+                }
+            }
+            return;
+        }
+
+        ElectionDefinition definition = validation.definition().get();
+        sender.sendMessage(" §8- §7Offices: §f" + definition.contests().size()
+                + " §7| Candidates: §f" + definition.candidates().size()
+                + " §7| Dependencies: §f" + definition.dependencies().size());
+
+        if (definition.contests().isEmpty()) {
+            return;
+        }
+
+        sender.sendMessage("§bOffices:");
+        int limit = 12;
+        int shown = 0;
+        for (com.modnmetl.modnvote.domain.election.ContestDefinition contest : definition.contests()) {
+            if (shown >= limit) {
+                sender.sendMessage(" §8- §7… and " + (definition.contests().size() - limit) + " more.");
+                break;
+            }
+            String method = contest.method() == null ? "?" : contest.method().name();
+            String name = contest.displayName() == null || contest.displayName().isBlank()
+                    ? contest.officeKey() : contest.displayName();
+            sender.sendMessage(" §8- §b" + name + " §7(key=" + contest.officeKey()
+                    + ", method=" + method + ", seats=" + contest.seats()
+                    + ", candidates=" + contest.candidateKeys().size() + ")");
+            shown++;
         }
     }
 
@@ -1378,6 +1440,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§7Alias: §e/poll §7can be used instead of §e/" + label);
         sender.sendMessage("§e/" + label + " guide §7- How to create and manage polls");
         sender.sendMessage("§e/" + label + " create ranked_single_winner <optionCount> §7- Create a ranked poll with the GUI builder");
+        sender.sendMessage("§e/" + label + " create linked_offices §7- Create a linked-offices election (configure its definition next)");
         sender.sendMessage("§e/" + label + " edit <draftPollId> §7- Resume editing a draft poll");
         sender.sendMessage("§e/" + label + " clone <sourcePollId> §7- Clone an existing poll into a new draft");
         sender.sendMessage("§e/" + label + " checkpoint <pollId> §7- Publish an integrity checkpoint");
@@ -1416,6 +1479,20 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§e/" + label + " clone <sourcePollId>");
         sender.sendMessage("§7Publish an integrity checkpoint:");
         sender.sendMessage("§e/" + label + " checkpoint <pollId>");
+        sender.sendMessage("§8");
+        sender.sendMessage("§7Run a linked-offices election (multiple offices at once):");
+        sender.sendMessage("§e/" + label + " create linked_offices");
+        sender.sendMessage("§7Configure its definition (JSON, file import, or the in-game builder):");
+        sender.sendMessage("§e/" + label + " config <pollId> set <json>");
+        sender.sendMessage("§e/" + label + " config <pollId> import <file>");
+        sender.sendMessage("§e/" + label + " edit-definition <pollId>");
+        sender.sendMessage("§7Validate, then ready and open it:");
+        sender.sendMessage("§e/" + label + " validate-definition <pollId>");
+        sender.sendMessage("§e/" + label + " ready <pollId> §7then §e/" + label + " open <pollId>");
+        sender.sendMessage("§7Players vote, then close, show and publish the result:");
+        sender.sendMessage("§e/" + label + " vote <pollId> §7, §e/" + label + " close <pollId>");
+        sender.sendMessage("§e/" + label + " result <pollId> §7, §e/" + label + " publishresult <pollId>");
+        sender.sendMessage("§7EXCLUDE_WINNERS dependencies apply at counting time, not while voting.");
     }
 
     private Poll requirePoll(long pollId) throws PollServiceException {
@@ -1459,7 +1536,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         try {
             return PollType.valueOf(normalized);
         } catch (IllegalArgumentException e) {
-            throw new PollServiceException("Unsupported poll type '" + raw + "'. Use YES_NO or RANKED_SINGLE_WINNER.");
+            throw new PollServiceException("Unsupported poll type '" + raw
+                    + "'. Use YES_NO, RANKED_SINGLE_WINNER, or LINKED_OFFICES.");
         }
     }
 

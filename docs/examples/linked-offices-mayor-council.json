@@ -1,5 +1,5 @@
 {
-  "_comment": "EXAMPLE ONLY. Generic Linked Offices definition for a Mayor (IRV) plus a Council (approval top-N). Office and candidate keys are arbitrary identifiers; no office name is hardcoded anywhere in the plugin. Copy this file into plugins/ModNVote/definitions and import it with /modnvote config <pollId> import linked-offices-mayor-council.json after creating a LINKED_OFFICES poll. Linked Offices voting is not implemented yet; this only demonstrates a valid definition.",
+  "_comment": "EXAMPLE ONLY. Generic Linked Offices definition for a Mayor (IRV) plus a Council (approval top-N). Office and candidate keys are arbitrary identifiers; no office name is hardcoded anywhere in the plugin. Copy this file into plugins/ModNVote/definitions and import it with /modnvote config <pollId> import linked-offices-mayor-council.json after creating a LINKED_OFFICES poll, then validate-definition, ready and open it for voting. This file only demonstrates a valid definition.",
   "model": "LINKED_OFFICES",
   "offices": {
     "mayor": {
