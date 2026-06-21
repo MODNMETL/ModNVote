@@ -15,10 +15,12 @@ import com.modnmetl.modnvote.domain.election.execution.LinkedElectionBallot;
 import com.modnmetl.modnvote.domain.election.execution.RankedContestVote;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -464,6 +466,83 @@ class LinkedElectionCountingServiceTest {
             assertTrue(candidate(board, tied).unresolved(), tied + " must be unresolved");
             assertFalse(candidate(board, tied).elected(), tied + " must not be elected");
         }
+    }
+
+    @Test
+    void stvQuotaTieWithinRemainingSeatsElectsAllTiedNotByOrder() {
+        // 2 seats; c1=3, c2=3 (tied at quota), c3=1. Total = 7, quota = floor(7/3)+1 = 3.
+        // c1 and c2 share the top at-or-above-quota tally. Because the tied group (2)
+        // fits the remaining seats (2), BOTH are elected — candidate order only
+        // sequences which surplus is processed first, it does not pick a winner and
+        // does not drop c2. The contest is complete with no unresolved seats.
+        ElectionDefinition def = singleStv(BOARD, 2, List.of(C1, C2, C3));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 3, List.of(C1));
+        addRankedTimes(ballots, def, BOARD, 3, List.of(C2));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C3));
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2), board.winners(), "both candidates tied at quota must be elected");
+        assertTrue(board.complete());
+        assertEquals(0, board.unresolvedSeatCount());
+        assertEquals(List.of(), board.unresolvedCandidateKeys());
+        assertEquals("3.000000", board.stv().quota());
+        assertTrue(result.complete());
+        for (String elected : List.of(C1, C2)) {
+            assertTrue(candidate(board, elected).elected(), elected + " must be elected");
+            assertFalse(candidate(board, elected).unresolved(), elected + " must not be unresolved");
+        }
+        assertFalse(candidate(board, C3).elected());
+    }
+
+    @Test
+    void highestAtOrAboveQuotaGroupCapturesFullTiedQuotaGroupInContestOrder() {
+        // Directly exercises the fairness-critical grouping the quota-election guard
+        // relies on. Under a strict Droop quota, value conservation makes a tied group
+        // larger than the remaining seats unreachable through real ballots — at most
+        // `remainingSeats` candidates can sit at or above quota at once — so the guard
+        // input is verified here at the unit level: the helper always returns the
+        // COMPLETE set of candidates tied at the top at-or-above-quota tally, in contest
+        // order, never an order-picked single winner.
+        List<String> order = List.of(C1, C2, C3, C4);
+        Set<String> continuing = Set.of(C1, C2, C3, C4);
+        BigDecimal quota = new BigDecimal("4");
+
+        // Three candidates tied at the top quota tally: the whole group is returned, in
+        // contest order. If the seats remaining were fewer than 3, the count would leave
+        // them unresolved rather than electing one of them by order.
+        assertEquals(List.of(C1, C2, C3),
+                counting.highestAtOrAboveQuotaGroup(order, continuing,
+                        tally(C1, "5", C2, "5", C3, "5", C4, "2"), quota));
+
+        // Only the single strict leader is the top group; candidates merely at/above
+        // quota but below the leader are elected in later rounds, not part of this tie.
+        assertEquals(List.of(C1),
+                counting.highestAtOrAboveQuotaGroup(order, continuing,
+                        tally(C1, "6", C2, "4", C3, "4", C4, "1"), quota));
+
+        // Ties are reported strictly in contest order even when the high candidates are
+        // not adjacent in the tally.
+        assertEquals(List.of(C2, C4),
+                counting.highestAtOrAboveQuotaGroup(order, continuing,
+                        tally(C1, "2", C2, "5", C3, "3", C4, "5"), quota));
+
+        // Nobody reaches quota: empty group (the count would eliminate instead).
+        assertEquals(List.of(),
+                counting.highestAtOrAboveQuotaGroup(order, continuing,
+                        tally(C1, "3", C2, "2", C3, "1", C4, "0"), quota));
+    }
+
+    private static Map<String, BigDecimal> tally(String k1, String v1, String k2, String v2,
+                                                 String k3, String v3, String k4, String v4) {
+        Map<String, BigDecimal> tally = new LinkedHashMap<>();
+        tally.put(k1, new BigDecimal(v1));
+        tally.put(k2, new BigDecimal(v2));
+        tally.put(k3, new BigDecimal(v3));
+        tally.put(k4, new BigDecimal(v4));
+        return tally;
     }
 
     // --- Dependency -----------------------------------------------------------

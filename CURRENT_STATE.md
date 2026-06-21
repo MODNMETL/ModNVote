@@ -473,10 +473,15 @@ proof-phrase, participation-token-hash, or privacy change**:
   exactly as for the other methods.
 - **No silent tie-break by candidate order** (matching the approval cutoff-tie rule): a
   non-seat-deciding elimination tie is broken deterministically by latest-in-contest
-  order and reported in the round summary, but an elimination tie whose outcome would
-  decide the final elected seats leaves those seats **unresolved**
-  (`unresolvedSeatCount` / `unresolvedCandidateKeys`, contest + election
-  `complete = false`) for a runoff/admin resolution.
+  order and reported in the round summary, but a **seat-deciding** tie leaves the
+  affected seats **unresolved** (`unresolvedSeatCount` / `unresolvedCandidateKeys`,
+  contest + election `complete = false`) for a runoff/admin resolution. This applies to
+  both an **elimination** tie whose outcome would decide the final elected seats and a
+  **quota-election** tie in which more candidates share the same top at-or-above-quota
+  tally than there are seats remaining (`highestAtOrAboveQuotaGroup`). Under a strict
+  Droop quota the quota-tie guard is a defensive invariant — value conservation caps the
+  number of candidates at or above quota at the remaining-seat count — so it is verified
+  by a direct helper-unit test rather than through ballots.
 - New STV result records `StvResultData` (quota, exhausted value, final fractional
   tallies, round summaries), `StvRoundResult`, `StvCandidateTally`, carried on a single
   nullable `ContestResult.stv` field (`null` for IRV/approval). `IrvRoundResult` is

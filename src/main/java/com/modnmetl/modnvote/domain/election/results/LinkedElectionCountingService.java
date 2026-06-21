@@ -68,10 +68,14 @@ import java.util.Set;
  * value; ballots with no further continuing preference exhaust. All fractional
  * arithmetic uses a fixed scale and deterministic rounding so repeated counts of
  * the same ballots are identical. As with approval, candidate order is never used
- * to decide a seat-deciding tie: an elimination tie whose outcome would change the
- * final elected seats leaves those seats unresolved (see
- * {@link ContestResult#unresolvedSeatCount()}) for a runoff/admin resolution
- * rather than being broken by definition order.
+ * to decide a seat-deciding tie. Two kinds of seat-deciding tie are left unresolved
+ * (see {@link ContestResult#unresolvedSeatCount()}) for a runoff/admin resolution
+ * rather than being broken by definition order: an <em>elimination</em> tie whose
+ * outcome would change the final elected seats, and a <em>quota-election</em> tie in
+ * which more candidates share the same top at-or-above-quota tally than there are
+ * seats remaining. (Under a strict Droop quota the latter cannot arise — at most the
+ * number of remaining seats can sit at or above quota at once — but the guard is kept
+ * so candidate order can never decide a seat-winning quota tie.)
  *
  * <p>Counting is generic: no office or candidate name is hardcoded. "Mayor" and
  * "Council" are only illustrative configuration.
@@ -518,19 +522,45 @@ public final class LinkedElectionCountingService {
                 break;
             }
 
-            // Elect the highest continuing candidate that has reached quota.
-            String quotaWinner = highestAtOrAboveQuota(eligible, continuing, tally, quota);
-            if (quotaWinner != null) {
+            // Candidates at or above quota are elected, but candidate order must never
+            // decide a seat-winning quota tie. Take the full group of continuing
+            // candidates tied at the highest at-or-above-quota tally. If that tied
+            // group is larger than the seats remaining, none of them can be separated
+            // by the count, so leave those seats unresolved for a runoff/admin
+            // resolution instead of electing by candidate order.
+            List<String> quotaGroup = highestAtOrAboveQuotaGroup(eligible, continuing, tally, quota);
+            if (!quotaGroup.isEmpty()) {
+                if (quotaGroup.size() > remainingSeats) {
+                    unresolvedSeatCount = remainingSeats;
+                    unresolvedCandidateKeys = List.copyOf(quotaGroup);
+                    complete = false;
+                    issues.add("Office '" + officeKey + "' has an STV quota tie that decides the final seat(s): "
+                            + unresolvedSeatCount + " seat(s) remain unresolved among tied candidates ["
+                            + String.join(", ", unresolvedCandidateKeys)
+                            + "] sharing the same at-or-above-quota tally. A runoff or administrator "
+                            + "resolution is required; no tied candidate was elected by candidate order.");
+                    rounds.add(new StvRoundResult(roundNumber, snapshot, List.of(), null,
+                            "Quota-election tie decides the final seat(s); "
+                                    + unresolvedSeatCount + " seat(s) left unresolved among ["
+                                    + String.join(", ", unresolvedCandidateKeys) + "]."));
+                    break;
+                }
+
+                // The tied quota group fits within the remaining seats, so every member
+                // will be elected. Process the highest member (group is already in
+                // contest order) now; candidate order only sequences processing here, it
+                // never chooses winners, because the rest of the tied group is elected in
+                // subsequent rounds. Elect by the Gregory method: the candidate retains
+                // exactly quota and every ballot leaves at the surplus fraction. A zero
+                // surplus transfers ballots at value 0, which both contributes nothing
+                // and prevents any later re-count.
+                String quotaWinner = quotaGroup.get(0);
                 BigDecimal candidateTotal = tally.get(quotaWinner);
                 BigDecimal surplus = candidateTotal.subtract(quota);
                 elected.add(quotaWinner);
                 finalValue.put(quotaWinner, quota);
                 continuing.remove(quotaWinner);
 
-                // Always move the elected candidate's ballots off them (Gregory method):
-                // they retain exactly quota and every ballot leaves at the surplus
-                // fraction. A zero surplus transfers ballots at value 0, which both
-                // correctly contributes nothing and prevents any later re-count.
                 BigDecimal transferValue = surplus.signum() > 0
                         ? surplus.divide(candidateTotal, STV_SCALE, RoundingMode.DOWN)
                         : zero();
@@ -675,28 +705,45 @@ public final class LinkedElectionCountingService {
     }
 
     /**
-     * @return the continuing candidate at or above quota with the highest tally
-     * (ties broken by earliest contest order — only affects which surplus is
-     * processed first, never which candidate is elected, since every candidate at
-     * quota is elected), or {@code null} if none reached quota
+     * Returns every continuing candidate sharing the highest tally among those at or
+     * above quota, in contest order; empty if none reached quota.
+     *
+     * <p>The full tied group — not a single order-picked candidate — is what the
+     * count uses to decide quota elections. When the group fits within the remaining
+     * seats every member is elected (contest order only sequences processing), so
+     * candidate order never chooses a winner. When the group is larger than the seats
+     * remaining the seats are left unresolved rather than broken by order. Returning
+     * the complete tied group is therefore the guarantee that no seat-winning quota
+     * tie is silently resolved by candidate definition order.
+     *
+     * <p>Package-private so the fairness-critical grouping can be unit-tested
+     * directly. (A strict Droop quota makes a tied group larger than the remaining
+     * seats unreachable through real ballots, so this is exercised at the unit level.)
      */
-    private String highestAtOrAboveQuota(List<String> contestOrder,
-                                         Set<String> continuing,
-                                         Map<String, BigDecimal> tally,
-                                         BigDecimal quota) {
-        String best = null;
-        BigDecimal bestValue = null;
+    List<String> highestAtOrAboveQuotaGroup(List<String> contestOrder,
+                                            Set<String> continuing,
+                                            Map<String, BigDecimal> tally,
+                                            BigDecimal quota) {
+        BigDecimal highest = null;
         for (String candidateKey : contestOrder) {
             if (!continuing.contains(candidateKey)) {
                 continue;
             }
             BigDecimal value = tally.get(candidateKey);
-            if (value.compareTo(quota) >= 0 && (bestValue == null || value.compareTo(bestValue) > 0)) {
-                best = candidateKey;
-                bestValue = value;
+            if (value.compareTo(quota) >= 0 && (highest == null || value.compareTo(highest) > 0)) {
+                highest = value;
             }
         }
-        return best;
+        List<String> group = new ArrayList<>();
+        if (highest == null) {
+            return group;
+        }
+        for (String candidateKey : contestOrder) {
+            if (continuing.contains(candidateKey) && tally.get(candidateKey).compareTo(highest) == 0) {
+                group.add(candidateKey);
+            }
+        }
+        return group;
     }
 
     /** The continuing candidates sharing the lowest tally, in contest order. */
