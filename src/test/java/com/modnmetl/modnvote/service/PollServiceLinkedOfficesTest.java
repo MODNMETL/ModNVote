@@ -258,8 +258,10 @@ class PollServiceLinkedOfficesTest {
     }
 
     @Test
-    void openPollRejectsLinkedOfficesEvenWhenReady(@TempDir Path tempDir) throws Exception {
-        DatabaseManager db = freshDb(tempDir, "open-reject.db");
+    void openPollAcceptsReadyValidLinkedOffices(@TempDir Path tempDir) throws Exception {
+        // Tranche 2L: linked-offices polls became openable once READY with a valid
+        // definition. (Earlier tranches deliberately blocked opening entirely.)
+        DatabaseManager db = freshDb(tempDir, "open-accept.db");
         PollService service = newService(db);
 
         long pollId = service.createPoll(ACTOR, PollType.LINKED_OFFICES);
@@ -267,13 +269,11 @@ class PollServiceLinkedOfficesTest {
         service.updatePollConfigJson(pollId, VALID_DEFINITION, ACTOR);
         service.readyPoll(pollId, ACTOR);
 
-        PollServiceException ex = assertThrows(PollServiceException.class,
-                () -> service.openPoll(pollId, ACTOR));
-        assertTrue(ex.getMessage().contains("Linked Offices voting is not implemented yet"),
-                "Unexpected message: " + ex.getMessage());
+        service.openPoll(pollId, ACTOR);
 
-        assertEquals(PollStatus.READY, service.findPollById(pollId).status(), "Poll must remain READY, not OPEN.");
-        assertEquals(0, countAnonymousBallots(db, pollId), "No ballots may exist for a linked offices poll.");
+        assertEquals(PollStatus.OPEN, service.findPollById(pollId).status(),
+                "A valid READY linked-offices poll must open.");
+        assertEquals(0, countAnonymousBallots(db, pollId), "Opening alone stores no ballots.");
     }
 
     @Test

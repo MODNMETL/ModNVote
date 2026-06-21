@@ -229,6 +229,14 @@ For ranked polls:
 - Players review their selection before casting.
 - Ballot submission requires confirmation.
 
+For Linked Offices polls (Tranche 2L):
+
+- An office overview lists every office with its method (ranked/approval), seats, and completion status.
+- Clicking an office opens its screen: rank candidates in order for IRV offices, or approve up to the configured maximum for approval offices.
+- Every eligible candidate is shown for each office; the eventual winner of a source office is not hidden from a dependent office (the `EXCLUDE_WINNERS` dependency is applied during counting, not at cast time).
+- A review screen summarises every office before the final submit, which is guarded until each required office has a selection.
+- On submission the player receives a ballot hash, participation receipt, and a private proof phrase; voting once is enforced by participation token.
+
 ### Close a poll
 
 ```text
@@ -247,7 +255,7 @@ Results are calculated from anonymous ballots only.
 
 For ranked single-winner polls, this shows the poll winner, final winner tally, and round-by-round IRV breakdown.
 
-For Linked Offices polls, this shows each office's method and seats, its winners, candidate tallies, IRV round breakdowns, any dependency exclusions applied (an office's winners excluded from a dependent office), and any issues. Counting is deterministic and reads anonymous ballot content only; it exposes no voter identity. Note that Linked Offices **voting/submission still does not exist** — result calculation operates on already-stored anonymous ballots.
+For Linked Offices polls, this shows each office's method and seats, its winners, candidate tallies, IRV round breakdowns, any dependency exclusions applied (an office's winners excluded from a dependent office), and any issues. Counting is deterministic and reads anonymous ballot content only; it exposes no voter identity. As of Tranche 2L, Linked Offices polls are **votable end to end** — players cast multi-office ballots through the voting GUI and those anonymous ballots are what counting operates on.
 
 ### Republish a closed poll result
 
@@ -380,9 +388,9 @@ Normal admin-facing commands:
 
 `/modnvote validate-definition <pollId>` is a read-only admin check that parses and validates a linked-offices election definition stored in a poll's `config_json`. It also warns if a poll's type and its declared config model disagree.
 
-`/modnvote create linked_offices` creates a DRAFT, non-votable Linked Offices poll. `/modnvote config <pollId> set <json>` stores an inline definition, and `/modnvote config <pollId> import <file>` imports one from `plugins/ModNVote/definitions/<file>` (UTF-8 JSON, path-traversal rejected). Definitions are validated before they are saved; invalid definitions are rejected without writing. A valid Linked Offices poll can be marked READY, but **Linked Offices voting is not implemented yet** — such polls cannot be opened or voted. (Deterministic counting and result calculation over stored anonymous ballots now exists — Tranche 2K — but there is still no way to cast or submit a linked-offices ballot.) See `docs/examples/linked-offices-mayor-council.json` for an example definition.
+`/modnvote create linked_offices` creates a DRAFT Linked Offices poll. `/modnvote config <pollId> set <json>` stores an inline definition, and `/modnvote config <pollId> import <file>` imports one from `plugins/ModNVote/definitions/<file>` (UTF-8 JSON, path-traversal rejected). Definitions are validated before they are saved; invalid definitions are rejected without writing. A valid Linked Offices poll can be marked READY and then **opened for voting** (`/modnvote open <pollId>`); as of Tranche 2L players vote through the GUI with `/modnvote vote <pollId>`, ballots are stored anonymously and counted, and results render after close. See `docs/examples/linked-offices-mayor-council.json` for an example definition.
 
-`/modnvote edit-definition <pollId>` opens an in-game GUI builder/editor for a Linked Offices poll's definition: screens for offices, candidates, and EXCLUDE_WINNERS dependencies, plus Validate and Save. The builder edits definition data only — it is an editor for the `ElectionDefinition`, not a voter GUI, and it saves exclusively through the service layer (the same validated path as JSON import). It does not implement linked-offices voting or ballot submission, which do not exist yet. (Deterministic counting and result calculation over already-stored anonymous ballots exist as of Tranche 2K.)
+`/modnvote edit-definition <pollId>` opens an in-game GUI builder/editor for a Linked Offices poll's definition: screens for offices, candidates, and EXCLUDE_WINNERS dependencies, plus Validate and Save. The builder edits definition data only — it is an editor for the `ElectionDefinition`, not a voter GUI, and it saves exclusively through the service layer (the same validated path as JSON import). The separate voter GUI used to cast a ballot is opened with `/modnvote vote <pollId>` once the poll is open (Tranche 2L).
 
 Player-facing commands:
 

@@ -127,9 +127,10 @@ which parses and validates a poll's definition and returns a structured result
 (it performs no persistence, lifecycle, or identity work). The admin command
 `/modnvote validate-definition <pollId>` uses it for read-only validation.
 
-Admins can author a linked-offices definition without enabling voting:
+Admins author a linked-offices definition before opening the poll for voting
+(voting itself is described in "Linked offices voter session and ballot submission"):
 
-- `/modnvote create linked_offices` creates a DRAFT, non-votable poll.
+- `/modnvote create linked_offices` creates a DRAFT poll.
 - `/modnvote config <pollId> set <json>` / `import <file>` store a definition in
   `polls.config_json` via `PollService.updatePollConfigJson`. The JSON is parsed
   and validated first; invalid definitions are rejected without any write. File
@@ -152,11 +153,11 @@ Admins can author a linked-offices definition without enabling voting:
   EXCLUDE_WINNERS dependencies; it implements no voting, ballot storage, counting,
   or result calculation, and is not a voter GUI.
 
-`PollType.LINKED_OFFICES` is a reserved, **non-votable** type. It is guarded out
-of the vote command, the vote session layer, `ResultService`, and `openPoll`
-(which rejects it even when READY), so no accidental voting path can exist until
-a later tranche deliberately enables it. Config definitions are accepted only for
-linked-offices polls and only while DRAFT; other poll types reject config writes.
+`PollType.LINKED_OFFICES` is now **votable** (Tranche 2L): `openPoll` accepts it
+once `READY` with a valid definition, `/modnvote vote` routes it to the
+linked-offices voting GUI, and `ResultService` produces its results. Config
+definitions are still accepted only for linked-offices polls and only while DRAFT;
+other poll types reject config writes.
 The legacy `poll_options` authoring methods are rejected for `LINKED_OFFICES`
 polls, so the `ElectionDefinition` in `config_json` is the single source of truth
 for linked-offices candidates.
@@ -420,6 +421,40 @@ ballot submission path.
   `getPollResult` path and `PollResult` shape are unchanged. `/modnvote result`
   branches on poll type and renders `LINKED_OFFICES` through the Bukkit-free
   `presentation.LinkedElectionResultDisplayFormatter`.
+
+#### Linked offices voter session and ballot submission (votable)
+
+Tranche 2L makes `LINKED_OFFICES` **votable end to end** — **no schema changes**, it
+reuses the Tranche 2G storage and Tranche 2K counting.
+
+- **Open gate.** `PollService.openPoll` opens a `LINKED_OFFICES` poll only when it is
+  `READY` and its definition still validates; an invalid definition cannot open.
+  `YES_NO`/`RANKED_SINGLE_WINNER` open behaviour is unchanged.
+- **Bukkit-free voting core.** `LinkedOfficesVoteState` (`ui.session.election`) holds
+  the voter's per-office selections, enforces `maxSelections` for approval offices,
+  builds the immutable `LinkedElectionBallot`, and reports submit-readiness via
+  `LinkedElectionBallotValidator`. `EXCLUDE_WINNERS` is **not** applied at cast time —
+  every structurally eligible candidate is offered for each office; exclusion is a
+  count-time outcome. `LinkedOfficesVoteSession`/`LinkedOfficesVoteScreen`/
+  `LinkedOfficesVoteSessionManager` model navigation and one session per player.
+- **GUI layer.** `ui.render` adds `LinkedOfficesInventoryHolder`,
+  `LinkedOfficesVoteRenderer`, `LinkedOfficesVoteListener`, and quit/close cleanup
+  listeners, mirroring the yes/no and ranked GUI architecture (overview → per-office
+  ranking/approval → review/submit) and reusing `ModNScheduler`, `VoteSoundService`,
+  and `messages.yml`.
+- **Submission service.** `LinkedOfficesSubmissionService` (`service`) is Bukkit-free
+  (holds only a `DatabaseManager`). It re-enforces the gate server-side (poll exists /
+  `LINKED_OFFICES` / `OPEN` / definition valid / ballot valid), issues a fresh proof
+  phrase via the shared `BallotProofPhraseGenerator`, and delegates the transactional
+  write to `LinkedBallotStorageService` (one participation record, one anonymous
+  ballot, the contest-response rows). Duplicate voting is prevented by the existing
+  participation-token semantics; a rejected/duplicate submission writes nothing.
+  `VoteSubmissionCoordinator.submitLinkedOfficesVote(...)` bridges the GUI to it, and
+  `/modnvote vote` routes `LINKED_OFFICES` to the linked-offices GUI.
+- **Privacy.** Voter identity is used only to derive the participation token/record;
+  vote content goes only to `anonymous_ballots` and `anonymous_ballot_contest_responses`,
+  and no contest-response row or message combines identity with vote content. Witness
+  publication of linked-offices results is still single-contest only (not wired here).
 
 ---
 

@@ -831,11 +831,21 @@ public final class PollService {
             if (poll == null) {
                 throw new PollServiceException("Poll #" + pollId + " does not exist.");
             }
-            if (poll.pollType() == PollType.LINKED_OFFICES) {
-                throw new PollServiceException("Linked Offices voting is not implemented yet.");
-            }
             if (poll.status() != PollStatus.READY) {
                 throw new PollServiceException("Poll #" + pollId + " is not in READY state.");
+            }
+            // Linked-offices polls are now openable, but only when their config_json
+            // definition still validates. This re-runs the same generic validation
+            // readyPoll enforced, so a poll whose definition was somehow invalidated
+            // cannot be opened. YES_NO / RANKED_SINGLE_WINNER open behaviour is
+            // unchanged: they take no extra branch here.
+            if (poll.pollType() == PollType.LINKED_OFFICES) {
+                PollValidationResult validation = validatePollDefinition(pollId);
+                if (!validation.valid()) {
+                    throw new PollServiceException("Poll #" + pollId
+                            + " cannot be opened: its linked-offices definition is not valid: "
+                            + String.join(" ", validation.issues()));
+                }
             }
 
             try (Connection connection = databaseManager.getConnection()) {

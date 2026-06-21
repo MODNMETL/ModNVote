@@ -17,7 +17,7 @@ If this file disagrees with code, verify against the code and resolve the disagr
 
 - Branch: `main`
 - Current release: `v2.1.1`
-- In development: `2.2.0` (Linked Offices development stretch; groundwork only so far — see CHANGELOG and the "2.2.0 groundwork" section below)
+- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2L, `LINKED_OFFICES` is votable end to end — see CHANGELOG and the "2.2.0 groundwork" section below)
 - Java target: 21
 - Platform target: Paper 1.21.x
 - Folia-aware scheduling: through `ModNScheduler`
@@ -131,13 +131,17 @@ no voting, storage, or counting):
   approval normalised to contest order) and produces a `CanonicalBallot`. This
   is canonicalization planning, NOT the final hash implementation.
 
-Explicitly NOT done in this groundwork:
+Explicitly NOT done **by the Tranche 2A–2C groundwork above** (later superseded —
+see the Tranche 2G–2L sections for storage, counting, and voting):
 
-- `PollType.LINKED_OFFICES` is authorable/readyable but remains non-votable;
-  there is NO linked-offices voting, submission, counting, or result calculation,
-  and it cannot be opened.
-- No `anonymous_ballot_contest_responses` table or any schema change.
-- No multi-contest ballot submission, counting pipeline, or IRV extraction.
+- At that point `PollType.LINKED_OFFICES` was authorable/readyable but non-votable;
+  there was NO linked-offices voting, submission, counting, or result calculation,
+  and it could not be opened. (Tranche 2K added counting/results; Tranche 2L added
+  voting/submission and made it openable.)
+- No `anonymous_ballot_contest_responses` table or any schema change. (Tranche 2G
+  later added that table; no schema change since.)
+- No multi-contest ballot submission, counting pipeline, or IRV extraction. (Added
+  across Tranches 2G/2K/2L.)
 - The linked-offices GUI edits definition data only; there is NO linked-offices
   voter GUI/session flow, and no proof-phrase or participation-token changes.
 - The Tranche 2E execution model is pure in-memory types only: no ballot
@@ -354,6 +358,44 @@ Explicitly NOT done by Tranche 2K:
   the election definition; it never reads or joins `participation_records` identity
   fields, and the result exposes no voter identity. Existing `YES_NO`/
   `RANKED_SINGLE_WINNER` result behaviour is unchanged (regression-locked).
+
+### 2.2.0 groundwork — Tranche 2L (voter session and ballot submission)
+
+Tranche 2L makes `LINKED_OFFICES` **votable end to end**, with **no schema
+changes** (it reuses the Tranche 2G storage and Tranche 2K counting):
+
+- `PollService.openPoll` now opens a `LINKED_OFFICES` poll when it is `READY` and
+  its definition still validates; an invalid definition cannot open. `YES_NO`/
+  `RANKED_SINGLE_WINNER` open behaviour is unchanged.
+- `/modnvote vote <pollId>` routes `LINKED_OFFICES` to a multi-screen voting GUI
+  (office overview → per-office ranking/approval → review/submit). `YES_NO`/
+  `RANKED_SINGLE_WINNER` voting is unchanged.
+- Bukkit-free voting core: `LinkedOfficesVoteState` (per-office selections,
+  `maxSelections` enforcement, ballot construction, submit-readiness, validation),
+  `LinkedOfficesVoteSession`/`LinkedOfficesVoteScreen`/`LinkedOfficesVoteSessionManager`.
+  Every structurally eligible candidate is offered for each office; `EXCLUDE_WINNERS`
+  is applied at count time, never at cast time.
+- GUI layer (`ui.render`): `LinkedOfficesInventoryHolder`,
+  `LinkedOfficesVoteRenderer`, `LinkedOfficesVoteListener`, and quit/close cleanup
+  listeners — mirrors the yes/no and ranked GUI architecture.
+- `LinkedOfficesSubmissionService` (`service`) — Bukkit-free (holds only a
+  `DatabaseManager`). Enforces poll exists / `LINKED_OFFICES` / `OPEN` / definition
+  valid / ballot valid (`LinkedElectionBallotValidator`), issues a proof phrase, and
+  delegates the transactional write to `LinkedBallotStorageService` (one participation
+  record, one anonymous ballot, the contest-response rows). Duplicate voting is
+  prevented by participation-token semantics; a rejected/duplicate submission writes
+  nothing. `VoteSubmissionCoordinator.submitLinkedOfficesVote(...)` bridges the GUI to it.
+- Shared `BallotProofPhraseGenerator` (`service`) holds the proof-phrase word list +
+  four-word logic extracted verbatim from `BallotService`; semantics unchanged.
+
+Explicitly NOT done by Tranche 2L:
+
+- No schema changes; no changes to canonical payloads, counting rules, proof-phrase
+  generation, or participation-token hashing. Voter identity is used only for the
+  participation token/record; vote content goes only to the anonymous tables and no
+  contest-response row carries identity. Witness/Discord publication of linked-offices
+  results is still single-contest only (not wired for linked offices). Existing
+  `YES_NO`/`RANKED_SINGLE_WINNER` voting/submission behaviour is unchanged.
 
 ---
 

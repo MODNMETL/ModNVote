@@ -45,26 +45,12 @@ public final class BallotService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
-     * This curated word list is used to generate human-usable ballot proof phrases.
-     *
-     * Note:
-     * - the phrase is shown once to the voter
-     * - only one-way verifier material is stored in the database
-     * - anyone who later learns the phrase can reveal that ballot's contents,
-     *   so the player must be warned not to share it
+     * Shared proof-phrase generator. The curated word list and the four-word
+     * generation logic now live in {@link BallotProofPhraseGenerator} so this
+     * single-contest path and the linked-offices submission path cannot drift on
+     * proof-phrase semantics.
      */
-    private static final String[] BALLOT_PROOF_WORDS = {
-            "amber","apple","arch","ash","atlas","aurora","badger","bamboo","barley","beacon","berry","birch",
-            "blossom","bluejay","brook","cedar","chalk","cherry","cinder","clover","cobalt","comet","coral","copper",
-            "cotton","cove","crystal","daisy","delta","drift","dune","ember","falcon","fern","field","flint",
-            "forest","fox","frost","garden","glade","glow","granite","harbor","hazel","heather","hollow","horizon",
-            "indigo","iris","ivory","jade","jetty","juniper","keystone","lagoon","lantern","laurel","leaf","linen",
-            "lilac","maple","marble","marsh","meadow","meteor","mist","monarch","moon","moss","mountain","mulberry",
-            "oasis","ocean","olive","opal","orchard","otter","pearl","pine","plains","plum","prairie","quartz",
-            "quill","raven","reed","river","robin","rose","saffron","sage","sail","sand","scarlet","shore",
-            "silver","sky","snow","solstice","sparrow","spruce","star","stone","storm","summit","sunrise","thistle",
-            "timber","topaz","trail","valley","velvet","violet","willow","wind","winter","wren","yarrow","zephyr"
-    };
+    private final BallotProofPhraseGenerator ballotProofPhraseGenerator = new BallotProofPhraseGenerator();
 
     private final DatabaseManager databaseManager;
     private final PlatformAdapter platformAdapter;
@@ -627,16 +613,7 @@ public final class BallotService {
     }
 
     private String generateBallotProofPhrase() {
-        StringBuilder sb = new StringBuilder();
-
-        for (int i = 0; i < 4; i++) {
-            if (i > 0) {
-                sb.append('-');
-            }
-            sb.append(BALLOT_PROOF_WORDS[SECURE_RANDOM.nextInt(BALLOT_PROOF_WORDS.length)]);
-        }
-
-        return sb.toString();
+        return ballotProofPhraseGenerator.generate();
     }
 
     private String sha256(String input) {

@@ -6,6 +6,7 @@ import com.modnmetl.modnvote.api.PollType;
 import com.modnmetl.modnvote.config.MessageService;
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.domain.election.ElectionDefinition;
 import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
 import com.modnmetl.modnvote.presentation.LinkedElectionResultDisplayFormatter;
 import com.modnmetl.modnvote.presentation.LinkedOfficeProofDisplayFormatter;
@@ -23,9 +24,11 @@ import com.modnmetl.modnvote.storage.PollOptionDao;
 import com.modnmetl.modnvote.ui.builder.PollBuilderSession;
 import com.modnmetl.modnvote.ui.builder.election.LinkedOfficesBuilderSession;
 import com.modnmetl.modnvote.ui.render.JavaInventoryVoteRenderer;
+import com.modnmetl.modnvote.ui.render.LinkedOfficesVoteRenderer;
 import com.modnmetl.modnvote.ui.render.YesNoInventoryVoteRenderer;
 import com.modnmetl.modnvote.ui.session.VoteSessionManager;
 import com.modnmetl.modnvote.ui.session.YesNoVoteSessionManager;
+import com.modnmetl.modnvote.ui.session.election.LinkedOfficesVoteSessionManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -64,6 +67,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     private final YesNoVoteSessionManager yesNoVoteSessionManager;
     private final JavaInventoryVoteRenderer rankedVoteRenderer;
     private final YesNoInventoryVoteRenderer yesNoVoteRenderer;
+    private final LinkedOfficesVoteSessionManager linkedOfficesVoteSessionManager;
+    private final LinkedOfficesVoteRenderer linkedOfficesVoteRenderer;
     private final PollOptionDao pollOptionDao;
     private final ElectionDefinitionService electionDefinitionService = new ElectionDefinitionService();
 
@@ -77,7 +82,9 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                        VoteSessionManager voteSessionManager,
                        YesNoVoteSessionManager yesNoVoteSessionManager,
                        JavaInventoryVoteRenderer rankedVoteRenderer,
-                       YesNoInventoryVoteRenderer yesNoVoteRenderer) {
+                       YesNoInventoryVoteRenderer yesNoVoteRenderer,
+                       LinkedOfficesVoteSessionManager linkedOfficesVoteSessionManager,
+                       LinkedOfficesVoteRenderer linkedOfficesVoteRenderer) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.pollService = Objects.requireNonNull(pollService, "pollService");
         this.ballotService = Objects.requireNonNull(ballotService, "ballotService");
@@ -89,6 +96,10 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         this.yesNoVoteSessionManager = Objects.requireNonNull(yesNoVoteSessionManager, "yesNoVoteSessionManager");
         this.rankedVoteRenderer = Objects.requireNonNull(rankedVoteRenderer, "rankedVoteRenderer");
         this.yesNoVoteRenderer = Objects.requireNonNull(yesNoVoteRenderer, "yesNoVoteRenderer");
+        this.linkedOfficesVoteSessionManager =
+                Objects.requireNonNull(linkedOfficesVoteSessionManager, "linkedOfficesVoteSessionManager");
+        this.linkedOfficesVoteRenderer =
+                Objects.requireNonNull(linkedOfficesVoteRenderer, "linkedOfficesVoteRenderer");
         this.pollOptionDao = new PollOptionDao(plugin.getDatabaseManager());
     }
 
@@ -240,8 +251,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         sender.sendMessage("§7Set its definition with §e/" + label + " config " + linkedPollId
                                 + " set <json> §7or §e/" + label + " config " + linkedPollId + " import <file>§7.");
                         sender.sendMessage("§7Then §e/" + label + " validate-definition " + linkedPollId
-                                + " §7and §e/" + label + " ready " + linkedPollId + "§7.");
-                        sender.sendMessage("§8(Linked Offices voting is not implemented yet; the poll cannot be opened.)");
+                                + " §7, §e/" + label + " ready " + linkedPollId
+                                + " §7and §e/" + label + " open " + linkedPollId + "§7 for voting.");
                         return true;
                     }
 
@@ -528,7 +539,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         sender.sendMessage("§7Poll is " + poll.status().name()
                                 + "; saving requires DRAFT. You can review/repair the definition here.");
                     }
-                    sender.sendMessage("§8Linked Offices voting is not implemented yet; this edits the definition only.");
+                    sender.sendMessage("§8This edits the definition only; open the poll to let players vote.");
                 } catch (PollServiceException e) {
                     sender.sendMessage("§cUnable to open the Linked Offices builder: " + e.getMessage());
                 }
@@ -950,8 +961,8 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     long pollId = parsePollId(args[1]);
                     Poll poll = requirePoll(pollId);
 
-                    if (isLinkedOfficesPoll(poll)) {
-                        sender.sendMessage("§cLinked Offices voting is not implemented yet.");
+                    if (poll.pollType() == PollType.LINKED_OFFICES) {
+                        handleLinkedOfficesVote(player, poll);
                         return true;
                     }
 
@@ -1065,15 +1076,6 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * Recognises a linked-offices poll for guarding purposes, by reserved poll type
-     * or by a {@code config_json} model of LINKED_OFFICES. Read-only; no side effects.
-     */
-    private boolean isLinkedOfficesPoll(Poll poll) {
-        return poll.pollType() == PollType.LINKED_OFFICES
-                || electionDefinitionService.isLinkedOfficesModel(poll.configJson());
-    }
-
-    /**
      * Builds the safe loader for admin-supplied definition files, rooted at
      * {@code plugins/ModNVote/definitions}. Path traversal is rejected by the loader.
      */
@@ -1098,7 +1100,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                 "§7Offices: §f" + definition.contests().size()
                         + " §7| Candidates: §f" + definition.candidates().size()
                         + " §7| Dependencies: §f" + definition.dependencies().size()));
-        sender.sendMessage("§8(Definition stored. Linked Offices voting is not implemented yet.)");
+        sender.sendMessage("§8(Definition stored. Mark the poll ready and open it to let players vote.)");
     }
 
     /**
@@ -1142,7 +1144,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        sender.sendMessage("§8(Read-only validation. Linked Offices voting is not implemented yet.)");
+        sender.sendMessage("§8(Read-only validation. A valid, READY linked-offices poll can be opened for voting.)");
     }
 
     private void handleParticipationVerification(CommandSender sender,
@@ -1277,6 +1279,37 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         for (String line : LinkedOfficeProofDisplayFormatter.formatInGame(verificationResult)) {
             sender.sendMessage(line);
         }
+    }
+
+    /**
+     * Opens the linked-offices voting GUI for a player. Enforces OPEN and that the
+     * poll carries a valid LINKED_OFFICES definition before any session is created;
+     * the binding lifecycle/validation checks are re-enforced server-side at
+     * submission time. Existing single-contest sessions for the player are cleared
+     * so only one vote GUI is active.
+     */
+    private void handleLinkedOfficesVote(Player player, Poll poll) throws PollServiceException {
+        if (poll.status() != PollStatus.OPEN) {
+            throw new PollServiceException(messages.getRaw("errors.vote_not_open"));
+        }
+
+        ElectionDefinitionService.ElectionDefinitionValidationResult validation =
+                electionDefinitionService.validate(poll);
+        if (!validation.valid() || validation.definition().isEmpty()) {
+            throw new PollServiceException("This linked-offices poll does not have a valid definition to vote on.");
+        }
+        ElectionDefinition definition = validation.definition().get();
+
+        voteSessionManager.removeSession(player.getUniqueId());
+        yesNoVoteSessionManager.removeSession(player.getUniqueId());
+        linkedOfficesVoteSessionManager.removeSession(player.getUniqueId());
+
+        player.sendMessage(messages.format("vote.gui_opening", Map.of("title", poll.title())));
+
+        linkedOfficesVoteSessionManager.createOrReplaceSession(player.getUniqueId(), poll, definition);
+        linkedOfficesVoteRenderer.open(
+                player,
+                linkedOfficesVoteSessionManager.getRequiredSession(player.getUniqueId()));
     }
 
     private void handleResultDisplay(CommandSender sender,
