@@ -17,7 +17,7 @@ If this file disagrees with code, verify against the code and resolve the disagr
 
 - Branch: `main`
 - Current release: `v2.1.1`
-- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2L, `LINKED_OFFICES` is votable end to end — see CHANGELOG and the "2.2.0 groundwork" section below)
+- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks — see CHANGELOG and the "2.2.0 groundwork" section below)
 - Java target: 21
 - Platform target: Paper 1.21.x
 - Folia-aware scheduling: through `ModNScheduler`
@@ -137,7 +137,8 @@ see the Tranche 2G–2L sections for storage, counting, and voting):
 - At that point `PollType.LINKED_OFFICES` was authorable/readyable but non-votable;
   there was NO linked-offices voting, submission, counting, or result calculation,
   and it could not be opened. (Tranche 2K added counting/results; Tranche 2L added
-  voting/submission and made it openable.)
+  voting/submission and made it openable; Tranche 2M added close/result witness
+  publication.)
 - No `anonymous_ballot_contest_responses` table or any schema change. (Tranche 2G
   later added that table; no schema change since.)
 - No multi-contest ballot submission, counting pipeline, or IRV extraction. (Added
@@ -397,6 +398,37 @@ Explicitly NOT done by Tranche 2L:
   results is still single-contest only (not wired for linked offices). Existing
   `YES_NO`/`RANKED_SINGLE_WINNER` voting/submission behaviour is unchanged.
 
+### 2.2.0 groundwork — Tranche 2M (close / result witness publication)
+
+Tranche 2M wires `LINKED_OFFICES` results into the existing close/publish witness
+flow, with **no schema changes** and **no privacy-model change**:
+
+- `/modnvote close <pollId>` and `/modnvote publishresult <pollId>` now route through
+  a shared `PollCommand.publishClosedResult(poll)` helper that branches on poll type:
+  `LINKED_OFFICES` computes a `LinkedElectionResult` and publishes it via the new
+  overload, while `YES_NO`/`RANKED_SINGLE_WINNER` stay on the unchanged single-contest
+  `getPollResult` + `publishPollClosed(Poll, options, PollResult)` path. Previously the
+  linked close/publish step failed because it called the single-contest result path,
+  which throws for `LINKED_OFFICES`.
+- New `WitnessPublicationService.publishPollClosed(Poll, LinkedElectionResult)` overload
+  renders the linked result onto the existing Discord "Poll Closed" embed.
+- New Bukkit-free `LinkedElectionWitnessPayloadFormatter` (`presentation`) builds the
+  deterministic witness fields: poll id/type/status/close time/completeness/counted +
+  skipped ballots, one field per office (counting method, seats, winners, candidate
+  tallies, dependency exclusions, IRV rounds, issues), then an election-issues field.
+  Offices/candidates/rounds render in result order.
+- `/modnvote checkpoint <pollId>` is integrity-only and poll-type agnostic; it already
+  works for `LINKED_OFFICES` via Tranche 2H and was left unchanged.
+
+Explicitly NOT done by Tranche 2M:
+
+- No schema changes; no changes to canonical payloads, counting rules, proof-phrase
+  generation, participation-token hashing, or the privacy model. The published payload
+  carries only anonymous result data — never player UUID/name, IP hash, Floodgate id,
+  participation token/receipt, proof phrase, identity key, or anonymous ballot id.
+  No new voting behaviour. Existing `YES_NO`/`RANKED_SINGLE_WINNER` close/publishresult/
+  checkpoint behaviour and the single-contest publication path are unchanged.
+
 ---
 
 ## Current product state
@@ -591,8 +623,12 @@ Important points for future sessions:
   candidate order (IRV eliminates the latest-in-order tied candidate; approval ranks
   by score desc then order asc). No office/candidate name is hardcoded.
 - Counting is over anonymous content only; it never touches participation/identity.
-- Voting/submission for linked offices still does not exist — only counting of
-  already-stored anonymous ballots.
+- Voting/submission for linked offices exists as of Tranche 2L (voter GUI + the
+  `LinkedOfficesSubmissionService` path).
+- As of Tranche 2M, closing/republishing a linked poll publishes the multi-contest
+  result to witness webhooks via `WitnessPublicationService.publishPollClosed(Poll,
+  LinkedElectionResult)`, rendered by the Bukkit-free `LinkedElectionWitnessPayloadFormatter`
+  (anonymous result data only).
 
 ### Canonical presentation layer
 

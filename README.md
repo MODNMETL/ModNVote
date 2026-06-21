@@ -243,7 +243,7 @@ For Linked Offices polls (Tranche 2L):
 /modnvote close <pollId>
 ```
 
-Closing an open poll calculates results and, when enabled, publishes a best-effort poll-closed witness message to configured webhooks.
+Closing an open poll calculates results and, when enabled, publishes a best-effort poll-closed witness message to configured webhooks. For Linked Offices polls the published message is the full multi-contest result (per-office method, seats, winners, candidate tallies, dependency exclusions, and IRV rounds), built from anonymous content only.
 
 ### Show results
 
@@ -263,7 +263,7 @@ For Linked Offices polls, this shows each office's method and seats, its winners
 /modnvote publishresult <pollId>
 ```
 
-This republishes a CLOSED poll's current result display to configured witness webhooks.
+This republishes a CLOSED poll's current result display to configured witness webhooks. Linked Offices polls republish the full multi-contest result through the same path; Yes/No and ranked single-winner polls republish their single-contest result exactly as before.
 
 Use this after upgrading result formatting or correcting public result presentation. The command requires the poll to already be `CLOSED`; it does not reopen or recalculate lifecycle state beyond reading current anonymous ballot results.
 
@@ -288,6 +288,7 @@ Supported witness events:
 - Poll opened
 - Poll closed, including a public result summary
 - Ranked poll closed, including winner, final IRV round, and IRV round breakdown
+- Linked Offices poll closed, including each office's method, seats, winners, candidate tallies, dependency exclusions, and IRV rounds
 - Automatic integrity checkpoints every configured number of accepted ballots
 - Manual integrity checkpoints via `/modnvote checkpoint <pollId>`
 - Manual closed-result republication via `/modnvote publishresult <pollId>`

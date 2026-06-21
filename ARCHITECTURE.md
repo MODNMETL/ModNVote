@@ -453,8 +453,35 @@ reuses the Tranche 2G storage and Tranche 2K counting.
   `/modnvote vote` routes `LINKED_OFFICES` to the linked-offices GUI.
 - **Privacy.** Voter identity is used only to derive the participation token/record;
   vote content goes only to `anonymous_ballots` and `anonymous_ballot_contest_responses`,
-  and no contest-response row or message combines identity with vote content. Witness
-  publication of linked-offices results is still single-contest only (not wired here).
+  and no contest-response row or message combines identity with vote content.
+
+#### Linked offices close / result witness publication
+
+Tranche 2M wires `LINKED_OFFICES` results into the existing close/publish witness
+flow — **no schema changes**, **no privacy-model change**.
+
+- **Close / publishresult routing.** `/modnvote close` and `/modnvote publishresult`
+  route through a shared `PollCommand.publishClosedResult(poll)` helper that branches on
+  poll type. `LINKED_OFFICES` computes a `LinkedElectionResult` via
+  `ResultService.getLinkedElectionResult` and publishes it through the linked overload;
+  `YES_NO`/`RANKED_SINGLE_WINNER` stay on the unchanged single-contest `getPollResult` +
+  `publishPollClosed(Poll, options, PollResult)` path. The close lifecycle operation
+  itself (`PollService.closePoll`) was always poll-type agnostic (status flip + audit
+  event); only publication needed routing.
+- **Publication overload.** `WitnessPublicationService.publishPollClosed(Poll,
+  LinkedElectionResult)` renders the linked result onto the existing Discord "Poll
+  Closed" embed, gated by the same `publication.publish_poll_closed` flag.
+- **Deterministic payload.** `presentation.LinkedElectionWitnessPayloadFormatter` is a
+  Bukkit-free, database-free builder that turns a `LinkedElectionResult` into witness
+  fields: poll id/type/status/close time/completeness/counted + skipped ballots, one
+  field per office (counting method, seats, winners, candidate tallies, dependency
+  exclusions, IRV rounds, issues), then an election-issues field. Offices render in
+  result order, candidates in contest order, rounds in round order. It receives only
+  anonymous result data, so it is structurally incapable of emitting voter identity,
+  participation token/receipt, anonymous ballot id, or proof material.
+- **Checkpoint.** `/modnvote checkpoint` is integrity-only and poll-type agnostic; it
+  already works for `LINKED_OFFICES` via Tranche 2H integrity verification and is
+  unchanged.
 
 ---
 

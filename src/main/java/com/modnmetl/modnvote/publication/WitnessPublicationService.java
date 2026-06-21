@@ -2,6 +2,8 @@ package com.modnmetl.modnvote.publication;
 
 import com.modnmetl.modnvote.domain.Poll;
 import com.modnmetl.modnvote.domain.PollOption;
+import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
+import com.modnmetl.modnvote.presentation.LinkedElectionWitnessPayloadFormatter;
 import com.modnmetl.modnvote.presentation.ResultDisplayFormatter;
 import com.modnmetl.modnvote.service.IntegrityVerificationService;
 import com.modnmetl.modnvote.service.PollService;
@@ -117,6 +119,41 @@ public final class WitnessPublicationService {
         for (ResultDisplayFormatter.FieldBlock block :
                 ResultDisplayFormatter.formatDiscordFields(result, MAX_FIELD_VALUE_LENGTH)) {
             fields.add(new DiscordField(block.name(), block.value(), false));
+        }
+
+        DiscordEmbed embed = new DiscordEmbed(
+                "Poll Closed",
+                truncate(poll.title() + " has closed.", MAX_EMBED_DESCRIPTION_LENGTH),
+                DISCORD_ORANGE,
+                List.copyOf(fields)
+        );
+
+        publishEmbed(embed);
+    }
+
+    /**
+     * Publishes a closed {@code LINKED_OFFICES} poll's multi-contest result.
+     *
+     * <p>The single-contest {@link ResultService.PollResult} shape cannot
+     * represent a linked-offices election, so this overload renders the
+     * {@link LinkedElectionResult} through its own deterministic, anonymous
+     * payload builder. Only anonymous office/candidate result data is published;
+     * no voter identity, participation token/receipt, anonymous ballot id, or
+     * proof material is ever included.
+     */
+    public void publishPollClosed(Poll poll, LinkedElectionResult result) {
+        Objects.requireNonNull(poll, "poll");
+        Objects.requireNonNull(result, "result");
+
+        if (!plugin.getConfig().getBoolean("publication.publish_poll_closed", true)) {
+            return;
+        }
+
+        List<DiscordField> fields = new ArrayList<>();
+        for (LinkedElectionWitnessPayloadFormatter.WitnessField field :
+                LinkedElectionWitnessPayloadFormatter.buildFields(
+                        poll, result, poll.closesAt(), MAX_FIELD_VALUE_LENGTH)) {
+            fields.add(new DiscordField(field.name(), field.value(), field.inline()));
         }
 
         DiscordEmbed embed = new DiscordEmbed(

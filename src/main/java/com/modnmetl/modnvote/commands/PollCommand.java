@@ -792,8 +792,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                     pollService.closePoll(pollId, sender.getName());
 
                     Poll closedPoll = requirePoll(pollId);
-                    ResultService.PollResult result = resultService.getPollResult(pollId);
-                    witnessPublicationService.publishPollClosed(closedPoll, findOptions(pollId), result);
+                    publishClosedResult(closedPoll);
 
                     sender.sendMessage(messages.format("poll.closed", Map.of(
                             "poll_id", String.valueOf(pollId),
@@ -840,8 +839,7 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
                         return true;
                     }
 
-                    ResultService.PollResult result = resultService.getPollResult(pollId);
-                    witnessPublicationService.publishPollClosed(poll, findOptions(pollId), result);
+                    publishClosedResult(poll);
 
                     sender.sendMessage("§aPublished closed result for poll §f#" + pollId
                             + "§a to configured witness webhook(s).");
@@ -1332,6 +1330,24 @@ public final class PollCommand implements CommandExecutor, TabCompleter {
         for (String line : ResultDisplayFormatter.formatInGame(result)) {
             sender.sendMessage(line);
         }
+    }
+
+    /**
+     * Publishes a closed poll's result to the witness webhooks, routing
+     * linked-offices polls to the multi-contest publication path. The
+     * single-contest {@link ResultService#getPollResult(long)} shape cannot
+     * represent a linked-offices election, so YES_NO / RANKED_SINGLE_WINNER are
+     * left on the unchanged single-contest path.
+     */
+    private void publishClosedResult(Poll poll) throws PollServiceException {
+        if (poll.pollType() == PollType.LINKED_OFFICES) {
+            LinkedElectionResult result = resultService.getLinkedElectionResult(poll.pollId());
+            witnessPublicationService.publishPollClosed(poll, result);
+            return;
+        }
+
+        ResultService.PollResult result = resultService.getPollResult(poll.pollId());
+        witnessPublicationService.publishPollClosed(poll, findOptions(poll.pollId()), result);
     }
 
     private List<PollOption> findOptions(long pollId) throws PollServiceException {
