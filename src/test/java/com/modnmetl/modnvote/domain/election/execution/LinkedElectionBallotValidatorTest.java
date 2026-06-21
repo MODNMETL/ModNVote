@@ -128,6 +128,29 @@ class LinkedElectionBallotValidatorTest {
     }
 
     @Test
+    void validStvCouncilRankingPasses() {
+        // STV is ranked like IRV: a ranked Council response is the correct shape.
+        LinkedElectionBallot ballot = LinkedElectionFixtures.stvBallotOf(
+                new RankedContestVote(COUNCIL, List.of(DAVE, ERIN, FRANK, ALICE)));
+
+        BallotValidationResult result = validator.validate(ballot);
+
+        assertTrue(result.valid(), () -> "expected valid, got: " + result.issues());
+    }
+
+    @Test
+    void approvalResponseToStvOfficeIsWrongVoteType() {
+        // Council is STV (ranked); an approval response is the wrong shape.
+        LinkedElectionBallot ballot = LinkedElectionFixtures.stvBallotOf(
+                new ApprovalContestVote(COUNCIL, List.of(DAVE, ERIN)));
+
+        BallotValidationResult result = validator.validate(ballot);
+
+        assertFalse(result.valid());
+        assertTrue(result.hasCode(BallotValidationCode.WRONG_VOTE_TYPE));
+    }
+
+    @Test
     void duplicateResponseForSameOfficeIsReported() {
         LinkedElectionBallot ballot = LinkedElectionFixtures.ballotOf(
                 new RankedContestVote(MAYOR, List.of(BOB)),

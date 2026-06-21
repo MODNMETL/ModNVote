@@ -11,6 +11,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -92,6 +93,34 @@ class LinkedOfficesBuilderStateTest {
 
         state.removeDependency(0);
         assertEquals(0, state.dependencyCount());
+    }
+
+    @Test
+    void stvOfficeKeepsMultipleSeatsAndNeedsNoMaxSelections() {
+        LinkedOfficesBuilderState state = LinkedOfficesBuilderState.empty();
+        OfficeDraft office = state.createOffice("council");
+        office.setDisplayName("Council");
+        office.setMethod(CountingMethod.STV);
+        office.setSeats(4);
+        // STV is multi-seat: setting the method must not force the seat count to 1.
+        assertEquals(4, office.seats());
+
+        state.createCandidate("a").setDisplayName("A");
+        state.toggleEligibility("a", "council");
+        state.createCandidate("b").setDisplayName("B");
+        state.toggleEligibility("b", "council");
+        state.createCandidate("c").setDisplayName("C");
+        state.toggleEligibility("c", "council");
+        state.createCandidate("d").setDisplayName("D");
+        state.toggleEligibility("d", "council");
+
+        ContestDefinition council = state.toDefinition().findContest("council").orElseThrow();
+        assertEquals(CountingMethod.STV, council.method());
+        assertEquals(4, council.seats());
+        // STV does not default maxSelections the way APPROVAL_TOP_N does; it stays unset.
+        assertNull(council.maxSelections());
+        assertTrue(validator.findIssues(state.toDefinition()).isEmpty(),
+                () -> "Issues: " + validator.findIssues(state.toDefinition()));
     }
 
     @Test

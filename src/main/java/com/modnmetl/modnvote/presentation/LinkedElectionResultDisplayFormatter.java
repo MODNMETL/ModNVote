@@ -5,6 +5,9 @@ import com.modnmetl.modnvote.domain.election.results.CandidateTally;
 import com.modnmetl.modnvote.domain.election.results.ContestResult;
 import com.modnmetl.modnvote.domain.election.results.IrvRoundResult;
 import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
+import com.modnmetl.modnvote.domain.election.results.StvCandidateTally;
+import com.modnmetl.modnvote.domain.election.results.StvResultData;
+import com.modnmetl.modnvote.domain.election.results.StvRoundResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +66,10 @@ public final class LinkedElectionResultDisplayFormatter {
         lines.add("§6Office §f" + contest.displayName() + " §8(" + contest.officeKey() + ")");
         lines.add("§7Method: §f" + contest.method() + " §8| §7Seats: §f" + contest.seats());
 
+        if (contest.stv() != null) {
+            lines.add("§7Quota: §f" + contest.stv().quota());
+        }
+
         if (contest.winners().isEmpty()) {
             lines.add("§eNo winner could be determined.");
         } else {
@@ -98,6 +105,10 @@ public final class LinkedElectionResultDisplayFormatter {
             }
         }
 
+        if (contest.stv() != null) {
+            appendStv(lines, contest.stv());
+        }
+
         if (contest.exhaustedBallots() > 0) {
             lines.add("§7Exhausted ballots (final round): §f" + contest.exhaustedBallots());
         }
@@ -105,6 +116,26 @@ public final class LinkedElectionResultDisplayFormatter {
         for (String issue : contest.issues()) {
             lines.add("§cIssue: §7" + issue);
         }
+    }
+
+    private static void appendStv(List<String> lines, StvResultData stv) {
+        if (!stv.rounds().isEmpty()) {
+            lines.add("§eSTV round breakdown:");
+            for (StvRoundResult round : stv.rounds()) {
+                lines.add("§6Round " + round.roundNumber() + "§7:");
+                for (StvCandidateTally tally : round.tallies()) {
+                    lines.add("  §8- §f" + tally.candidateKey() + "§7: §f" + tally.value());
+                }
+                if (!round.electedThisRound().isEmpty()) {
+                    lines.add("  §aElected: §f" + String.join(", ", round.electedThisRound()));
+                }
+                if (round.eliminatedCandidateKey() != null) {
+                    lines.add("  §cEliminated: §f" + round.eliminatedCandidateKey());
+                }
+                lines.add("  §7" + round.summary());
+            }
+        }
+        lines.add("§7Exhausted ballot value: §f" + stv.exhaustedValue());
     }
 
     private static void appendRound(List<String> lines, IrvRoundResult round) {

@@ -232,7 +232,7 @@ For ranked polls:
 For Linked Offices polls (Tranche 2L):
 
 - An office overview lists every office with its method (ranked/approval), seats, and completion status.
-- Clicking an office opens its screen: rank candidates in order for IRV offices, or approve up to the configured maximum for approval offices.
+- Clicking an office opens its screen: rank candidates in order for ranked offices (IRV single-seat and STV multi-seat), or approve up to the configured maximum for approval offices. STV offices use the same ranked screen as IRV with no selection cap.
 - Every eligible candidate is shown for each office; the eventual winner of a source office is not hidden from a dependent office (the `EXCLUDE_WINNERS` dependency is applied during counting, not at cast time).
 - A review screen summarises every office before the final submit, which is guarded until each required office has a selection.
 - On submission the player receives a ballot hash, participation receipt, and a private proof phrase; voting once is enforced by participation token.
@@ -243,7 +243,7 @@ For Linked Offices polls (Tranche 2L):
 /modnvote close <pollId>
 ```
 
-Closing an open poll calculates results and, when enabled, publishes a best-effort poll-closed witness message to configured webhooks. For Linked Offices polls the published message is the full multi-contest result (per-office method, seats, winners, candidate tallies, dependency exclusions, and IRV rounds), built from anonymous content only.
+Closing an open poll calculates results and, when enabled, publishes a best-effort poll-closed witness message to configured webhooks. For Linked Offices polls the published message is the full multi-contest result (per-office method, seats, winners, candidate tallies, dependency exclusions, IRV rounds, and — for STV offices — the quota, transfer/elimination rounds, and exhausted value), built from anonymous content only.
 
 ### Show results
 
@@ -258,6 +258,8 @@ For ranked single-winner polls, this shows the poll winner, final winner tally, 
 For Linked Offices polls, this shows each office's method and seats, its winners, candidate tallies, IRV round breakdowns, any dependency exclusions applied (an office's winners excluded from a dependent office), and any issues. Counting is deterministic and reads anonymous ballot content only; it exposes no voter identity. As of Tranche 2L, Linked Offices polls are **votable end to end** — players cast multi-office ballots through the voting GUI and those anonymous ballots are what counting operates on.
 
 For approval (top-N) offices, candidate definition order is never used to break a tie that decides the final seat(s). Candidates are elected by approval score in descending groups, and a tied score group is elected only when it fits entirely within the remaining seats. If a tie crosses the seat cutoff (more tied candidates than seats left), **none** of those tied candidates is elected: the office is shown as unresolved with the number of unresolved seats and the tied candidate keys, and a runoff or administrator resolution is required to fill them. Clearly leading candidates above the cutoff are still elected, and a tie that does not cross the cutoff still fills the seats normally.
+
+Multi-seat offices can also be counted by **STV (single transferable vote)**. STV uses ranked ballots like IRV but fills multiple seats: a Droop quota is computed once from the valid ballot value, candidates at or above quota are elected and their surplus is transferred at the Gregory fraction, and when no one reaches quota the lowest candidate is eliminated and transferred; ballots with no further continuing preference exhaust. The result shows the quota, the elected winners, the round-by-round transfers and eliminations, and the exhausted ballot value. As with approval, candidate definition order never decides a seat-deciding tie: an elimination tie that would decide the final seat(s) leaves those seats unresolved for a runoff/administrator resolution. The recommended Pineton configuration is a Mayor counted by IRV plus a Council counted by STV that excludes the Mayor winner — see [`docs/examples/pineton-mayor-stv-council.json`](docs/examples/pineton-mayor-stv-council.json).
 
 ### Republish a closed poll result
 
@@ -393,7 +395,7 @@ Normal admin-facing commands:
 
 `/modnvote show <pollId>` prints a poll's details. For Yes/No and ranked single-winner polls it shows the ranking rules and the configured options. For Linked Offices polls it instead shows the election definition: whether the stored definition is valid, the office/candidate/dependency counts, and a brief per-office list (each office's counting method, seats, and candidate count). Linked Offices polls carry no `poll_options`, so no options section is shown for them.
 
-`/modnvote create linked_offices` creates a DRAFT Linked Offices poll. `/modnvote config <pollId> set <json>` stores an inline definition, and `/modnvote config <pollId> import <file>` imports one from `plugins/ModNVote/definitions/<file>` (UTF-8 JSON, path-traversal rejected). Definitions are validated before they are saved; invalid definitions are rejected without writing. A valid Linked Offices poll can be marked READY and then **opened for voting** (`/modnvote open <pollId>`); as of Tranche 2L players vote through the GUI with `/modnvote vote <pollId>`, ballots are stored anonymously and counted, and results render after close. See `docs/examples/linked-offices-mayor-council.json` for an example definition.
+`/modnvote create linked_offices` creates a DRAFT Linked Offices poll. `/modnvote config <pollId> set <json>` stores an inline definition, and `/modnvote config <pollId> import <file>` imports one from `plugins/ModNVote/definitions/<file>` (UTF-8 JSON, path-traversal rejected). Definitions are validated before they are saved; invalid definitions are rejected without writing. A valid Linked Offices poll can be marked READY and then **opened for voting** (`/modnvote open <pollId>`); as of Tranche 2L players vote through the GUI with `/modnvote vote <pollId>`, ballots are stored anonymously and counted, and results render after close. See `docs/examples/linked-offices-mayor-council.json` (Mayor IRV + Council approval top-N) and `docs/examples/pineton-mayor-stv-council.json` (Mayor IRV + Council STV) for example definitions.
 
 `/modnvote edit-definition <pollId>` opens an in-game GUI builder/editor for a Linked Offices poll's definition: screens for offices, candidates, and EXCLUDE_WINNERS dependencies, plus Validate and Save. The builder edits definition data only — it is an editor for the `ElectionDefinition`, not a voter GUI, and it saves exclusively through the service layer (the same validated path as JSON import). The separate voter GUI used to cast a ballot is opened with `/modnvote vote <pollId>` once the poll is open (Tranche 2L).
 
@@ -661,8 +663,10 @@ post-election, privacy, and YES_NO/RANKED regression checks), follow
 remains the final step before tagging. The first manual smoke run exposed one
 release-blocking fairness defect — APPROVAL_TOP_N decided seat-deciding ties by
 candidate definition order — which has been fixed (a cutoff tie now leaves the
-seats unresolved for a runoff/admin resolution); the checklist must be re-run to
-completion against the rebuilt jar before tagging.
+seats unresolved for a runoff/admin resolution). STV counting for multi-seat
+council contests is now also supported (recommended Pineton config: Mayor IRV +
+Council STV) and follows the same no-silent-tie-break fairness rule; the checklist
+must be re-run to completion against the rebuilt jar before tagging.
 
 ---
 

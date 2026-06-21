@@ -192,7 +192,7 @@ public final class BallotCanonicalizer {
 
     private static String responseType(CountingMethod method) {
         return switch (method) {
-            case IRV -> "RANKED";
+            case IRV, STV -> "RANKED";
             case APPROVAL_TOP_N -> "APPROVAL";
         };
     }

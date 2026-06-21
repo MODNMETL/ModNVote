@@ -154,6 +154,52 @@ class ElectionDefinitionValidatorTest {
     }
 
     @Test
+    void acceptsStvWithMultipleSeats() {
+        ElectionDefinition definition = new ElectionDefinition(
+                "LINKED_OFFICES",
+                List.of(new ContestDefinition("council", "Council", CountingMethod.STV, 4, null, false,
+                        List.of("alice", "bob", "carol", "dave", "emma"))),
+                List.of(
+                        new CandidateDefinition("alice", "Alice", List.of("council")),
+                        new CandidateDefinition("bob", "Bob", List.of("council")),
+                        new CandidateDefinition("carol", "Carol", List.of("council")),
+                        new CandidateDefinition("dave", "Dave", List.of("council")),
+                        new CandidateDefinition("emma", "Emma", List.of("council"))),
+                List.of());
+        assertTrue(validator.findIssues(definition).isEmpty(),
+                () -> "expected a valid STV definition, found: " + validator.findIssues(definition));
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void rejectsStvWithZeroSeats() {
+        ElectionDefinition definition = new ElectionDefinition(
+                "LINKED_OFFICES",
+                List.of(new ContestDefinition("council", "Council", CountingMethod.STV, 0, null, false,
+                        List.of("alice", "bob"))),
+                List.of(
+                        new CandidateDefinition("alice", "Alice", List.of("council")),
+                        new CandidateDefinition("bob", "Bob", List.of("council"))),
+                List.of());
+        assertContainsIssue(definition, "seats >= 1");
+    }
+
+    @Test
+    void rejectsStvWithMaxSelections() {
+        // STV uses ranked ballots; maxSelections is not applicable and is rejected.
+        ElectionDefinition definition = new ElectionDefinition(
+                "LINKED_OFFICES",
+                List.of(new ContestDefinition("council", "Council", CountingMethod.STV, 2, 3, false,
+                        List.of("alice", "bob", "carol"))),
+                List.of(
+                        new CandidateDefinition("alice", "Alice", List.of("council")),
+                        new CandidateDefinition("bob", "Bob", List.of("council")),
+                        new CandidateDefinition("carol", "Carol", List.of("council"))),
+                List.of());
+        assertContainsIssue(definition, "must not set maxSelections");
+    }
+
+    @Test
     void rejectsContestWithFewerEligibleCandidatesThanSeats() {
         ElectionDefinition definition = new ElectionDefinition(
                 "LINKED_OFFICES",

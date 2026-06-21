@@ -131,17 +131,22 @@ public final class LinkedOfficesBuilderRenderer {
         bind(inv, session, 12, item(Material.COMPARATOR, "§eCounting method",
                 lore("§7Current: §f" + orUnset(office.method() == null ? null : office.method().name()),
                         "§8",
-                        "§7Click to cycle IRV / APPROVAL_TOP_N.",
-                        "§8IRV is always single-seat.")),
+                        "§7Click to cycle IRV / APPROVAL_TOP_N / STV.",
+                        "§8IRV is single-seat; APPROVAL_TOP_N and STV are multi-seat.",
+                        "§8STV is ranked like IRV but fills multiple seats.")),
                 new Action("CYCLE_METHOD"));
         bind(inv, session, 13, item(Material.TARGET, "§eSeats: §f" + office.seats(),
                 lore("§eLeft-click: §7+1", "§cRight-click: §7-1",
                         office.method() == CountingMethod.IRV ? "§8IRV forces a single seat." : "§8")),
                 new Action("SEAT_ADJUST"));
-        String maxSel = office.maxSelections() == null ? "(unset)" : String.valueOf(office.maxSelections());
+        boolean approval = office.method() == CountingMethod.APPROVAL_TOP_N;
+        String maxSel = !approval ? "(n/a)"
+                : office.maxSelections() == null ? "(unset)" : String.valueOf(office.maxSelections());
         bind(inv, session, 14, item(Material.HOPPER, "§eMax selections: §f" + maxSel,
                 lore("§eLeft-click: §7+1", "§cRight-click: §7-1 (clears below 1)",
-                        "§8Used by APPROVAL_TOP_N; defaults to seats if unset.")),
+                        approval
+                                ? "§8Used by APPROVAL_TOP_N; defaults to seats if unset."
+                                : "§8Only APPROVAL_TOP_N uses max selections; ignored for IRV/STV.")),
                 new Action("MAXSEL_ADJUST"));
         bind(inv, session, 15, item(office.allowAbstain() ? Material.LIME_DYE : Material.GRAY_DYE,
                 "§eAllow abstain: §f" + office.allowAbstain(),

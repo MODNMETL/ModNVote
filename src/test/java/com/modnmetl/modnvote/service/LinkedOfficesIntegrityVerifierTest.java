@@ -70,6 +70,36 @@ class LinkedOfficesIntegrityVerifierTest {
     }
 
     @Test
+    void stvCouncilBallotPassesIntegrity(@TempDir Path tempDir) throws Exception {
+        // STV reuses the ranked storage path; a stored STV ballot must recount and
+        // pass integrity verification unchanged.
+        DatabaseManager dbm = new DatabaseManager(tempDir.resolve("stv-integrity.db"));
+        new SchemaInitializer(dbm).initialize();
+        ElectionDefinition def = LinkedStorageTestFixtures.mayorStvCouncil();
+        String configJson = new ElectionDefinitionSerializer().serialize(def);
+        PollDao pollDao = new PollDao(dbm);
+        long pollId;
+        try (Connection connection = dbm.getConnection()) {
+            pollId = pollDao.insertPoll(connection, linkedPoll(0, "stv-integrity", configJson),
+                    "tester", "DEFAULT", configJson);
+        }
+        Poll poll = linkedPoll(pollId, "stv-integrity", configJson);
+        LinkedBallotStorageService storage = new LinkedBallotStorageService(dbm);
+        LinkedOfficesIntegrityVerifier verifier = new LinkedOfficesIntegrityVerifier(dbm);
+
+        LinkedElectionBallot ballot = new LinkedElectionBallot(def, List.of(
+                new RankedContestVote(MAYOR, List.of(ALICE, BOB, CAROL)),
+                new RankedContestVote(COUNCIL, List.of(GRACE, DAVE, ERIN, ALICE))));
+        storage.storeLinkedOfficesBallot(poll, def, ballot, "id-stv", "JAVA", null, null, PROOF, T);
+
+        IntegrityVerificationResult result = verifier.verify(poll);
+
+        assertTrue(result.overallValid(), () -> "expected valid, issues: " + result.issues());
+        assertTrue(result.ballotHashesValid());
+        assertTrue(result.issues().isEmpty(), () -> "unexpected issues: " + result.issues());
+    }
+
+    @Test
     void tamperedContestResponseFailsIntegrity(@TempDir Path tempDir) throws Exception {
         Ctx ctx = setup(tempDir, "tamper-row");
         long ballotId = storeBallot(ctx, "id-1", PROOF, T);

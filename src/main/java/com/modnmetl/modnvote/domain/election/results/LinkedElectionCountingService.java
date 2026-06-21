@@ -13,6 +13,8 @@ import com.modnmetl.modnvote.domain.election.execution.ElectionDependencyEvaluat
 import com.modnmetl.modnvote.domain.election.execution.LinkedElectionBallot;
 import com.modnmetl.modnvote.domain.election.execution.RankedContestVote;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -56,10 +58,28 @@ import java.util.Set;
  * arbitrarily elect one tied candidate over another at the cutoff. A runoff or
  * administrator resolution fills unresolved seats outside this count.
  *
+ * <p><strong>STV multi-seat counting.</strong> For {@code STV}, candidates are
+ * ranked exactly as for IRV but multiple seats are filled by deterministic
+ * fractional single-transferable-vote. A Droop quota
+ * ({@code floor(validBallots / (seats + 1)) + 1}) is computed once from the
+ * initial valid ballot value. Candidates reaching quota are elected and their
+ * surplus is transferred at the Gregory fraction {@code surplus / tally}; when no
+ * one reaches quota the lowest candidate is eliminated and transferred at full
+ * value; ballots with no further continuing preference exhaust. All fractional
+ * arithmetic uses a fixed scale and deterministic rounding so repeated counts of
+ * the same ballots are identical. As with approval, candidate order is never used
+ * to decide a seat-deciding tie: an elimination tie whose outcome would change the
+ * final elected seats leaves those seats unresolved (see
+ * {@link ContestResult#unresolvedSeatCount()}) for a runoff/admin resolution
+ * rather than being broken by definition order.
+ *
  * <p>Counting is generic: no office or candidate name is hardcoded. "Mayor" and
  * "Council" are only illustrative configuration.
  */
 public final class LinkedElectionCountingService {
+
+    /** Fixed scale for all STV fractional arithmetic, for deterministic results. */
+    private static final int STV_SCALE = 6;
 
     private final ElectionDependencyEvaluator dependencyEvaluator;
 
@@ -208,6 +228,9 @@ public final class LinkedElectionCountingService {
 
         if (contest.method() == CountingMethod.IRV) {
             return countIrv(contest, ballots, eligible, excluded);
+        }
+        if (contest.method() == CountingMethod.STV) {
+            return countStv(contest, ballots, eligible, excluded);
         }
         return countApproval(contest, ballots, eligible, excluded);
     }
@@ -393,6 +416,374 @@ public final class LinkedElectionCountingService {
             map.put(tally.candidateKey(), tally.votes());
         }
         return map;
+    }
+
+    // --- STV ------------------------------------------------------------------
+
+    /**
+     * One ballot participating in an STV count: its ranked preferences restricted
+     * to candidates eligible for the contest, a cursor to the candidate it is
+     * currently allocated to, and its current fractional value.
+     */
+    private static final class StvBallot {
+        final List<String> prefs;
+        int cursor;
+        BigDecimal value;
+
+        StvBallot(List<String> prefs, BigDecimal value) {
+            this.prefs = prefs;
+            this.cursor = 0;
+            this.value = value;
+        }
+    }
+
+    private ContestResult countStv(ContestDefinition contest,
+                                   List<LinkedElectionBallot> ballots,
+                                   List<String> eligible,
+                                   List<String> excluded) {
+        String officeKey = contest.officeKey();
+        int seats = contest.seats();
+        List<String> issues = new ArrayList<>();
+
+        Set<String> eligibleSet = new LinkedHashSet<>(eligible);
+
+        // Build per-ballot preference lists, restricted to eligible candidates in
+        // voter order. A ballot with no eligible preference exhausts immediately.
+        List<StvBallot> stvBallots = new ArrayList<>();
+        BigDecimal exhausted = BigDecimal.ZERO.setScale(STV_SCALE, RoundingMode.UNNECESSARY);
+        int validBallots = 0;
+        for (LinkedElectionBallot ballot : ballots) {
+            Optional<ContestVote> response = ballot.findResponse(officeKey);
+            if (response.isEmpty() || !(response.get() instanceof RankedContestVote ranked)) {
+                continue;
+            }
+            List<String> prefs = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (String candidateKey : ranked.orderedCandidateKeys()) {
+                if (eligibleSet.contains(candidateKey) && seen.add(candidateKey)) {
+                    prefs.add(candidateKey);
+                }
+            }
+            if (prefs.isEmpty()) {
+                exhausted = exhausted.add(BigDecimal.ONE);
+                continue;
+            }
+            validBallots++;
+            stvBallots.add(new StvBallot(prefs, BigDecimal.ONE.setScale(STV_SCALE, RoundingMode.UNNECESSARY)));
+        }
+
+        // Droop quota from the initial valid ballot value (computed once).
+        BigDecimal quota = BigDecimal.valueOf((validBallots / (seats + 1)) + 1L)
+                .setScale(STV_SCALE, RoundingMode.UNNECESSARY);
+
+        if (eligible.isEmpty()) {
+            issues.add("Office '" + officeKey + "' has no eligible candidates to elect.");
+        }
+        if (!eligible.isEmpty() && eligible.size() < seats) {
+            issues.add("Office '" + officeKey + "' has " + eligible.size()
+                    + " eligible candidate(s) for " + seats
+                    + " seat(s); only " + eligible.size() + " seat(s) could be filled.");
+        }
+
+        // Continuing candidates in contest order; elected in election order.
+        LinkedHashSet<String> continuing = new LinkedHashSet<>(eligible);
+        List<String> elected = new ArrayList<>();
+        Set<String> eliminated = new LinkedHashSet<>();
+        Map<String, BigDecimal> finalValue = new LinkedHashMap<>();
+
+        List<StvRoundResult> rounds = new ArrayList<>();
+        int unresolvedSeatCount = 0;
+        List<String> unresolvedCandidateKeys = List.of();
+        boolean complete = true;
+
+        int roundNumber = 0;
+        while (elected.size() < seats && !continuing.isEmpty()) {
+            roundNumber++;
+            int remainingSeats = seats - elected.size();
+
+            // Current pile totals for every continuing candidate, in contest order.
+            Map<String, BigDecimal> tally = stvTally(eligible, continuing, elected, stvBallots);
+            List<StvCandidateTally> snapshot = stvSnapshot(eligible, continuing, tally);
+
+            // If the continuing candidates can all be elected, fill the remaining seats.
+            if (continuing.size() <= remainingSeats) {
+                List<String> rest = orderedContinuing(eligible, continuing);
+                elected.addAll(rest);
+                for (String candidateKey : rest) {
+                    finalValue.put(candidateKey, tally.get(candidateKey));
+                }
+                continuing.clear();
+                rounds.add(new StvRoundResult(roundNumber, snapshot, List.copyOf(rest), null,
+                        "Remaining candidates fill the last seat(s): " + String.join(", ", rest) + "."));
+                break;
+            }
+
+            // Elect the highest continuing candidate that has reached quota.
+            String quotaWinner = highestAtOrAboveQuota(eligible, continuing, tally, quota);
+            if (quotaWinner != null) {
+                BigDecimal candidateTotal = tally.get(quotaWinner);
+                BigDecimal surplus = candidateTotal.subtract(quota);
+                elected.add(quotaWinner);
+                finalValue.put(quotaWinner, quota);
+                continuing.remove(quotaWinner);
+
+                // Always move the elected candidate's ballots off them (Gregory method):
+                // they retain exactly quota and every ballot leaves at the surplus
+                // fraction. A zero surplus transfers ballots at value 0, which both
+                // correctly contributes nothing and prevents any later re-count.
+                BigDecimal transferValue = surplus.signum() > 0
+                        ? surplus.divide(candidateTotal, STV_SCALE, RoundingMode.DOWN)
+                        : zero();
+                exhausted = exhausted.add(transferSurplus(quotaWinner, transferValue, continuing, elected, stvBallots));
+                String summary = surplus.signum() > 0
+                        ? quotaWinner + " reached quota (" + plain(candidateTotal) + " ≥ "
+                                + plain(quota) + ") and is elected; surplus " + plain(surplus)
+                                + " transferred at value " + plain(transferValue) + "."
+                        : quotaWinner + " reached quota exactly (" + plain(quota)
+                                + ") and is elected; no surplus to transfer.";
+                rounds.add(new StvRoundResult(roundNumber, snapshot, List.of(quotaWinner), null, summary));
+                continue;
+            }
+
+            // No one reached quota: eliminate the lowest, unless the elimination would
+            // decide the final seat(s) among tied-lowest candidates.
+            List<String> lowestTie = lowestTiedGroup(eligible, continuing, tally);
+            if (lowestTie.size() >= 2 && continuing.size() - lowestTie.size() < remainingSeats) {
+                // Removing the whole tied group would drop below the remaining seats, so
+                // at least one tied candidate must be elected — and they are
+                // indistinguishable by the count. Leave the seats unresolved.
+                unresolvedSeatCount = remainingSeats;
+                unresolvedCandidateKeys = List.copyOf(lowestTie);
+                complete = false;
+                issues.add("Office '" + officeKey + "' has an STV elimination tie that decides the final seat(s): "
+                        + unresolvedSeatCount + " seat(s) remain unresolved among tied candidates ["
+                        + String.join(", ", unresolvedCandidateKeys)
+                        + "]. A runoff or administrator resolution is required; "
+                        + "no tied candidate was eliminated or elected by candidate order.");
+                rounds.add(new StvRoundResult(roundNumber, snapshot, List.of(), null,
+                        "Elimination tie decides the final seat(s); "
+                                + unresolvedSeatCount + " seat(s) left unresolved among ["
+                                + String.join(", ", unresolvedCandidateKeys) + "]."));
+                break;
+            }
+
+            // Safe elimination: break a non-deciding tie deterministically by latest in
+            // contest order (earlier-defined candidates survive), matching IRV.
+            String toEliminate = lowestTie.get(lowestTie.size() - 1);
+            continuing.remove(toEliminate);
+            eliminated.add(toEliminate);
+            finalValue.put(toEliminate, tally.get(toEliminate));
+            exhausted = exhausted.add(transferEliminated(toEliminate, continuing, elected, stvBallots));
+            String tieNote = lowestTie.size() >= 2
+                    ? " (lowest tie broken by latest contest order among [" + String.join(", ", lowestTie) + "])"
+                    : "";
+            rounds.add(new StvRoundResult(roundNumber, snapshot, List.of(), toEliminate,
+                    toEliminate + " has the lowest tally (" + plain(tally.get(toEliminate))
+                            + ") and is eliminated" + tieNote + "; ballots transferred to next preference."));
+        }
+
+        // Record final values for any candidate not yet captured (still continuing at a
+        // break, or unresolved). Recompute a final tally pass for completeness.
+        Map<String, BigDecimal> finalTally = stvTally(eligible, continuing, elected, stvBallots);
+        for (String candidateKey : eligible) {
+            finalValue.putIfAbsent(candidateKey,
+                    finalTally.getOrDefault(candidateKey, zero()));
+        }
+
+        Set<String> winnerSet = new LinkedHashSet<>(elected);
+        Set<String> unresolvedSet = new LinkedHashSet<>(unresolvedCandidateKeys);
+        List<CandidateResult> candidateResults = new ArrayList<>();
+        for (String candidateKey : eligible) {
+            BigDecimal value = finalValue.getOrDefault(candidateKey, zero());
+            int score = value.setScale(0, RoundingMode.DOWN).intValue();
+            Integer eliminationRound = null; // STV rounds are reported via StvResultData, not per-candidate.
+            candidateResults.add(new CandidateResult(
+                    candidateKey, score, winnerSet.contains(candidateKey), false, eliminationRound,
+                    unresolvedSet.contains(candidateKey)));
+        }
+        for (String candidateKey : excluded) {
+            candidateResults.add(new CandidateResult(candidateKey, 0, false, true, null));
+        }
+
+        List<StvCandidateTally> finalTallies = new ArrayList<>();
+        for (String candidateKey : eligible) {
+            finalTallies.add(new StvCandidateTally(candidateKey, plain(finalValue.getOrDefault(candidateKey, zero()))));
+        }
+
+        StvResultData stv = new StvResultData(plain(quota), plain(exhausted), finalTallies, rounds);
+
+        return new ContestResult(
+                officeKey,
+                displayName(contest),
+                CountingMethod.STV,
+                seats,
+                List.copyOf(elected),
+                candidateResults,
+                excluded,
+                0,
+                List.of(),
+                issues,
+                complete,
+                unresolvedSeatCount,
+                unresolvedCandidateKeys,
+                stv);
+    }
+
+    /** Sum each continuing candidate's currently-allocated ballot value. */
+    private Map<String, BigDecimal> stvTally(List<String> contestOrder,
+                                             Set<String> continuing,
+                                             List<String> elected,
+                                             List<StvBallot> ballots) {
+        Set<String> active = new LinkedHashSet<>(continuing);
+        Map<String, BigDecimal> tally = new LinkedHashMap<>();
+        for (String candidateKey : contestOrder) {
+            if (active.contains(candidateKey)) {
+                tally.put(candidateKey, zero());
+            }
+        }
+        for (StvBallot ballot : ballots) {
+            String holder = currentHolder(ballot, active);
+            if (holder != null) {
+                tally.put(holder, tally.get(holder).add(ballot.value));
+            }
+        }
+        return tally;
+    }
+
+    /**
+     * Advances a ballot's cursor to its highest-ranked candidate that is currently
+     * "active" (a continuing candidate that can still receive value), and returns
+     * that candidate, or {@code null} if the ballot has exhausted.
+     */
+    private String currentHolder(StvBallot ballot, Set<String> active) {
+        while (ballot.cursor < ballot.prefs.size() && !active.contains(ballot.prefs.get(ballot.cursor))) {
+            ballot.cursor++;
+        }
+        return ballot.cursor < ballot.prefs.size() ? ballot.prefs.get(ballot.cursor) : null;
+    }
+
+    private List<StvCandidateTally> stvSnapshot(List<String> contestOrder,
+                                                Set<String> continuing,
+                                                Map<String, BigDecimal> tally) {
+        List<StvCandidateTally> snapshot = new ArrayList<>();
+        for (String candidateKey : contestOrder) {
+            if (continuing.contains(candidateKey)) {
+                snapshot.add(new StvCandidateTally(candidateKey, plain(tally.getOrDefault(candidateKey, zero()))));
+            }
+        }
+        return snapshot;
+    }
+
+    /**
+     * @return the continuing candidate at or above quota with the highest tally
+     * (ties broken by earliest contest order — only affects which surplus is
+     * processed first, never which candidate is elected, since every candidate at
+     * quota is elected), or {@code null} if none reached quota
+     */
+    private String highestAtOrAboveQuota(List<String> contestOrder,
+                                         Set<String> continuing,
+                                         Map<String, BigDecimal> tally,
+                                         BigDecimal quota) {
+        String best = null;
+        BigDecimal bestValue = null;
+        for (String candidateKey : contestOrder) {
+            if (!continuing.contains(candidateKey)) {
+                continue;
+            }
+            BigDecimal value = tally.get(candidateKey);
+            if (value.compareTo(quota) >= 0 && (bestValue == null || value.compareTo(bestValue) > 0)) {
+                best = candidateKey;
+                bestValue = value;
+            }
+        }
+        return best;
+    }
+
+    /** The continuing candidates sharing the lowest tally, in contest order. */
+    private List<String> lowestTiedGroup(List<String> contestOrder,
+                                         Set<String> continuing,
+                                         Map<String, BigDecimal> tally) {
+        BigDecimal lowest = null;
+        for (String candidateKey : contestOrder) {
+            if (!continuing.contains(candidateKey)) {
+                continue;
+            }
+            BigDecimal value = tally.get(candidateKey);
+            if (lowest == null || value.compareTo(lowest) < 0) {
+                lowest = value;
+            }
+        }
+        List<String> group = new ArrayList<>();
+        for (String candidateKey : contestOrder) {
+            if (continuing.contains(candidateKey) && tally.get(candidateKey).compareTo(lowest) == 0) {
+                group.add(candidateKey);
+            }
+        }
+        return group;
+    }
+
+    /**
+     * Transfers an elected candidate's surplus: every ballot allocated to them
+     * leaves at {@code value * transferValue} to its next continuing preference.
+     *
+     * @return the value that exhausted (had no continuing preference to receive it)
+     */
+    private BigDecimal transferSurplus(String elected,
+                                       BigDecimal transferValue,
+                                       Set<String> continuing,
+                                       List<String> electedList,
+                                       List<StvBallot> ballots) {
+        Set<String> active = new LinkedHashSet<>(continuing);
+        active.add(elected); // so currentHolder can still find ballots sitting with the just-elected candidate
+        BigDecimal exhausted = zero();
+        for (StvBallot ballot : ballots) {
+            if (!elected.equals(currentHolder(ballot, active))) {
+                continue;
+            }
+            ballot.value = ballot.value.multiply(transferValue).setScale(STV_SCALE, RoundingMode.DOWN);
+            ballot.cursor++; // leave the elected candidate
+            String next = currentHolder(ballot, continuing);
+            if (next == null) {
+                exhausted = exhausted.add(ballot.value);
+                ballot.value = zero();
+            }
+        }
+        return exhausted;
+    }
+
+    /**
+     * Transfers an eliminated candidate's ballots at full value to their next
+     * continuing preference.
+     *
+     * @return the value that exhausted (had no continuing preference to receive it)
+     */
+    private BigDecimal transferEliminated(String eliminated,
+                                          Set<String> continuing,
+                                          List<String> electedList,
+                                          List<StvBallot> ballots) {
+        Set<String> active = new LinkedHashSet<>(continuing);
+        active.add(eliminated);
+        BigDecimal exhausted = zero();
+        for (StvBallot ballot : ballots) {
+            if (!eliminated.equals(currentHolder(ballot, active))) {
+                continue;
+            }
+            ballot.cursor++; // leave the eliminated candidate
+            String next = currentHolder(ballot, continuing);
+            if (next == null) {
+                exhausted = exhausted.add(ballot.value);
+                ballot.value = zero();
+            }
+        }
+        return exhausted;
+    }
+
+    private static BigDecimal zero() {
+        return BigDecimal.ZERO.setScale(STV_SCALE, RoundingMode.UNNECESSARY);
+    }
+
+    private static String plain(BigDecimal value) {
+        return value.setScale(STV_SCALE, RoundingMode.DOWN).toPlainString();
     }
 
     // --- Approval -------------------------------------------------------------

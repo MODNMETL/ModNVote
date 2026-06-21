@@ -62,6 +62,28 @@ final class LinkedElectionFixtures {
                 ElectionDefinition.LINKED_OFFICES_MODEL, List.of(mayor, council), candidates, dependencies);
     }
 
+    /**
+     * @return a single-office Council STV definition (4 seats, ranked) for testing
+     * the ranked ballot shape of STV
+     */
+    static ElectionDefinition stvCouncil() {
+        ContestDefinition council = new ContestDefinition(
+                COUNCIL, "Council", CountingMethod.STV, 4, null, false,
+                List.of(ALICE, DAVE, ERIN, FRANK, GRACE));
+        List<CandidateDefinition> candidates = List.of(
+                new CandidateDefinition(ALICE, "Alice", List.of(COUNCIL)),
+                new CandidateDefinition(DAVE, "Dave", List.of(COUNCIL)),
+                new CandidateDefinition(ERIN, "Erin", List.of(COUNCIL)),
+                new CandidateDefinition(FRANK, "Frank", List.of(COUNCIL)),
+                new CandidateDefinition(GRACE, "Grace", List.of(COUNCIL)));
+        return new ElectionDefinition(
+                ElectionDefinition.LINKED_OFFICES_MODEL, List.of(council), candidates, List.of());
+    }
+
+    static LinkedElectionBallot stvBallotOf(ContestVote... votes) {
+        return new LinkedElectionBallot(stvCouncil(), List.of(votes));
+    }
+
     static RankedContestVote validMayorRanking() {
         return new RankedContestVote(MAYOR, List.of(BOB, ALICE, CAROL));
     }

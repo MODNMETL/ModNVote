@@ -1,0 +1,30 @@
+{
+  "_comment": "EXAMPLE ONLY. Recommended Pineton configuration: a single-seat Mayor counted by IRV plus a four-seat Council counted by STV (single transferable vote). The Mayor winner is excluded from the Council count via excludeWinnersFrom. Office and candidate keys are arbitrary identifiers; no office name is hardcoded anywhere in the plugin. STV uses ranked ballots, exactly like IRV, but fills multiple seats; it does not use maxSelections. Copy this file into plugins/ModNVote/definitions and import it with /modnvote config <pollId> import pineton-mayor-stv-council.json after creating a LINKED_OFFICES poll, then validate-definition, ready and open it for voting.",
+  "model": "LINKED_OFFICES",
+  "offices": {
+    "mayor": {
+      "displayName": "Pineton Mayor",
+      "method": "IRV",
+      "seats": 1,
+      "allowAbstain": false,
+      "candidates": ["vradow", "space", "rooster"]
+    },
+    "council": {
+      "displayName": "Pineton Council",
+      "method": "STV",
+      "seats": 4,
+      "allowAbstain": false,
+      "candidates": ["vradow", "katie", "space", "rooster", "metta", "mort", "fitzy"],
+      "excludeWinnersFrom": ["mayor"]
+    }
+  },
+  "candidateDefinitions": {
+    "vradow":  { "displayName": "Vradow",  "eligibleFor": ["mayor", "council"] },
+    "space":   { "displayName": "Space",   "eligibleFor": ["mayor", "council"] },
+    "rooster": { "displayName": "Rooster", "eligibleFor": ["mayor", "council"] },
+    "katie":   { "displayName": "Katie",   "eligibleFor": ["council"] },
+    "metta":   { "displayName": "Metta",   "eligibleFor": ["council"] },
+    "mort":    { "displayName": "Mort",    "eligibleFor": ["council"] },
+    "fitzy":   { "displayName": "Fitzy",   "eligibleFor": ["council"] }
+  }
+}

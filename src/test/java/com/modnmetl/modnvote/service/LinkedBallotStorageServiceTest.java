@@ -188,6 +188,47 @@ class LinkedBallotStorageServiceTest {
         assertEquals(List.of(ALICE, BOB, CAROL, ALICE, DAVE, GRACE), orderA);
     }
 
+    @Test
+    void stvCouncilStoresRankedRowsAndRoundTrips(@TempDir Path tempDir) throws Exception {
+        Ctx ctx = setup(tempDir, "stv-store");
+        Poll poll = ctx.poll;
+        ElectionDefinition def = LinkedStorageTestFixtures.mayorStvCouncil();
+
+        // Council is STV (ranked): a ranked Council response must store as RANKED rows
+        // with 1-based rank positions, exactly like IRV ranked responses.
+        LinkedElectionBallot ballot = new LinkedElectionBallot(def, List.of(
+                new RankedContestVote(MAYOR, List.of(ALICE, BOB, CAROL)),
+                new RankedContestVote(COUNCIL, List.of(GRACE, DAVE, ERIN, ALICE))));
+
+        LinkedBallotStorageService.LinkedBallotStorageResult result =
+                ctx.service.storeLinkedOfficesBallot(poll, def, ballot, "id-stv", "JAVA", null, null, PROOF, T);
+
+        List<AnonymousBallotContestResponse> council =
+                new AnonymousBallotContestResponseDao(ctx.dbm)
+                        .findResponsesByAnonymousBallotId(result.anonymousBallotId()).stream()
+                        .filter(r -> r.officeKey().equals(COUNCIL))
+                        .toList();
+
+        // Ranked: 4 rows, all RANKED, rank positions 1..4 preserving voter order, no selection order.
+        assertEquals(4, council.size());
+        for (AnonymousBallotContestResponse row : council) {
+            assertEquals(AnonymousBallotContestResponse.TYPE_RANKED, row.responseType());
+        }
+        assertEquals(List.of(GRACE, DAVE, ERIN, ALICE),
+                council.stream().map(AnonymousBallotContestResponse::candidateKey).toList());
+        assertEquals(List.of(1, 2, 3, 4),
+                council.stream().map(AnonymousBallotContestResponse::rankPosition).toList());
+
+        // Reconstruction reproduces the original canonical payload and hash byte-for-byte.
+        List<AnonymousBallotContestResponse> rows =
+                new AnonymousBallotContestResponseDao(ctx.dbm)
+                        .findResponsesByAnonymousBallotId(result.anonymousBallotId());
+        LinkedElectionBallot reconstructed = new LinkedBallotReconstructor().reconstruct(def, rows);
+        String reconstructedPayload = canonicalizer.canonicalLinkedOfficesBallotPayload(poll, def, reconstructed, T);
+        assertEquals(result.canonicalPayload(), reconstructedPayload);
+        assertEquals(result.ballotHash(), sha256(reconstructedPayload));
+    }
+
     // --- helpers --------------------------------------------------------------
 
     private record Ctx(DatabaseManager dbm, LinkedBallotStorageService service, Poll poll) {

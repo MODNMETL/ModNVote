@@ -6,6 +6,9 @@ import com.modnmetl.modnvote.domain.election.results.CandidateTally;
 import com.modnmetl.modnvote.domain.election.results.ContestResult;
 import com.modnmetl.modnvote.domain.election.results.IrvRoundResult;
 import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
+import com.modnmetl.modnvote.domain.election.results.StvCandidateTally;
+import com.modnmetl.modnvote.domain.election.results.StvResultData;
+import com.modnmetl.modnvote.domain.election.results.StvRoundResult;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -129,6 +132,53 @@ class LinkedElectionResultDisplayFormatterTest {
         assertFalse(joined.contains("mort§7: §f2 §a(elected)"), joined);
         // Whole-result incompleteness is surfaced.
         assertTrue(joined.contains("incomplete"), joined);
+    }
+
+    @Test
+    void stvResultShowsQuotaWinnersAndRounds() {
+        StvResultData stv = new StvResultData(
+                "3.000000", "1.000000",
+                List.of(
+                        new StvCandidateTally("c1", "3.000000"),
+                        new StvCandidateTally("c2", "3.000000"),
+                        new StvCandidateTally("c3", "2.000000"),
+                        new StvCandidateTally("c4", "0.000000")),
+                List.of(
+                        new StvRoundResult(1, List.of(
+                                new StvCandidateTally("c1", "5.000000"),
+                                new StvCandidateTally("c2", "0.000000"),
+                                new StvCandidateTally("c3", "2.000000"),
+                                new StvCandidateTally("c4", "1.000000")),
+                                List.of("c1"), null,
+                                "c1 reached quota (5.000000 ≥ 3.000000) and is elected; surplus 2.000000 transferred at value 0.400000."),
+                        new StvRoundResult(2, List.of(
+                                new StvCandidateTally("c2", "2.000000"),
+                                new StvCandidateTally("c3", "2.000000"),
+                                new StvCandidateTally("c4", "1.000000")),
+                                List.of(), "c4",
+                                "c4 has the lowest tally (1.000000) and is eliminated; ballots transferred to next preference.")));
+        ContestResult council = new ContestResult(
+                "office_council", "Council", CountingMethod.STV, 3,
+                List.of("c1", "c2", "c3"),
+                List.of(
+                        new CandidateResult("c1", 3, true, false, null),
+                        new CandidateResult("c2", 3, true, false, null),
+                        new CandidateResult("c3", 2, true, false, null),
+                        new CandidateResult("c4", 0, false, false, null)),
+                List.of(), 0, List.of(), List.of(), true, 0, List.of(), stv);
+
+        LinkedElectionResult result = new LinkedElectionResult(
+                21L, "STV Election", true, 8, 0, List.of(council), List.of());
+
+        String joined = String.join("\n", LinkedElectionResultDisplayFormatter.formatInGame(result));
+
+        assertTrue(joined.contains("Quota: §f3.000000"), joined);
+        assertTrue(joined.contains("Winners: §fc1, c2, c3"), joined);
+        assertTrue(joined.contains("STV round breakdown"), joined);
+        assertTrue(joined.contains("Round 1"), joined);
+        assertTrue(joined.contains("Elected: §fc1"), joined);
+        assertTrue(joined.contains("Eliminated: §fc4"), joined);
+        assertTrue(joined.contains("Exhausted ballot value: §f1.000000"), joined);
     }
 
     @Test

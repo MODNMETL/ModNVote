@@ -25,8 +25,8 @@ import java.util.Set;
  *   <li>All contests: office must exist; the vote shape must match the contest's
  *       counting method; the voter must not respond to the same office twice;
  *       and the definition's dependency references must resolve.</li>
- *   <li>Ranked (IRV) contests: every candidate must exist, with no duplicates,
- *       and all must be eligible for the office.</li>
+ *   <li>Ranked contests (IRV and STV): every candidate must exist, with no
+ *       duplicates, and all must be eligible for the office.</li>
  *   <li>Approval (APPROVAL_TOP_N) contests: every candidate must exist, with no
  *       duplicates, must not exceed {@code maxSelections}, and all must be
  *       eligible for the office.</li>
@@ -90,7 +90,7 @@ public final class LinkedElectionBallotValidator {
         CountingMethod method = contest.method();
 
         if (vote instanceof RankedContestVote ranked) {
-            if (method != CountingMethod.IRV) {
+            if (method == null || !method.usesRankedBallot()) {
                 issues.add(new BallotValidationIssue(
                         BallotValidationCode.WRONG_VOTE_TYPE,
                         officeKey,

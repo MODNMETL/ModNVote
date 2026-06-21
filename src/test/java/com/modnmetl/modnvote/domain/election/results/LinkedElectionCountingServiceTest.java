@@ -262,6 +262,210 @@ class LinkedElectionCountingServiceTest {
                 () -> "expected fewer-candidates-than-seats issue: " + board.issues());
     }
 
+    // --- STV ------------------------------------------------------------------
+
+    @Test
+    void stvElectsFourWinnersUnderQuota() {
+        // 4 seats; c1..c4 each get 3 first preferences (= quota), c5 gets 1.
+        // Total valid = 13, Droop quota = floor(13/5)+1 = 3. The four front-runners
+        // each meet quota and are elected; c5 is not.
+        ElectionDefinition def = singleStv(BOARD, 4, List.of(C1, C2, C3, C4, C5));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 3, List.of(C1));
+        addRankedTimes(ballots, def, BOARD, 3, List.of(C2));
+        addRankedTimes(ballots, def, BOARD, 3, List.of(C3));
+        addRankedTimes(ballots, def, BOARD, 3, List.of(C4));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C5));
+
+        ContestResult board = counting.count(poll(), def, ballots).findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2, C3, C4), board.winners());
+        assertTrue(board.complete());
+        assertEquals("3.000000", board.stv().quota());
+        assertFalse(candidate(board, C5).elected());
+    }
+
+    @Test
+    void stvTransfersSurplusToElectRemainingSeats() {
+        // 3 seats; 5×(c1>c2), 2×c3, 1×c4. Total = 8, quota = floor(8/4)+1 = 3.
+        // c1 reaches quota (5), its surplus 2 transfers to c2 at 0.4 -> c2 = 2.0.
+        // c4 is eliminated (exhausts), then c2 and c3 fill the last two seats.
+        ElectionDefinition def = singleStv(BOARD, 3, List.of(C1, C2, C3, C4));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 5, List.of(C1, C2));
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C3));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C4));
+
+        ContestResult board = counting.count(poll(), def, ballots).findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2, C3), board.winners());
+        assertTrue(board.complete());
+        assertEquals("3.000000", board.stv().quota());
+        // Round 1 elected c1 and described a surplus transfer.
+        StvRoundResult round1 = board.stv().rounds().get(0);
+        assertEquals(List.of(C1), round1.electedThisRound());
+        assertTrue(round1.summary().contains("surplus"), () -> "round 1 summary: " + round1.summary());
+        // c4 was eliminated at some point.
+        assertTrue(board.stv().rounds().stream().anyMatch(r -> C4.equals(r.eliminatedCandidateKey())),
+                "c4 must be eliminated");
+    }
+
+    @Test
+    void stvEliminationTransferElectsContinuingCandidate() {
+        // 2 seats; 2×c1, 4×c2, 1×(c3>c1), 1×(c4>c1). Total = 8, quota = floor(8/3)+1 = 3.
+        // c2 reaches quota and is elected (surplus exhausts on bullet votes). Then c3
+        // and c4 tie lowest but the elimination is not seat-deciding, so c4 (latest in
+        // order) is eliminated and its ballot transfers to c1 -> c1 reaches quota and
+        // is elected. The eliminated candidate's transfer changes the outcome.
+        ElectionDefinition def = singleStv(BOARD, 2, List.of(C1, C2, C3, C4));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C1));
+        addRankedTimes(ballots, def, BOARD, 4, List.of(C2));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C3, C1));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C4, C1));
+
+        ContestResult board = counting.count(poll(), def, ballots).findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C2, C1), board.winners(), "c2 first by quota, then c1 via elimination transfer");
+        assertTrue(board.complete());
+        assertTrue(candidate(board, C1).elected());
+        assertTrue(board.stv().rounds().stream().anyMatch(r -> C4.equals(r.eliminatedCandidateKey())),
+                "c4 must be eliminated and transfer to c1");
+    }
+
+    @Test
+    void stvExhaustsBallotsWithNoContinuingPreference() {
+        // 2 seats; 6×c1 (bullet), 2×c2, 1×c3. Total = 9, quota = floor(9/3)+1 = 4.
+        // c1's surplus (2) has nowhere to go (bullet votes) and exhausts; c3 is then
+        // eliminated and also exhausts. Exhausted value must be strictly positive.
+        ElectionDefinition def = singleStv(BOARD, 2, List.of(C1, C2, C3));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 6, List.of(C1));
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C2));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C3));
+
+        ContestResult board = counting.count(poll(), def, ballots).findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2), board.winners());
+        assertTrue(board.complete());
+        assertEquals("4.000000", board.stv().quota());
+        assertTrue(Double.parseDouble(board.stv().exhaustedValue()) > 0.0,
+                () -> "expected positive exhausted value: " + board.stv().exhaustedValue());
+    }
+
+    @Test
+    void stvAppliesMayorWinnerExclusionBeforeCouncilCount() {
+        // Mayor (IRV, 1 seat) excludes its winner ("vradow") from Council (STV, 4 seats).
+        // After exclusion, Council eligibles are space/rooster/katie/metta/mort/fitzy.
+        // Two vradow>space ballots transfer to space at count time (exclusion at count).
+        String mayor = "office_mayor";
+        String council = "office_council";
+        String vradow = "vradow";
+        String runnerUp = "mayor_runner";
+        String space = "space";
+        String rooster = "rooster";
+        String katie = "katie";
+        String metta = "metta";
+        String mort = "mort";
+        String fitzy = "fitzy";
+
+        ContestDefinition mayorContest = new ContestDefinition(
+                mayor, "Mayor", CountingMethod.IRV, 1, null, false, List.of(vradow, runnerUp));
+        ContestDefinition councilContest = new ContestDefinition(
+                council, "Council", CountingMethod.STV, 4, null, false,
+                List.of(space, rooster, katie, metta, mort, fitzy, vradow));
+        List<CandidateDefinition> candidates = List.of(
+                new CandidateDefinition(vradow, "Vradow", List.of(mayor, council)),
+                new CandidateDefinition(runnerUp, "Runner", List.of(mayor)),
+                new CandidateDefinition(space, "Space", List.of(council)),
+                new CandidateDefinition(rooster, "Rooster", List.of(council)),
+                new CandidateDefinition(katie, "Katie", List.of(council)),
+                new CandidateDefinition(metta, "Metta", List.of(council)),
+                new CandidateDefinition(mort, "Mort", List.of(council)),
+                new CandidateDefinition(fitzy, "Fitzy", List.of(council)));
+        List<OfficeDependencyRule> deps = List.of(
+                new OfficeDependencyRule(OfficeDependencyType.EXCLUDE_WINNERS, mayor, council));
+        ElectionDefinition def = new ElectionDefinition(
+                ElectionDefinition.LINKED_OFFICES_MODEL,
+                List.of(mayorContest, councilContest), candidates, deps);
+
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            ballots.add(new LinkedElectionBallot(def, List.<ContestVote>of(
+                    new RankedContestVote(mayor, List.of(vradow)))));
+        }
+        ballots.add(new LinkedElectionBallot(def, List.<ContestVote>of(
+                new RankedContestVote(mayor, List.of(runnerUp)))));
+        // Council ballots: bullets plus two vradow>space (vradow excluded -> count for space).
+        addRankedTimes(ballots, def, council, 5, List.of(space));
+        addRankedTimes(ballots, def, council, 5, List.of(rooster));
+        addRankedTimes(ballots, def, council, 3, List.of(katie));
+        addRankedTimes(ballots, def, council, 3, List.of(metta));
+        addRankedTimes(ballots, def, council, 2, List.of(mort));
+        addRankedTimes(ballots, def, council, 1, List.of(fitzy));
+        addRankedTimes(ballots, def, council, 2, List.of(vradow, space));
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult councilResult = result.findContest(council).orElseThrow();
+
+        assertEquals(List.of(vradow), result.findContest(mayor).orElseThrow().winners());
+        assertTrue(councilResult.excludedCandidateKeys().contains(vradow),
+                "Mayor winner must be excluded from Council before the STV count");
+        assertFalse(councilResult.winners().contains(vradow), "excluded candidate cannot win Council");
+        assertEquals(List.of(space, rooster, katie, metta), councilResult.winners());
+        assertTrue(councilResult.complete());
+        assertTrue(result.complete());
+    }
+
+    @Test
+    void stvIsDeterministicAcrossRepeatedRuns() {
+        ElectionDefinition def = singleStv(BOARD, 3, List.of(C1, C2, C3, C4));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 5, List.of(C1, C2));
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C3));
+        addRankedTimes(ballots, def, BOARD, 1, List.of(C4));
+
+        ContestResult first = counting.count(poll(), def, ballots).findContest(BOARD).orElseThrow();
+        ContestResult second = new LinkedElectionCountingService().count(poll(), def, ballots)
+                .findContest(BOARD).orElseThrow();
+
+        assertEquals(first.winners(), second.winners());
+        assertEquals(first.stv().quota(), second.stv().quota());
+        assertEquals(first.stv().exhaustedValue(), second.stv().exhaustedValue());
+        assertEquals(first.stv().rounds().size(), second.stv().rounds().size());
+        for (int i = 0; i < first.stv().rounds().size(); i++) {
+            assertEquals(first.stv().rounds().get(i).summary(), second.stv().rounds().get(i).summary());
+            assertEquals(first.stv().rounds().get(i).tallies().size(),
+                    second.stv().rounds().get(i).tallies().size());
+        }
+    }
+
+    @Test
+    void stvEliminationTieForFinalSeatsIsUnresolvedNotBrokenByOrder() {
+        // 2 seats; c1=c2=c3 each 2 bullet votes. Total = 6, quota = floor(6/3)+1 = 3.
+        // No one reaches quota and all three are tied lowest; eliminating any of them
+        // decides the final seats, so the contest is left unresolved rather than
+        // dropping a candidate by definition order.
+        ElectionDefinition def = singleStv(BOARD, 2, List.of(C1, C2, C3));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C1));
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C2));
+        addRankedTimes(ballots, def, BOARD, 2, List.of(C3));
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(), board.winners(), "no candidate may be elected by order in a seat-deciding tie");
+        assertFalse(board.complete());
+        assertEquals(2, board.unresolvedSeatCount());
+        assertEquals(List.of(C1, C2, C3), board.unresolvedCandidateKeys());
+        assertFalse(result.complete());
+        for (String tied : List.of(C1, C2, C3)) {
+            assertTrue(candidate(board, tied).unresolved(), tied + " must be unresolved");
+            assertFalse(candidate(board, tied).elected(), tied + " must not be elected");
+        }
+    }
+
     // --- Dependency -----------------------------------------------------------
 
     @Test
@@ -456,6 +660,21 @@ class LinkedElectionCountingServiceTest {
         return new ElectionDefinition(
                 ElectionDefinition.LINKED_OFFICES_MODEL, List.of(contest),
                 candidateDefs(officeKey, candidateKeys), List.of());
+    }
+
+    private static ElectionDefinition singleStv(String officeKey, int seats, List<String> candidateKeys) {
+        ContestDefinition contest = new ContestDefinition(
+                officeKey, officeKey, CountingMethod.STV, seats, null, false, candidateKeys);
+        return new ElectionDefinition(
+                ElectionDefinition.LINKED_OFFICES_MODEL, List.of(contest),
+                candidateDefs(officeKey, candidateKeys), List.of());
+    }
+
+    private static void addRankedTimes(List<LinkedElectionBallot> ballots, ElectionDefinition def,
+                                       String officeKey, int count, List<String> ranking) {
+        for (int i = 0; i < count; i++) {
+            addRanked(ballots, def, officeKey, ranking);
+        }
     }
 
     private static ElectionDefinition singleApproval(String officeKey, int seats, List<String> candidateKeys) {

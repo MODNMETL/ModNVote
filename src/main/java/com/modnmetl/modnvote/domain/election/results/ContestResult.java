@@ -37,6 +37,10 @@ import java.util.Objects;
  *                             complete. None of these candidates is elected — a runoff
  *                             or administrator resolution is required to fill the
  *                             remaining seats.
+ * @param stv                  the STV-specific result detail (quota, exhausted value,
+ *                             final fractional tallies, round summaries) for an
+ *                             {@code STV} contest, or {@code null} for IRV / approval
+ *                             contests
  */
 public record ContestResult(
         String officeKey,
@@ -51,7 +55,8 @@ public record ContestResult(
         List<String> issues,
         boolean complete,
         int unresolvedSeatCount,
-        List<String> unresolvedCandidateKeys
+        List<String> unresolvedCandidateKeys,
+        StvResultData stv
 ) {
     public ContestResult {
         Objects.requireNonNull(officeKey, "officeKey");
@@ -64,14 +69,27 @@ public record ContestResult(
     }
 
     /**
+     * Backwards-compatible constructor for a non-STV contest (IRV or approval),
+     * including any unresolved-cutoff-tie state. The STV detail is absent.
+     */
+    public ContestResult(String officeKey, String displayName, CountingMethod method, int seats,
+                         List<String> winners, List<CandidateResult> candidateResults,
+                         List<String> excludedCandidateKeys, int exhaustedBallots,
+                         List<IrvRoundResult> rounds, List<String> issues,
+                         boolean complete, int unresolvedSeatCount, List<String> unresolvedCandidateKeys) {
+        this(officeKey, displayName, method, seats, winners, candidateResults, excludedCandidateKeys,
+                exhaustedBallots, rounds, issues, complete, unresolvedSeatCount, unresolvedCandidateKeys, null);
+    }
+
+    /**
      * Backwards-compatible constructor for a contest that filled its seats decisively
-     * (no unresolved cutoff tie).
+     * (no unresolved cutoff tie, no STV detail).
      */
     public ContestResult(String officeKey, String displayName, CountingMethod method, int seats,
                          List<String> winners, List<CandidateResult> candidateResults,
                          List<String> excludedCandidateKeys, int exhaustedBallots,
                          List<IrvRoundResult> rounds, List<String> issues) {
         this(officeKey, displayName, method, seats, winners, candidateResults, excludedCandidateKeys,
-                exhaustedBallots, rounds, issues, true, 0, List.of());
+                exhaustedBallots, rounds, issues, true, 0, List.of(), null);
     }
 }

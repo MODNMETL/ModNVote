@@ -172,8 +172,8 @@ dependency interpretation, and its canonical ordering are pinned down ahead of
 the storage tranche.
 
 - **Response model:** a sealed `ContestVote` with two shapes —
-  `RankedContestVote` (ordered preferences, for IRV) and `ApprovalContestVote`
-  (selections, for APPROVAL_TOP_N) — plus `LinkedElectionBallot`, an
+  `RankedContestVote` (ordered preferences, for ranked methods IRV and STV) and
+  `ApprovalContestVote` (selections, for APPROVAL_TOP_N) — plus `LinkedElectionBallot`, an
   `ElectionDefinition` together with the voter's per-contest responses. All
   immutable records.
 - **Validation:** `LinkedElectionBallotValidator` checks a ballot against its
@@ -398,8 +398,12 @@ ballot submission path.
   result records: `LinkedElectionResult` (poll id/title, completeness, counted /
   skipped counts, per-contest results, issues), `ContestResult` (office, method,
   seats, winners, candidate results, excluded keys, exhausted ballots, IRV rounds,
-  issues), `CandidateResult`, `IrvRoundResult`, and `CandidateTally`. They carry
-  office/candidate keys and counts only — never voter identity.
+  issues, plus `complete` / `unresolvedSeatCount` / `unresolvedCandidateKeys` for
+  unresolved seat-deciding ties, and a nullable `stv` detail), `CandidateResult` (with
+  an `unresolved` flag), `IrvRoundResult`, `CandidateTally`, and — for STV — the
+  `StvResultData` (quota, exhausted value, final fractional tallies, round summaries),
+  `StvRoundResult`, and `StvCandidateTally` records. They carry office/candidate keys
+  and counts only — never voter identity.
 - **Pure calculator.** `LinkedElectionCountingService` (`domain.election.results`)
   is database-free and Bukkit-free. It counts contests in the topological order from
   `ElectionDependencyEvaluator`, applies `EXCLUDE_WINNERS` (a source office's winners
@@ -407,9 +411,16 @@ ballot submission path.
   to count first), and is generic — no office/candidate name is hardcoded. IRV
   (single-seat) elects on a strict majority of active ballots, eliminating the
   lowest tally with a deterministic latest-in-contest-order tie-break and exhausting
-  ballots with no continuing candidate; approval top-N ranks by score then contest
-  order. A dependency cycle is reported and the result marked incomplete rather than
-  pretending success.
+  ballots with no continuing candidate. Approval top-N elects by walking score groups
+  from highest to lowest, electing a whole tied group only when it fits the remaining
+  seats; a tie that crosses the seat cutoff leaves those seats unresolved instead of
+  being broken by candidate order. STV (multi-seat ranked; Tranche 2O) runs
+  deterministic fractional single-transferable-vote: a Droop quota computed once from
+  the valid ballot value, surplus transfers at the Gregory fraction, lowest-candidate
+  elimination, and ballot exhaustion, with a seat-deciding elimination tie left
+  unresolved rather than broken by order. All STV fractional arithmetic uses a fixed
+  scale and deterministic rounding. A dependency cycle is reported and the result
+  marked incomplete rather than pretending success.
 - **Loader collaborator.** `LinkedElectionResultService` (`service`) is a Bukkit-free
   collaborator (holds only a `DatabaseManager`, like `LinkedOfficesIntegrityVerifier`)
   that loads `anonymous_ballots` + `anonymous_ballot_contest_responses`, reconstructs
@@ -506,6 +517,34 @@ models, no schema/canonical/counting/hashing changes.
   linked polls cannot reach the single-contest result/vote-session paths.
 - **Config.** `publication.publish_poll_closed` is the single shared flag for all
   closed-result publication (documented in `config.yml`); no new key was added.
+
+#### Linked offices STV counting (Tranche 2O)
+
+STV (single transferable vote) is added as a linked-office counting method for
+multi-seat contests — **no schema, canonical-payload, proof-phrase,
+participation-token-hash, or privacy change**.
+
+- **Ranked reuse.** `CountingMethod.STV` voters rank candidates exactly as for IRV.
+  `CountingMethod.usesRankedBallot()` (true for IRV and STV) is the single source of
+  truth for "is this contest ranked?" consumed by the voter `LinkedOfficesVoteState`,
+  the `LinkedElectionBallotValidator`, `LinkedElectionCanonicalModel`/`BallotCanonicalizer`
+  (`method=STV;type=RANKED`), and `LinkedBallotStorageService` (RANKED rows with
+  `rank_position`). Stored STV ballots reconstruct as `RankedContestVote` and verify by
+  proof and recount identically to IRV.
+- **Count.** `LinkedElectionCountingService.countStv` implements deterministic fractional
+  STV (Droop quota once from the valid ballot value; Gregory surplus transfer; lowest
+  elimination; ballot exhaustion) using `BigDecimal` at a fixed scale and `RoundingMode.DOWN`.
+  A seat-deciding elimination tie is left unresolved (`unresolvedSeatCount` /
+  `unresolvedCandidateKeys`, `complete = false`) rather than broken by candidate order; a
+  non-deciding elimination tie is broken deterministically by latest-in-contest order and
+  reported. Output is a `ContestResult` whose nullable `stv` field carries `StvResultData`.
+- **Validation / authoring / display.** The definition validator accepts `method: "STV"`
+  for multi-seat contests and rejects `maxSelections` on an STV office; the admin builder
+  cycles `IRV → APPROVAL_TOP_N → STV`, allows multi-seat STV, and disables the
+  max-selections control for STV; the voter GUI uses the same ranked screen as IRV with no
+  cap; the in-game and witness formatters render quota/winners/rounds/exhausted value.
+  Example `docs/examples/pineton-mayor-stv-council.json`. `IRV`, `APPROVAL_TOP_N`, `YES_NO`,
+  and `RANKED_SINGLE_WINNER` behaviour is unchanged and regression-locked.
 
 ---
 

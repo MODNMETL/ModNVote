@@ -122,6 +122,10 @@ public final class ElectionDefinitionValidator {
             }
         }
 
+        if (contest.method() == CountingMethod.STV && contest.maxSelections() != null) {
+            issues.add("office '" + officeKey + "' uses STV (ranked ballots) and must not set maxSelections.");
+        }
+
         int eligibleCount = 0;
         for (String candidateKey : contest.candidateKeys()) {
             CandidateDefinition candidate = candidatesByKey.get(candidateKey);

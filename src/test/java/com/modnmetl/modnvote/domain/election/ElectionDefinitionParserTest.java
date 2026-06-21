@@ -124,6 +124,19 @@ class ElectionDefinitionParserTest {
     }
 
     @Test
+    void parsesStvMethodForMultiSeatContest() {
+        String json = EXAMPLE_JSON
+                .replace("\"method\": \"APPROVAL_TOP_N\",", "\"method\": \"STV\",")
+                .replace("\"maxSelections\": 4,", "");
+        ElectionDefinition definition = parser.parse(json);
+
+        ContestDefinition council = definition.findContest("council").orElseThrow();
+        assertEquals(CountingMethod.STV, council.method());
+        assertEquals(4, council.seats());
+        assertNull(council.maxSelections());
+    }
+
+    @Test
     void rejectsUnknownModel() {
         String json = EXAMPLE_JSON.replace("\"LINKED_OFFICES\"", "\"SOMETHING_ELSE\"");
         ElectionDefinitionException ex = assertThrows(ElectionDefinitionException.class, () -> parser.parse(json));

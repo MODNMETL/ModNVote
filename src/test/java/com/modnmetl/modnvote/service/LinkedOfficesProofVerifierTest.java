@@ -87,6 +87,38 @@ class LinkedOfficesProofVerifierTest {
     }
 
     @Test
+    void stvCouncilProofVerifiesWithRankedContent(@TempDir Path tempDir) throws Exception {
+        // STV Council reuses the ranked storage/proof path; a valid proof must verify
+        // and return the Council response as RANKED in the voter's preference order.
+        DatabaseManager dbm = new DatabaseManager(tempDir.resolve("stv-proof.db"));
+        new SchemaInitializer(dbm).initialize();
+        ElectionDefinition def = LinkedStorageTestFixtures.mayorStvCouncil();
+        String configJson = new ElectionDefinitionSerializer().serialize(def);
+        PollDao pollDao = new PollDao(dbm);
+        long pollId;
+        try (Connection connection = dbm.getConnection()) {
+            pollId = pollDao.insertPoll(connection, linkedPoll(0, "stv-proof", configJson),
+                    "tester", "DEFAULT", configJson);
+        }
+        Poll poll = linkedPoll(pollId, "stv-proof", configJson);
+        LinkedBallotStorageService storage = new LinkedBallotStorageService(dbm);
+        LinkedOfficesProofVerifier verifier = new LinkedOfficesProofVerifier(dbm);
+
+        LinkedElectionBallot ballot = new LinkedElectionBallot(def, List.of(
+                new RankedContestVote(MAYOR, List.of(ALICE, BOB, CAROL)),
+                new RankedContestVote(COUNCIL, List.of(GRACE, DAVE, ERIN, ALICE))));
+        storage.storeLinkedOfficesBallot(poll, def, ballot, "id-stv", "JAVA", null, null, PROOF, T);
+
+        LinkedOfficeBallotProofVerificationResult result = verifier.verify(poll, PROOF);
+
+        assertTrue(result.verified(), () -> "failure: " + result.failureReason());
+        OfficeResponse council = result.offices().stream()
+                .filter(o -> o.officeKey().equals(COUNCIL)).findFirst().orElseThrow();
+        assertEquals("RANKED", council.responseType());
+        assertEquals(List.of(GRACE, DAVE, ERIN, ALICE), council.orderedCandidateKeys());
+    }
+
+    @Test
     void wrongProofPhraseReturnsNoBallotContent(@TempDir Path tempDir) throws Exception {
         Ctx ctx = setup(tempDir, "wrong-phrase");
         storeBallot(ctx, "id-1", PROOF, T);

@@ -196,7 +196,7 @@ public final class LinkedBallotStorageService {
             CanonicalBallot canonicalBallot) {
         List<AnonymousBallotContestResponseDao.NewContestResponse> rows = new ArrayList<>();
         for (CanonicalContestResponse response : canonicalBallot.responses()) {
-            boolean ranked = response.method() == CountingMethod.IRV;
+            boolean ranked = response.method().usesRankedBallot();
             String responseType = ranked
                     ? AnonymousBallotContestResponse.TYPE_RANKED
                     : AnonymousBallotContestResponse.TYPE_APPROVAL;

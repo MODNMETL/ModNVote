@@ -6,6 +6,9 @@ import com.modnmetl.modnvote.domain.election.results.CandidateTally;
 import com.modnmetl.modnvote.domain.election.results.ContestResult;
 import com.modnmetl.modnvote.domain.election.results.IrvRoundResult;
 import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
+import com.modnmetl.modnvote.domain.election.results.StvCandidateTally;
+import com.modnmetl.modnvote.domain.election.results.StvResultData;
+import com.modnmetl.modnvote.domain.election.results.StvRoundResult;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -97,6 +100,10 @@ public final class LinkedElectionWitnessPayloadFormatter {
         sb.append("Method: ").append(contest.method())
                 .append(" | Seats: ").append(contest.seats()).append('\n');
 
+        if (contest.stv() != null) {
+            sb.append("Quota: ").append(contest.stv().quota()).append('\n');
+        }
+
         if (contest.winners().isEmpty()) {
             sb.append("Winners: (none determined)").append('\n');
         } else {
@@ -137,6 +144,10 @@ public final class LinkedElectionWitnessPayloadFormatter {
             }
         }
 
+        if (contest.stv() != null) {
+            appendStv(sb, contest.stv());
+        }
+
         if (contest.exhaustedBallots() > 0) {
             sb.append("Exhausted ballots (final round): ").append(contest.exhaustedBallots()).append('\n');
         }
@@ -146,6 +157,27 @@ public final class LinkedElectionWitnessPayloadFormatter {
         }
 
         return stripTrailingNewline(sb.toString());
+    }
+
+    private static void appendStv(StringBuilder sb, StvResultData stv) {
+        if (!stv.rounds().isEmpty()) {
+            sb.append("STV rounds:").append('\n');
+            for (StvRoundResult round : stv.rounds()) {
+                sb.append("Round ").append(round.roundNumber()).append(": ");
+                List<String> parts = new ArrayList<>();
+                for (StvCandidateTally tally : round.tallies()) {
+                    parts.add(tally.candidateKey() + " " + tally.value());
+                }
+                sb.append(String.join(", ", parts)).append('\n');
+                if (!round.electedThisRound().isEmpty()) {
+                    sb.append("  Elected: ").append(String.join(", ", round.electedThisRound())).append('\n');
+                }
+                if (round.eliminatedCandidateKey() != null) {
+                    sb.append("  Eliminated: ").append(round.eliminatedCandidateKey()).append('\n');
+                }
+            }
+        }
+        sb.append("Exhausted ballot value: ").append(stv.exhaustedValue()).append('\n');
     }
 
     private static void appendRound(StringBuilder sb, IrvRoundResult round) {

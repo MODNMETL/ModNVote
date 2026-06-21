@@ -59,6 +59,34 @@ final class LinkedStorageTestFixtures {
     }
 
     /**
+     * Mayor (IRV, 1 seat) + Council (STV, 4 seats, ranked) with an EXCLUDE_WINNERS
+     * dependency Mayor -> Council. STV reuses the ranked ballot/storage path.
+     */
+    static ElectionDefinition mayorStvCouncil() {
+        ContestDefinition mayor = new ContestDefinition(
+                MAYOR, "Mayor", CountingMethod.IRV, 1, null, false,
+                List.of(ALICE, BOB, CAROL));
+        ContestDefinition council = new ContestDefinition(
+                COUNCIL, "Council", CountingMethod.STV, 4, null, false,
+                List.of(ALICE, DAVE, ERIN, FRANK, GRACE));
+
+        List<CandidateDefinition> candidates = List.of(
+                new CandidateDefinition(ALICE, "Alice", List.of(MAYOR, COUNCIL)),
+                new CandidateDefinition(BOB, "Bob", List.of(MAYOR)),
+                new CandidateDefinition(CAROL, "Carol", List.of(MAYOR)),
+                new CandidateDefinition(DAVE, "Dave", List.of(COUNCIL)),
+                new CandidateDefinition(ERIN, "Erin", List.of(COUNCIL)),
+                new CandidateDefinition(FRANK, "Frank", List.of(COUNCIL)),
+                new CandidateDefinition(GRACE, "Grace", List.of(COUNCIL)));
+
+        List<OfficeDependencyRule> dependencies = List.of(
+                new OfficeDependencyRule(OfficeDependencyType.EXCLUDE_WINNERS, MAYOR, COUNCIL));
+
+        return new ElectionDefinition(
+                ElectionDefinition.LINKED_OFFICES_MODEL, List.of(mayor, council), candidates, dependencies);
+    }
+
+    /**
      * Builds a DRAFT LINKED_OFFICES poll domain object. (Storage is a primitive,
      * not a real submission, so status is irrelevant — DRAFT keeps it clearly
      * non-votable.)

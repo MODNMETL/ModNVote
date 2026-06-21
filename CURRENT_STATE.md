@@ -17,7 +17,7 @@ If this file disagrees with code, verify against the code and resolve the disagr
 
 - Branch: `main`
 - Current release: `v2.1.1`
-- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks. As of Tranche 2N it is **release-candidate ready**. Manual in-server smoke testing began and exposed one release-blocking fairness defect — APPROVAL_TOP_N broke seat-deciding ties by candidate definition order — now **fixed** so a cutoff tie leaves seats unresolved for a runoff/admin resolution instead of arbitrarily electing. The manual smoke checklist in `docs/release/2.2.0-linked-offices-smoke-test.md` must be re-run to completion against the rebuilt jar before tagging — see CHANGELOG and the "2.2.0 groundwork" section below)
+- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks. As of Tranche 2N it is **release-candidate ready**. Manual in-server smoke testing began and exposed one release-blocking fairness defect — APPROVAL_TOP_N broke seat-deciding ties by candidate definition order — now **fixed** so a cutoff tie leaves seats unresolved for a runoff/admin resolution instead of arbitrarily electing. Tranche 2O adds **STV** as a multi-seat linked-office counting method (recommended Pineton config: Mayor IRV + Council STV) following the same no-silent-tie-break fairness rule. The manual smoke checklist in `docs/release/2.2.0-linked-offices-smoke-test.md` must be re-run to completion against the rebuilt jar before tagging — see CHANGELOG and the "2.2.0 groundwork" section below)
 - Java target: 21
 - Platform target: Paper 1.21.x
 - Folia-aware scheduling: through `ModNScheduler`
@@ -448,6 +448,55 @@ Explicitly NOT done by Tranche 2M:
   participation token/receipt, proof phrase, identity key, or anonymous ballot id.
   No new voting behaviour. Existing `YES_NO`/`RANKED_SINGLE_WINNER` close/publishresult/
   checkpoint behaviour and the single-contest publication path are unchanged.
+
+### 2.2.0 groundwork — Tranche 2O (STV multi-seat council counting)
+
+Tranche 2O adds **STV (single transferable vote)** as a linked-office counting
+method for multi-seat representative contests, with **no schema, canonical-payload,
+proof-phrase, participation-token-hash, or privacy change**:
+
+- New `CountingMethod.STV`, alongside `IRV` and `APPROVAL_TOP_N`. STV voters rank
+  candidates exactly as for IRV (same `RankedContestVote`, same `RANKED` storage rows
+  with `rank_position`, same reconstruction and proof/integrity verification); the
+  difference is purely in the count and the number of seats. A shared
+  `CountingMethod.usesRankedBallot()` is the single source of truth for "is this
+  contest ranked?" used by the voter GUI, ballot validator, canonicalization, and
+  storage.
+- **STV count** in `LinkedElectionCountingService`: deterministic fractional STV with a
+  Droop quota (`floor(validBallots / (seats + 1)) + 1`) computed once from the initial
+  valid ballot value. Candidates at/above quota are elected and their surplus is
+  transferred at the Gregory fraction `surplus / tally`; when no one reaches quota the
+  lowest candidate is eliminated and transferred at full value; ballots with no further
+  continuing preference exhaust. All fractional arithmetic uses a fixed scale (6) and
+  `RoundingMode.DOWN`, so repeated counts are identical. Dependency exclusions
+  (`EXCLUDE_WINNERS`, e.g. the Mayor winner) are applied before the Council STV count,
+  exactly as for the other methods.
+- **No silent tie-break by candidate order** (matching the approval cutoff-tie rule): a
+  non-seat-deciding elimination tie is broken deterministically by latest-in-contest
+  order and reported in the round summary, but an elimination tie whose outcome would
+  decide the final elected seats leaves those seats **unresolved**
+  (`unresolvedSeatCount` / `unresolvedCandidateKeys`, contest + election
+  `complete = false`) for a runoff/admin resolution.
+- New STV result records `StvResultData` (quota, exhausted value, final fractional
+  tallies, round summaries), `StvRoundResult`, `StvCandidateTally`, carried on a single
+  nullable `ContestResult.stv` field (`null` for IRV/approval). `IrvRoundResult` is
+  unchanged. The in-game and witness formatters render STV quota/winners/rounds/exhausted
+  value and never leak identity.
+- The definition validator accepts `method: "STV"` for multi-seat contests and rejects
+  `maxSelections` on an STV office. The admin builder cycles `IRV → APPROVAL_TOP_N → STV`,
+  allows multi-seat STV, and hides/disables the max-selections control for STV. The voter
+  GUI presents STV on the same ranked screen as IRV with no selection cap. Example
+  `docs/examples/pineton-mayor-stv-council.json` (Mayor IRV + Council STV, Council
+  excludes the Mayor winner) is the recommended Pineton configuration.
+
+Explicitly NOT done by Tranche 2O:
+
+- No schema change, no canonical-payload-format change, no proof-phrase change, no
+  participation-token-hash change, no privacy change. STV reuses the existing ranked
+  storage/canonicalization/proof/integrity path. `IRV`, `APPROVAL_TOP_N` (including the
+  unresolved cutoff-tie fix), `YES_NO`, and `RANKED_SINGLE_WINNER` behaviour is unchanged
+  and regression-locked. The standalone `PollType.RANKED_MULTI_WINNER_STV` remains an
+  unimplemented top-level poll type; STV ships only as a linked-office method.
 
 ---
 

@@ -29,8 +29,10 @@ import java.util.Objects;
  *
  * <p>Per office:
  * <ul>
- *   <li>IRV contests keep an ordered ranking — toggling a candidate appends it
- *       to the ranking or removes it; remaining candidates keep their order.</li>
+ *   <li>Ranked contests (IRV single-seat and STV multi-seat) keep an ordered
+ *       ranking — toggling a candidate appends it to the ranking or removes it;
+ *       remaining candidates keep their order. STV uses the same ranked screen as
+ *       IRV with no selection cap.</li>
  *   <li>APPROVAL_TOP_N contests keep an ordered selection set bounded by the
  *       contest's {@code maxSelections}; toggling adds (while under the cap) or
  *       removes a candidate.</li>
@@ -71,7 +73,8 @@ public final class LinkedOfficesVoteState {
     }
 
     public boolean isRanked(String officeKey) {
-        return requireContest(officeKey).method() == CountingMethod.IRV;
+        CountingMethod method = requireContest(officeKey).method();
+        return method != null && method.usesRankedBallot();
     }
 
     public boolean isApproval(String officeKey) {
@@ -200,7 +203,7 @@ public final class LinkedOfficesVoteState {
             if (selections.isEmpty()) {
                 continue;
             }
-            if (contest.method() == CountingMethod.IRV) {
+            if (contest.method() != null && contest.method().usesRankedBallot()) {
                 votes.add(new RankedContestVote(contest.officeKey(), selections));
             } else {
                 votes.add(new ApprovalContestVote(contest.officeKey(), selections));

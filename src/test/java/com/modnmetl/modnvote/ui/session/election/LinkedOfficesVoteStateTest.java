@@ -16,6 +16,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -140,6 +141,60 @@ class LinkedOfficesVoteStateTest {
         state.toggle(MAYOR, ALICE);
         assertTrue(state.toggle(COUNCIL, ALICE), "Alice may be approved for Council even if ranked for Mayor");
         assertTrue(state.isSelected(COUNCIL, ALICE));
+    }
+
+    private static ElectionDefinition mayorStvCouncil() {
+        ContestDefinition mayor = new ContestDefinition(
+                MAYOR, "Mayor", CountingMethod.IRV, 1, null, false, List.of(ALICE, BOB, CAROL));
+        ContestDefinition council = new ContestDefinition(
+                COUNCIL, "Council", CountingMethod.STV, 4, null, false,
+                List.of(ALICE, DAVE, ERIN, FRANK, GRACE));
+        List<CandidateDefinition> candidates = List.of(
+                new CandidateDefinition(ALICE, "Alice", List.of(MAYOR, COUNCIL)),
+                new CandidateDefinition(BOB, "Bob", List.of(MAYOR)),
+                new CandidateDefinition(CAROL, "Carol", List.of(MAYOR)),
+                new CandidateDefinition(DAVE, "Dave", List.of(COUNCIL)),
+                new CandidateDefinition(ERIN, "Erin", List.of(COUNCIL)),
+                new CandidateDefinition(FRANK, "Frank", List.of(COUNCIL)),
+                new CandidateDefinition(GRACE, "Grace", List.of(COUNCIL)));
+        return new ElectionDefinition(
+                ElectionDefinition.LINKED_OFFICES_MODEL, List.of(mayor, council), candidates, List.of());
+    }
+
+    @Test
+    void stvOfficeIsRankedNotApprovalAndHasNoSelectionCap() {
+        LinkedOfficesVoteState state = new LinkedOfficesVoteState(mayorStvCouncil());
+
+        // STV uses the ranked vote state, not approval, and imposes no selection cap.
+        assertTrue(state.isRanked(COUNCIL));
+        assertFalse(state.isApproval(COUNCIL));
+        assertNull(state.maxSelections(COUNCIL));
+
+        // The voter may rank every candidate (no max-selection refusal like approval).
+        assertTrue(state.toggle(COUNCIL, DAVE));
+        assertTrue(state.toggle(COUNCIL, ERIN));
+        assertTrue(state.toggle(COUNCIL, FRANK));
+        assertTrue(state.toggle(COUNCIL, GRACE));
+        assertTrue(state.toggle(COUNCIL, ALICE));
+        assertEquals(5, state.selectionCount(COUNCIL));
+    }
+
+    @Test
+    void stvBallotIsBuiltAsRankedContestVoteInVoterOrder() {
+        LinkedOfficesVoteState state = new LinkedOfficesVoteState(mayorStvCouncil());
+        state.toggle(MAYOR, ALICE);
+        state.toggle(COUNCIL, GRACE);
+        state.toggle(COUNCIL, DAVE);
+        state.toggle(COUNCIL, ERIN);
+
+        LinkedElectionBallot ballot = state.buildBallot();
+        List<ContestVote> votes = ballot.contestVotes();
+        // Council (STV) must be a ranked response preserving the voter's order.
+        ContestVote council = votes.stream()
+                .filter(v -> v.officeKey().equals(COUNCIL)).findFirst().orElseThrow();
+        assertTrue(council instanceof RankedContestVote);
+        assertEquals(List.of(GRACE, DAVE, ERIN), ((RankedContestVote) council).orderedCandidateKeys());
+        assertTrue(state.validate().valid(), () -> "expected valid STV ballot: " + state.validate().issues());
     }
 
     @Test

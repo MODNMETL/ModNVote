@@ -326,7 +326,11 @@ public final class LinkedOfficesBuilderListener implements Listener {
         if (method == null) {
             return CountingMethod.IRV;
         }
-        return method == CountingMethod.IRV ? CountingMethod.APPROVAL_TOP_N : CountingMethod.IRV;
+        return switch (method) {
+            case IRV -> CountingMethod.APPROVAL_TOP_N;
+            case APPROVAL_TOP_N -> CountingMethod.STV;
+            case STV -> CountingMethod.IRV;
+        };
     }
 
     private String normalizeKey(String input) {

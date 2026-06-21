@@ -9,6 +9,9 @@ import com.modnmetl.modnvote.domain.election.results.CandidateTally;
 import com.modnmetl.modnvote.domain.election.results.ContestResult;
 import com.modnmetl.modnvote.domain.election.results.IrvRoundResult;
 import com.modnmetl.modnvote.domain.election.results.LinkedElectionResult;
+import com.modnmetl.modnvote.domain.election.results.StvCandidateTally;
+import com.modnmetl.modnvote.domain.election.results.StvResultData;
+import com.modnmetl.modnvote.domain.election.results.StvRoundResult;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -180,6 +183,57 @@ class LinkedElectionWitnessPayloadFormatterTest {
         // Tied candidates must never be marked elected.
         assertFalse(all.contains("katie: 2 (elected)"), all);
         assertFalse(all.contains("mort: 2 (elected)"), all);
+    }
+
+    @Test
+    void stvResultShowsQuotaWinnersAndRoundsWithoutIdentity() {
+        StvResultData stv = new StvResultData(
+                "3.000000", "1.000000",
+                List.of(
+                        new StvCandidateTally("c1", "3.000000"),
+                        new StvCandidateTally("c2", "3.000000"),
+                        new StvCandidateTally("c3", "2.000000")),
+                List.of(
+                        new StvRoundResult(1, List.of(
+                                new StvCandidateTally("c1", "5.000000"),
+                                new StvCandidateTally("c2", "0.000000"),
+                                new StvCandidateTally("c3", "2.000000")),
+                                List.of("c1"), null,
+                                "c1 reached quota and is elected; surplus transferred."),
+                        new StvRoundResult(2, List.of(
+                                new StvCandidateTally("c2", "2.000000"),
+                                new StvCandidateTally("c3", "2.000000")),
+                                List.of(), "c3",
+                                "c3 has the lowest tally and is eliminated.")));
+        ContestResult council = new ContestResult(
+                "council", "Council", CountingMethod.STV, 2,
+                List.of("c1", "c2"),
+                List.of(
+                        new CandidateResult("c1", 3, true, false, null),
+                        new CandidateResult("c2", 3, true, false, null),
+                        new CandidateResult("c3", 2, false, false, null)),
+                List.of(), 0, List.of(), List.of(), true, 0, List.of(), stv);
+        LinkedElectionResult result = new LinkedElectionResult(7L, "Town Election", true, 8, 0,
+                List.of(council), List.of());
+
+        String all = render(LinkedElectionWitnessPayloadFormatter.buildFields(
+                poll(PollStatus.CLOSED, Instant.parse("2026-06-21T12:00:00Z")),
+                result, Instant.parse("2026-06-21T12:00:00Z"), MAX));
+
+        assertTrue(all.contains("Method: STV | Seats: 2"), all);
+        assertTrue(all.contains("Quota: 3.000000"), all);
+        assertTrue(all.contains("Winners: c1, c2"), all);
+        assertTrue(all.contains("STV rounds:"), all);
+        assertTrue(all.contains("Round 1: c1 5.000000, c2 0.000000, c3 2.000000"), all);
+        assertTrue(all.contains("Elected: c1"), all);
+        assertTrue(all.contains("Eliminated: c3"), all);
+        assertTrue(all.contains("Exhausted ballot value: 1.000000"), all);
+        // Privacy guard: no identity/proof material in the STV payload.
+        String lower = all.toLowerCase();
+        for (String forbidden : List.of("uuid", "ip-hash", "floodgate", "participation",
+                "receipt", "proof", "secret", "token", "identity")) {
+            assertFalse(lower.contains(forbidden), () -> "STV payload leaked '" + forbidden + "': " + all);
+        }
     }
 
     @Test
