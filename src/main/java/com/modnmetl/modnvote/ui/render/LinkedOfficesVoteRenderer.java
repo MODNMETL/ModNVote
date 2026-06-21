@@ -105,7 +105,7 @@ public final class LinkedOfficesVoteRenderer {
         List<String> infoLore = new ArrayList<>();
         infoLore.add("§7Method: §f" + methodLabel(contest.method()));
         infoLore.add("§7Seats: §f" + contest.seats());
-        if (contest.method() == CountingMethod.IRV) {
+        if (isRankedMethod(contest.method())) {
             infoLore.add("§7Click candidates in order of preference.");
         } else {
             Integer max = state.maxSelections(officeKey);
@@ -116,7 +116,7 @@ public final class LinkedOfficesVoteRenderer {
         inventory.setItem(INFO_SLOT, createItem(Material.BOOK, "§6" + officeDisplay(contest), infoLore));
 
         List<String> eligible = state.eligibleCandidates(officeKey);
-        boolean ranked = contest.method() == CountingMethod.IRV;
+        boolean ranked = isRankedMethod(contest.method());
         for (int i = 0; i < eligible.size() && i < CONTENT_CAPACITY; i++) {
             String candidateKey = eligible.get(i);
             boolean selected = state.isSelected(officeKey, candidateKey);
@@ -160,7 +160,7 @@ public final class LinkedOfficesVoteRenderer {
             lore.add("§7Method: §f" + methodLabel(contest.method()));
             if (selections.isEmpty()) {
                 lore.add(contest.allowAbstain() ? "§7Abstained" : "§cNo selection");
-            } else if (contest.method() == CountingMethod.IRV) {
+            } else if (isRankedMethod(contest.method())) {
                 int rank = 1;
                 for (String key : selections) {
                     lore.add("§7#" + rank++ + " §f" + candidateDisplay(state, key));
@@ -269,8 +269,23 @@ public final class LinkedOfficesVoteRenderer {
         return createItem(enabled ? Material.LIME_CONCRETE : Material.RED_CONCRETE, title, lore);
     }
 
+    /**
+     * Human-readable label for an office's counting method, shown on the overview,
+     * office, and review screens. Delegates to the Bukkit-free
+     * {@link LinkedOfficesVoteMethodText} (unit-tested there) so STV is labelled
+     * "Ranked (STV)", never Approval.
+     */
     private String methodLabel(CountingMethod method) {
-        return method == CountingMethod.IRV ? "Ranked (IRV)" : "Approval";
+        return LinkedOfficesVoteMethodText.methodLabel(method);
+    }
+
+    /**
+     * Whether an office is rendered and operated as a ranked contest. Delegates to
+     * {@link LinkedOfficesVoteMethodText#isRankedMethod(CountingMethod)} so IRV and
+     * STV both render as ranked.
+     */
+    private boolean isRankedMethod(CountingMethod method) {
+        return LinkedOfficesVoteMethodText.isRankedMethod(method);
     }
 
     private String officeDisplay(ContestDefinition contest) {
