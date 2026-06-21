@@ -652,6 +652,12 @@ Also verify alias behavior:
 /poll publishresult <closedPollId>
 ```
 
+For the full Linked Offices release-candidate validation (admin, voter,
+post-election, privacy, and YES_NO/RANKED regression checks), follow
+[`docs/release/2.2.0-linked-offices-smoke-test.md`](docs/release/2.2.0-linked-offices-smoke-test.md).
+2.2.0 Linked Offices is **release-candidate ready**; this in-server smoke test
+remains the final step before tagging.
+
 ---
 
 ## Roadmap

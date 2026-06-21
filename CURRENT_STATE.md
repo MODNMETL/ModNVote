@@ -17,7 +17,7 @@ If this file disagrees with code, verify against the code and resolve the disagr
 
 - Branch: `main`
 - Current release: `v2.1.1`
-- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks — see CHANGELOG and the "2.2.0 groundwork" section below)
+- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks. As of Tranche 2N it is **release-candidate ready**; the final in-server manual smoke test in `docs/release/2.2.0-linked-offices-smoke-test.md` remains before tagging — see CHANGELOG and the "2.2.0 groundwork" section below)
 - Java target: 21
 - Platform target: Paper 1.21.x
 - Folia-aware scheduling: through `ModNScheduler`
@@ -39,7 +39,10 @@ anonymously and counted, the multi-contest result renders after close, and the
 closed result publishes to the configured witness webhooks. Tranche 2N is
 release-hardening (lifecycle audit, regression tests, docs/help/show polish, and
 stale-message cleanup) ahead of the 2.2.0 release — see the "2.2.0 release
-readiness" section in CHANGELOG.md. The per-tranche sections below are retained
+readiness" section in CHANGELOG.md. The feature is now **release-candidate
+ready**; the only remaining pre-tag step is the manual in-server smoke test
+documented in `docs/release/2.2.0-linked-offices-smoke-test.md`. The per-tranche
+sections below are retained
 as a historical build record; where an early section says "non-votable", read it
 as the state at that tranche, superseded by Tranche 2K–2M.
 
