@@ -149,6 +149,40 @@ class LinkedElectionWitnessPayloadFormatterTest {
     }
 
     @Test
+    void unresolvedApprovalTieIsShownInWitnessPayload() {
+        ContestResult council = new ContestResult(
+                "council", "Council", CountingMethod.APPROVAL_TOP_N, 4,
+                List.of("space", "rooster"),
+                List.of(
+                        new CandidateResult("space", 3, true, false, null, false),
+                        new CandidateResult("rooster", 3, true, false, null, false),
+                        new CandidateResult("katie", 2, false, false, null, true),
+                        new CandidateResult("metta", 2, false, false, null, true),
+                        new CandidateResult("mort", 2, false, false, null, true)),
+                List.of(),
+                0,
+                List.of(),
+                List.of("Office 'council' has an approval tie at the seat cutoff."),
+                false, 2, List.of("katie", "metta", "mort"));
+        LinkedElectionResult result = new LinkedElectionResult(7L, "Town Election", false, 6, 0,
+                List.of(council), List.of());
+
+        String all = render(LinkedElectionWitnessPayloadFormatter.buildFields(
+                poll(PollStatus.CLOSED, Instant.parse("2026-06-21T12:00:00Z")),
+                result, Instant.parse("2026-06-21T12:00:00Z"), MAX));
+
+        assertTrue(all.contains("Result=Incomplete"), all);
+        assertTrue(all.contains("Winners: space, rooster"), all);
+        assertTrue(all.contains("Unresolved seats: 2"), all);
+        assertTrue(all.contains("Tied candidates: katie, metta, mort"), all);
+        assertTrue(all.contains("Runoff/admin resolution required."), all);
+        assertTrue(all.contains("katie: 2 (tied — unresolved)"), all);
+        // Tied candidates must never be marked elected.
+        assertFalse(all.contains("katie: 2 (elected)"), all);
+        assertFalse(all.contains("mort: 2 (elected)"), all);
+    }
+
+    @Test
     void containsNoIdentityOrProofMaterial() {
         List<LinkedElectionWitnessPayloadFormatter.WitnessField> fields =
                 LinkedElectionWitnessPayloadFormatter.buildFields(

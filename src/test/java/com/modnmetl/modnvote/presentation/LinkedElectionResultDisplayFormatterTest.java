@@ -96,6 +96,42 @@ class LinkedElectionResultDisplayFormatterTest {
     }
 
     @Test
+    void unresolvedApprovalTieIsShownAndTiedCandidatesNotElected() {
+        // Council: 4 seats; space,rooster elected; katie,metta,mort tied for 2 seats.
+        ContestResult council = new ContestResult(
+                "office_council", "Council", CountingMethod.APPROVAL_TOP_N, 4,
+                List.of("space", "rooster"),
+                List.of(
+                        new CandidateResult("space", 3, true, false, null, false),
+                        new CandidateResult("rooster", 3, true, false, null, false),
+                        new CandidateResult("katie", 2, false, false, null, true),
+                        new CandidateResult("metta", 2, false, false, null, true),
+                        new CandidateResult("mort", 2, false, false, null, true),
+                        new CandidateResult("fitzy", 1, false, false, null, false)),
+                List.of(),
+                0,
+                List.of(),
+                List.of("Office 'office_council' has an approval tie at the seat cutoff: 2 seat(s) remain unresolved among tied candidates [katie, metta, mort]."),
+                false, 2, List.of("katie", "metta", "mort"));
+
+        LinkedElectionResult result = new LinkedElectionResult(
+                11L, "Pineton Election", false, 6, 0, List.of(council), List.of());
+
+        String joined = String.join("\n", LinkedElectionResultDisplayFormatter.formatInGame(result));
+
+        assertTrue(joined.contains("Winners: §fspace, rooster"), joined);
+        assertTrue(joined.contains("unresolved: §f2"), joined);
+        assertTrue(joined.contains("Tied candidates: §fkatie, metta, mort"), joined);
+        assertTrue(joined.contains("runoff/admin resolution"), joined);
+        assertTrue(joined.contains("katie§7: §f2 §c(tied — unresolved)"), joined);
+        // Tied candidates must never be rendered as elected.
+        assertFalse(joined.contains("katie§7: §f2 §a(elected)"), joined);
+        assertFalse(joined.contains("mort§7: §f2 §a(elected)"), joined);
+        // Whole-result incompleteness is surfaced.
+        assertTrue(joined.contains("incomplete"), joined);
+    }
+
+    @Test
     void outputNeverContainsIdentityMaterial() {
         String joined = String.join("\n", LinkedElectionResultDisplayFormatter.formatInGame(sampleResult()));
 

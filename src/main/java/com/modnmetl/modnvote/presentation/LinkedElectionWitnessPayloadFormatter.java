@@ -103,6 +103,13 @@ public final class LinkedElectionWitnessPayloadFormatter {
             sb.append("Winners: ").append(String.join(", ", contest.winners())).append('\n');
         }
 
+        if (contest.unresolvedSeatCount() > 0) {
+            sb.append("Unresolved seats: ").append(contest.unresolvedSeatCount()).append('\n');
+            sb.append("Tied candidates: ")
+                    .append(String.join(", ", contest.unresolvedCandidateKeys())).append('\n');
+            sb.append("Runoff/admin resolution required.").append('\n');
+        }
+
         if (!contest.excludedCandidateKeys().isEmpty()) {
             sb.append("Excluded by dependency: ")
                     .append(String.join(", ", contest.excludedCandidateKeys())).append('\n');
@@ -116,6 +123,8 @@ public final class LinkedElectionWitnessPayloadFormatter {
                 sb.append("- ").append(candidate.candidateKey()).append(": ").append(candidate.score());
                 if (candidate.elected()) {
                     sb.append(" (elected)");
+                } else if (candidate.unresolved()) {
+                    sb.append(" (tied — unresolved)");
                 }
                 sb.append('\n');
             }

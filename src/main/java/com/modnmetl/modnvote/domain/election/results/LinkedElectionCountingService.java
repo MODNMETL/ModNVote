@@ -40,11 +40,21 @@ import java.util.Set;
  * result is reported as incomplete and contests are counted in definition order
  * without applying exclusions, rather than pretending success.
  *
- * <p><strong>Determinism.</strong> Every tie-break is resolved using the
+ * <p><strong>Determinism.</strong> Every ordering is resolved using the
  * definition's source candidate order, never randomness or unordered iteration.
  * IRV eliminates the tied-lowest candidate appearing latest in contest order (so
- * earlier-defined candidates survive); approval ranks by score descending then
- * contest order ascending.
+ * earlier-defined candidates survive).
+ *
+ * <p><strong>Approval cutoff ties are not broken by candidate order.</strong> For
+ * APPROVAL_TOP_N, approval score is the only ranking that decides winners.
+ * Candidates are walked in score-descending groups; a tied score group is elected
+ * only if it fits entirely within the remaining seats. If a tied group is larger
+ * than the seats left, none of its candidates is elected and the affected seats are
+ * reported as unresolved (see {@link ContestResult#unresolvedSeatCount()} and
+ * {@link ContestResult#unresolvedCandidateKeys()}), marking the contest and the
+ * election incomplete. Candidate order is used only for display stability, never to
+ * arbitrarily elect one tied candidate over another at the cutoff. A runoff or
+ * administrator resolution fills unresolved seats outside this count.
  *
  * <p>Counting is generic: no office or candidate name is hardcoded. "Mayor" and
  * "Council" are only illustrative configuration.
@@ -125,7 +135,11 @@ public final class LinkedElectionCountingService {
             }
         }
 
-        boolean complete = dependenciesUsable;
+        // The election is complete only if the dependency graph was usable AND no
+        // contest was left with unresolved cutoff ties (a legitimate but incomplete
+        // outcome requiring an external runoff/admin resolution).
+        boolean allContestsComplete = orderedResults.stream().allMatch(ContestResult::complete);
+        boolean complete = dependenciesUsable && allContestsComplete;
 
         return new LinkedElectionResult(
                 poll.pollId(),
@@ -424,25 +438,59 @@ public final class LinkedElectionCountingService {
         });
 
         int seats = contest.seats();
+
+        // Walk score groups from highest to lowest, electing a whole tied group only
+        // when it fits within the remaining seats. Candidate order provides display
+        // stability (the sort above) but never decides winners at the cutoff: if a
+        // tied group is larger than the seats left, no candidate in it is elected and
+        // those seats are reported unresolved for an external runoff/admin resolution.
         List<String> winners = new ArrayList<>();
-        for (String candidateKey : ranked) {
-            if (winners.size() >= seats) {
+        int unresolvedSeatCount = 0;
+        List<String> unresolvedCandidateKeys = List.of();
+        boolean complete = true;
+
+        int remaining = seats;
+        int i = 0;
+        while (i < ranked.size() && remaining > 0) {
+            int groupScore = scores.get(ranked.get(i));
+            List<String> group = new ArrayList<>();
+            int j = i;
+            while (j < ranked.size() && scores.get(ranked.get(j)) == groupScore) {
+                group.add(ranked.get(j));
+                j++;
+            }
+
+            if (group.size() <= remaining) {
+                winners.addAll(group);
+                remaining -= group.size();
+                i = j;
+            } else {
+                // Tie crosses the seat cutoff: the group cannot be separated by counting.
+                unresolvedSeatCount = remaining;
+                unresolvedCandidateKeys = List.copyOf(group);
+                complete = false;
+                issues.add("Office '" + officeKey + "' has an approval tie at the seat cutoff: "
+                        + unresolvedSeatCount + " seat(s) remain unresolved among tied candidates ["
+                        + String.join(", ", unresolvedCandidateKeys)
+                        + "]. A runoff or administrator resolution is required; "
+                        + "no tied candidate was elected by candidate order.");
                 break;
             }
-            winners.add(candidateKey);
         }
 
-        if (eligible.size() < seats) {
+        if (eligible.size() < seats && unresolvedSeatCount == 0) {
             issues.add("Office '" + officeKey + "' has " + eligible.size()
                     + " eligible candidate(s) for " + seats + " seat(s); only "
                     + winners.size() + " seat(s) could be filled.");
         }
 
         Set<String> winnerSet = new LinkedHashSet<>(winners);
+        Set<String> unresolvedSet = new LinkedHashSet<>(unresolvedCandidateKeys);
         List<CandidateResult> candidateResults = new ArrayList<>();
         for (String candidateKey : eligible) {
             candidateResults.add(new CandidateResult(
-                    candidateKey, scores.get(candidateKey), winnerSet.contains(candidateKey), false, null));
+                    candidateKey, scores.get(candidateKey), winnerSet.contains(candidateKey), false, null,
+                    unresolvedSet.contains(candidateKey)));
         }
         for (String candidateKey : excluded) {
             candidateResults.add(new CandidateResult(candidateKey, 0, false, true, null));
@@ -458,7 +506,10 @@ public final class LinkedElectionCountingService {
                 excluded,
                 0,
                 List.of(),
-                issues);
+                issues,
+                complete,
+                unresolvedSeatCount,
+                unresolvedCandidateKeys);
     }
 
     private String displayName(ContestDefinition contest) {

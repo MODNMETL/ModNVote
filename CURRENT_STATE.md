@@ -17,7 +17,7 @@ If this file disagrees with code, verify against the code and resolve the disagr
 
 - Branch: `main`
 - Current release: `v2.1.1`
-- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks. As of Tranche 2N it is **release-candidate ready**; the final in-server manual smoke test in `docs/release/2.2.0-linked-offices-smoke-test.md` remains before tagging — see CHANGELOG and the "2.2.0 groundwork" section below)
+- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks. As of Tranche 2N it is **release-candidate ready**. Manual in-server smoke testing began and exposed one release-blocking fairness defect — APPROVAL_TOP_N broke seat-deciding ties by candidate definition order — now **fixed** so a cutoff tie leaves seats unresolved for a runoff/admin resolution instead of arbitrarily electing. The manual smoke checklist in `docs/release/2.2.0-linked-offices-smoke-test.md` must be re-run to completion against the rebuilt jar before tagging — see CHANGELOG and the "2.2.0 groundwork" section below)
 - Java target: 21
 - Platform target: Paper 1.21.x
 - Folia-aware scheduling: through `ModNScheduler`
@@ -40,8 +40,12 @@ closed result publishes to the configured witness webhooks. Tranche 2N is
 release-hardening (lifecycle audit, regression tests, docs/help/show polish, and
 stale-message cleanup) ahead of the 2.2.0 release — see the "2.2.0 release
 readiness" section in CHANGELOG.md. The feature is now **release-candidate
-ready**; the only remaining pre-tag step is the manual in-server smoke test
-documented in `docs/release/2.2.0-linked-offices-smoke-test.md`. The per-tranche
+ready**. The remaining pre-tag step is the manual in-server smoke test documented
+in `docs/release/2.2.0-linked-offices-smoke-test.md`; the first manual smoke run
+exposed one release-blocking fairness defect (APPROVAL_TOP_N cutoff ties decided by
+candidate order), which is now fixed — a cutoff tie leaves the seats unresolved for
+a runoff/admin resolution — so the checklist must be re-run to completion against
+the rebuilt jar before tagging. The per-tranche
 sections below are retained
 as a historical build record; where an early section says "non-votable", read it
 as the state at that tranche, superseded by Tranche 2K–2M.
@@ -344,10 +348,15 @@ still **no voter GUI, vote session, or ballot submission path**:
     otherwise the lowest tally is eliminated, ties broken by eliminating the tied
     candidate **latest** in contest order (earlier-defined candidates survive);
     ballots with no continuing ranked candidate exhaust; rounds are recorded.
-  - **Approval top-N**: distinct eligible approvals score candidates; winners are
-    the first `seats` by score desc then contest order asc; approvals for excluded
-    candidates ignored; too few eligible candidates fills what it can and reports an
-    issue.
+  - **Approval top-N**: distinct eligible approvals score candidates. Winners are
+    chosen by walking score groups from highest to lowest and electing a whole tied
+    group **only when it fits within the remaining seats**. A tie that crosses the
+    seat cutoff (a tied score group larger than the seats left) elects **none** of
+    that group: the contest is marked incomplete with `unresolvedSeatCount` and
+    `unresolvedCandidateKeys`, and a runoff/admin resolution fills those seats outside
+    the count. Candidate order is display-stability only and never decides winners at
+    the cutoff. Approvals for excluded candidates are ignored; too few eligible
+    candidates fills what it can and reports an issue.
   - A dependency cycle (or unresolved reference) is reported and the result marked
     incomplete; it does not pretend success.
 - `LinkedElectionResultService` (`service`) — Bukkit-free collaborator (holds only a
@@ -630,9 +639,13 @@ Important points for future sessions:
 
 - Contests are counted in dependency order; `EXCLUDE_WINNERS` removes a source
   office's winners from a dependent office before it is counted.
-- IRV is single-seat; approval is top-N. Tie-breaks are deterministic from contest
-  candidate order (IRV eliminates the latest-in-order tied candidate; approval ranks
-  by score desc then order asc). No office/candidate name is hardcoded.
+- IRV is single-seat; approval is top-N. IRV tie-breaks are deterministic from
+  contest candidate order (the latest-in-order tied candidate is eliminated).
+  **Approval does NOT break a cutoff tie by candidate order**: a tied score group is
+  elected only if it fits the remaining seats, otherwise none of it is elected and
+  the seats are reported unresolved (`unresolvedSeatCount` / `unresolvedCandidateKeys`,
+  contest `complete = false`) for an external runoff/admin resolution. Candidate order
+  is display-stability only. No office/candidate name is hardcoded.
 - Counting is over anonymous content only; it never touches participation/identity.
 - Voting/submission for linked offices exists as of Tranche 2L (voter GUI + the
   `LinkedOfficesSubmissionService` path).

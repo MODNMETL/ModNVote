@@ -18,15 +18,30 @@ import java.util.Objects;
  * @param eliminationRound for IRV, the 1-based round in which the candidate was
  *                        eliminated; {@code null} if they were elected, survived, or
  *                        the contest is not ranked
+ * @param unresolved      whether the candidate is part of an approval tie at the seat
+ *                        cutoff that could not be resolved by counting alone: such a
+ *                        candidate is neither elected nor eliminated and awaits a
+ *                        runoff/administrator resolution. Never {@code true} together
+ *                        with {@code elected}.
  */
 public record CandidateResult(
         String candidateKey,
         int score,
         boolean elected,
         boolean excluded,
-        Integer eliminationRound
+        Integer eliminationRound,
+        boolean unresolved
 ) {
     public CandidateResult {
         Objects.requireNonNull(candidateKey, "candidateKey");
+    }
+
+    /**
+     * Backwards-compatible constructor for a fully resolved candidate (not part of an
+     * unresolved cutoff tie).
+     */
+    public CandidateResult(String candidateKey, int score, boolean elected, boolean excluded,
+                           Integer eliminationRound) {
+        this(candidateKey, score, elected, excluded, eliminationRound, false);
     }
 }

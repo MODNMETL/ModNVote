@@ -69,6 +69,12 @@ public final class LinkedElectionResultDisplayFormatter {
             lines.add("§aWinners: §f" + String.join(", ", contest.winners()));
         }
 
+        if (contest.unresolvedSeatCount() > 0) {
+            lines.add("§c" + contest.displayName() + " unresolved: §f" + contest.unresolvedSeatCount()
+                    + " §cseat(s) require runoff/admin resolution.");
+            lines.add("§cTied candidates: §f" + String.join(", ", contest.unresolvedCandidateKeys()));
+        }
+
         if (!contest.excludedCandidateKeys().isEmpty()) {
             lines.add("§7Excluded by dependency: §f" + String.join(", ", contest.excludedCandidateKeys()));
         }
@@ -78,7 +84,9 @@ public final class LinkedElectionResultDisplayFormatter {
             if (candidate.excluded()) {
                 lines.add(" §8- §7" + candidate.candidateKey() + " §8(excluded)");
             } else {
-                String marker = candidate.elected() ? " §a(elected)" : "";
+                String marker = candidate.elected()
+                        ? " §a(elected)"
+                        : candidate.unresolved() ? " §c(tied — unresolved)" : "";
                 lines.add(" §8- §f" + candidate.candidateKey() + "§7: §f" + candidate.score() + marker);
             }
         }

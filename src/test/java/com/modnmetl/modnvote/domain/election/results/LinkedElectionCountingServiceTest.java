@@ -16,7 +16,9 @@ import com.modnmetl.modnvote.domain.election.execution.RankedContestVote;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,6 +42,7 @@ class LinkedElectionCountingServiceTest {
     private static final String C3 = "c3";
     private static final String C4 = "c4";
     private static final String C5 = "c5";
+    private static final String C6 = "c6";
 
     private final LinkedElectionCountingService counting = new LinkedElectionCountingService();
 
@@ -138,17 +141,112 @@ class LinkedElectionCountingServiceTest {
     }
 
     @Test
-    void approvalTiesBrokenByContestOrder() {
+    void approvalCutoffTieIsNotBrokenByContestOrder() {
+        // 2 seats; c1=c2=c3=2, c4=0. The tied score group {c1,c2,c3} (3) exceeds the
+        // 2 remaining seats, so candidate order must NOT elect c1,c2 — all three are
+        // unresolved and no seat is filled by the count.
         ElectionDefinition def = singleApproval(BOARD, 2, List.of(C1, C2, C3, C4));
         List<LinkedElectionBallot> ballots = new ArrayList<>();
-        // c1=c2=c3=2, c4=0 -> top 2 by contest order are c1, c2.
         for (int i = 0; i < 2; i++) {
             addApproval(ballots, def, BOARD, List.of(C1, C2, C3));
         }
 
-        ContestResult board = counting.count(poll(), def, ballots).findContest(BOARD).orElseThrow();
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(), board.winners(), "no candidate may be elected by order at the cutoff");
+        assertFalse(board.complete());
+        assertEquals(2, board.unresolvedSeatCount());
+        assertEquals(List.of(C1, C2, C3), board.unresolvedCandidateKeys());
+        assertFalse(result.complete(), "a cutoff tie makes the whole election incomplete");
+        assertTrue(board.candidateResults().stream()
+                        .filter(c -> List.of(C1, C2, C3).contains(c.candidateKey()))
+                        .allMatch(c -> c.unresolved() && !c.elected()),
+                "tied candidates must be flagged unresolved and not elected");
+    }
+
+    @Test
+    void approvalCutoffTieWithMoreTiedThanRemainingSeats() {
+        // 4 seats; scores c1=3,c2=3,c3=2,c4=2,c5=2,c6=1.
+        // {c1,c2}@3 fit -> elected; {c3,c4,c5}@2 (3) exceed the 2 remaining seats -> unresolved.
+        ElectionDefinition def = singleApproval(BOARD, 4, List.of(C1, C2, C3, C4, C5, C6));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        Map<String, Integer> scores = new LinkedHashMap<>();
+        scores.put(C1, 3); scores.put(C2, 3);
+        scores.put(C3, 2); scores.put(C4, 2); scores.put(C5, 2);
+        scores.put(C6, 1);
+        giveScores(ballots, def, BOARD, scores);
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
 
         assertEquals(List.of(C1, C2), board.winners());
+        assertFalse(board.complete());
+        assertEquals(2, board.unresolvedSeatCount());
+        assertEquals(List.of(C3, C4, C5), board.unresolvedCandidateKeys());
+        assertFalse(result.complete());
+        // c6 is below the unresolved group and is neither elected nor unresolved.
+        CandidateResult c6 = candidate(board, C6);
+        assertFalse(c6.elected());
+        assertFalse(c6.unresolved());
+    }
+
+    @Test
+    void approvalTieExactlyFitsRemainingSeats() {
+        // 4 seats; scores 5,4,3,3,1 -> {c3,c4}@3 exactly fills the last 2 seats. Complete.
+        ElectionDefinition def = singleApproval(BOARD, 4, List.of(C1, C2, C3, C4, C5));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        Map<String, Integer> scores = new LinkedHashMap<>();
+        scores.put(C1, 5); scores.put(C2, 4); scores.put(C3, 3); scores.put(C4, 3); scores.put(C5, 1);
+        giveScores(ballots, def, BOARD, scores);
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2, C3, C4), board.winners());
+        assertTrue(board.complete());
+        assertEquals(0, board.unresolvedSeatCount());
+        assertEquals(List.of(), board.unresolvedCandidateKeys());
+        assertTrue(result.complete());
+    }
+
+    @Test
+    void approvalTieBelowCutoffDoesNotBlock() {
+        // 4 seats; scores 5,4,3,2,1,1 -> top 4 are clear; the c5=c6=1 tie is below the
+        // cutoff and never affects the filled seats.
+        ElectionDefinition def = singleApproval(BOARD, 4, List.of(C1, C2, C3, C4, C5, C6));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        Map<String, Integer> scores = new LinkedHashMap<>();
+        scores.put(C1, 5); scores.put(C2, 4); scores.put(C3, 3); scores.put(C4, 2);
+        scores.put(C5, 1); scores.put(C6, 1);
+        giveScores(ballots, def, BOARD, scores);
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2, C3, C4), board.winners());
+        assertTrue(board.complete());
+        assertEquals(0, board.unresolvedSeatCount());
+        assertTrue(result.complete());
+    }
+
+    @Test
+    void approvalTieForFinalSeatIsUnresolved() {
+        // 4 seats; scores 5,4,3,2,2 -> A,B,C clear; {c4,c5}@2 tie for the single last seat.
+        ElectionDefinition def = singleApproval(BOARD, 4, List.of(C1, C2, C3, C4, C5));
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        Map<String, Integer> scores = new LinkedHashMap<>();
+        scores.put(C1, 5); scores.put(C2, 4); scores.put(C3, 3); scores.put(C4, 2); scores.put(C5, 2);
+        giveScores(ballots, def, BOARD, scores);
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult board = result.findContest(BOARD).orElseThrow();
+
+        assertEquals(List.of(C1, C2, C3), board.winners());
+        assertFalse(board.complete());
+        assertEquals(1, board.unresolvedSeatCount());
+        assertEquals(List.of(C4, C5), board.unresolvedCandidateKeys());
+        assertFalse(result.complete());
     }
 
     @Test
@@ -244,7 +342,104 @@ class LinkedElectionCountingServiceTest {
         assertEquals(2, result.contestResults().size());
     }
 
+    @Test
+    void pinetonCouncilApprovalTieLeavesSeatsUnresolved() {
+        // Linked offices: Mayor (IRV, 1 seat) excludes its winner from Council
+        // (APPROVAL_TOP_N, 4 seats). Reproduces the manual smoke finding:
+        // after excluding the Mayor winner ("vradow"), Council scores are
+        // Space=3, Rooster=3, Katie=2, Metta=2, Mort=2, Fitzy=1.
+        // Space+Rooster are clearly elected; the three 2-vote candidates tie for the
+        // two remaining seats and must all be unresolved — Mort must not be silently
+        // dropped by candidate definition order.
+        String mayor = "office_mayor";
+        String council = "office_council";
+        String vradow = "vradow";
+        String runnerUp = "mayor_runner";
+        String space = "space";
+        String rooster = "rooster";
+        String katie = "katie";
+        String metta = "metta";
+        String mort = "mort";
+        String fitzy = "fitzy";
+
+        ContestDefinition mayorContest = new ContestDefinition(
+                mayor, "Mayor", CountingMethod.IRV, 1, null, false, List.of(vradow, runnerUp));
+        ContestDefinition councilContest = new ContestDefinition(
+                council, "Council", CountingMethod.APPROVAL_TOP_N, 4, 4, false,
+                List.of(space, rooster, katie, metta, mort, fitzy, vradow));
+        List<CandidateDefinition> candidates = List.of(
+                new CandidateDefinition(vradow, "Vradow", List.of(mayor, council)),
+                new CandidateDefinition(runnerUp, "Runner", List.of(mayor)),
+                new CandidateDefinition(space, "Space", List.of(council)),
+                new CandidateDefinition(rooster, "Rooster", List.of(council)),
+                new CandidateDefinition(katie, "Katie", List.of(council)),
+                new CandidateDefinition(metta, "Metta", List.of(council)),
+                new CandidateDefinition(mort, "Mort", List.of(council)),
+                new CandidateDefinition(fitzy, "Fitzy", List.of(council)));
+        List<OfficeDependencyRule> deps = List.of(
+                new OfficeDependencyRule(OfficeDependencyType.EXCLUDE_WINNERS, mayor, council));
+        ElectionDefinition def = new ElectionDefinition(
+                ElectionDefinition.LINKED_OFFICES_MODEL,
+                List.of(mayorContest, councilContest), candidates, deps);
+
+        List<LinkedElectionBallot> ballots = new ArrayList<>();
+        // Mayor: vradow wins outright (3 of 4 first preferences).
+        for (int i = 0; i < 3; i++) {
+            ballots.add(new LinkedElectionBallot(def, List.<ContestVote>of(
+                    new RankedContestVote(mayor, List.of(vradow)))));
+        }
+        ballots.add(new LinkedElectionBallot(def, List.<ContestVote>of(
+                new RankedContestVote(mayor, List.of(runnerUp)))));
+        // Council approvals giving Space=3, Rooster=3, Katie=2, Metta=2, Mort=2, Fitzy=1.
+        Map<String, Integer> councilScores = new LinkedHashMap<>();
+        councilScores.put(space, 3);
+        councilScores.put(rooster, 3);
+        councilScores.put(katie, 2);
+        councilScores.put(metta, 2);
+        councilScores.put(mort, 2);
+        councilScores.put(fitzy, 1);
+        giveScores(ballots, def, council, councilScores);
+
+        LinkedElectionResult result = counting.count(poll(), def, ballots);
+        ContestResult mayorResult = result.findContest(mayor).orElseThrow();
+        ContestResult councilResult = result.findContest(council).orElseThrow();
+
+        assertEquals(List.of(vradow), mayorResult.winners());
+        assertTrue(councilResult.excludedCandidateKeys().contains(vradow),
+                "Mayor winner must be excluded from Council");
+        assertEquals(List.of(space, rooster), councilResult.winners(),
+                "only the two clear front-runners are elected");
+        assertEquals(2, councilResult.unresolvedSeatCount());
+        assertEquals(List.of(katie, metta, mort), councilResult.unresolvedCandidateKeys(),
+                "Mort must not be dropped by candidate order — it is unresolved with the others");
+        assertFalse(councilResult.complete());
+        assertFalse(result.complete());
+        // None of the tied candidates may be reported as elected.
+        for (String tied : List.of(katie, metta, mort)) {
+            assertFalse(candidate(councilResult, tied).elected(), tied + " must not be elected");
+            assertTrue(candidate(councilResult, tied).unresolved(), tied + " must be unresolved");
+        }
+    }
+
     // --- helpers --------------------------------------------------------------
+
+    private static CandidateResult candidate(ContestResult contest, String candidateKey) {
+        return contest.candidateResults().stream()
+                .filter(c -> c.candidateKey().equals(candidateKey))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static void giveScores(List<LinkedElectionBallot> ballots, ElectionDefinition def,
+                                   String officeKey, Map<String, Integer> scores) {
+        // Each single-selection approval ballot adds exactly one to one candidate's score,
+        // so the resulting tally matches the requested scores precisely.
+        for (Map.Entry<String, Integer> entry : scores.entrySet()) {
+            for (int i = 0; i < entry.getValue(); i++) {
+                addApproval(ballots, def, officeKey, List.of(entry.getKey()));
+            }
+        }
+    }
 
     private static List<String> approvalsFor(int ballotIndex, String... ordered) {
         // ballotIndex 0..4 approves a decreasing prefix so c1 gets 5, c2 gets 4, ... c5 gets 1.

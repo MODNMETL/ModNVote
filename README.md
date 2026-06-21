@@ -257,6 +257,8 @@ For ranked single-winner polls, this shows the poll winner, final winner tally, 
 
 For Linked Offices polls, this shows each office's method and seats, its winners, candidate tallies, IRV round breakdowns, any dependency exclusions applied (an office's winners excluded from a dependent office), and any issues. Counting is deterministic and reads anonymous ballot content only; it exposes no voter identity. As of Tranche 2L, Linked Offices polls are **votable end to end** — players cast multi-office ballots through the voting GUI and those anonymous ballots are what counting operates on.
 
+For approval (top-N) offices, candidate definition order is never used to break a tie that decides the final seat(s). Candidates are elected by approval score in descending groups, and a tied score group is elected only when it fits entirely within the remaining seats. If a tie crosses the seat cutoff (more tied candidates than seats left), **none** of those tied candidates is elected: the office is shown as unresolved with the number of unresolved seats and the tied candidate keys, and a runoff or administrator resolution is required to fill them. Clearly leading candidates above the cutoff are still elected, and a tie that does not cross the cutoff still fills the seats normally.
+
 ### Republish a closed poll result
 
 ```text
@@ -656,7 +658,11 @@ For the full Linked Offices release-candidate validation (admin, voter,
 post-election, privacy, and YES_NO/RANKED regression checks), follow
 [`docs/release/2.2.0-linked-offices-smoke-test.md`](docs/release/2.2.0-linked-offices-smoke-test.md).
 2.2.0 Linked Offices is **release-candidate ready**; this in-server smoke test
-remains the final step before tagging.
+remains the final step before tagging. The first manual smoke run exposed one
+release-blocking fairness defect — APPROVAL_TOP_N decided seat-deciding ties by
+candidate definition order — which has been fixed (a cutoff tie now leaves the
+seats unresolved for a runoff/admin resolution); the checklist must be re-run to
+completion against the rebuilt jar before tagging.
 
 ---
 
