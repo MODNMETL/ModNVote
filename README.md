@@ -4,7 +4,7 @@
 
 ModNVote is a Minecraft voting and polling plugin for communities that want voting to be easy for players, practical for admins, and verifiable after the fact.
 
-ModNVote 2.x replaces the original Yes/No-only workflow with a GUI-first, ballot-based polling platform supporting ranked single-winner polls, Yes/No polls, anonymous ballots, poll lifecycle controls, tamper-evident integrity checks, Discord-compatible witness publication, and transparent ranked-choice result reporting.
+ModNVote 2.2.0 adds **Linked Offices** elections: a full multi-office election model for scenarios such as a Mayor election and a Council election run together from one voter flow. It also continues to support Yes/No polls and ranked single-winner polls.
 
 Developed by [MODN METL LTD](https://modnmetl.com).
 
@@ -15,35 +15,63 @@ Developed by [MODN METL LTD](https://modnmetl.com).
 
 ---
 
-## ModNVote 2.x status
+## Current status
 
-ModNVote 2.1.1 is the current active replacement for the legacy 1.x Yes/No-only plugin.
+ModNVote 2.2.0 is the current feature-complete Linked Offices release.
 
-2.x includes:
+Supported election types:
 
-- GUI-driven poll creation and editing
-- Ranked single-winner polls
-- Yes/No polls
-- Anonymous ballot storage
-- Identity-aware participation tracking without joining identity to vote content
-- Ballot proof-phrase verification
-- Tamper-evident audit records
-- Java/Bedrock-friendly inventory interfaces
-- Mandatory confirmation before ballots are cast
-- Poll cloning for repeated or template-based poll setup
-- Optional external witness publication via Discord-compatible webhooks
-- Automatic and manual integrity checkpoint publication
-- Transparent IRV round reporting for ranked single-winner polls
-- Manual closed-result republication with `/modnvote publishresult <pollId>`
-- `/poll` as a short alias for `/modnvote`
+- **Yes/No polls**
+- **Ranked single-winner polls** using IRV-style counting
+- **Linked Offices elections** with multiple offices in one election
+- **Linked Offices IRV contests**
+- **Linked Offices STV contests**
+- **Linked Offices Approval Top-N contests**
 
-2.x is a clean install target. Migration from legacy 1.x databases is not currently supported.
+Linked Offices is now supported end to end:
+
+- Admin creation
+- JSON import
+- In-game definition editor
+- Definition validation
+- Ready/open lifecycle
+- Player voting GUI
+- Anonymous multi-contest ballot storage
+- Duplicate-vote prevention
+- Proof phrase verification
+- Integrity verification
+- Result calculation
+- Witness publication
+- Manual smoke-tested Mayor + Council flow
+
+---
+
+## What Linked Offices is for
+
+Linked Offices allows a community to run an election containing more than one office while still giving each voter one clear voting session.
+
+Example:
+
+- **Mayor**: 1 seat, elected by IRV
+- **Council**: 4 seats, elected by STV
+- **Dependency**: the Mayor winner is excluded from winning a Council seat
+
+This solves the common governance problem where a candidate may stand for Mayor, but if they win Mayor they should not also occupy a Council seat.
+
+The recommended configuration for a Mayor + Council election is:
+
+| Office | Seats | Recommended method |
+|---|---:|---|
+| Mayor | 1 | IRV |
+| Council | 2+ | STV |
+
+Approval Top-N remains supported, but STV is recommended for representative multi-seat bodies such as councils, boards, and committees.
 
 ---
 
 ## Core privacy model
 
-ModNVote 2.x is designed around one central rule:
+ModNVote is built around one central rule:
 
 > Anonymous ballots are the source of truth for vote content.
 
@@ -52,51 +80,31 @@ The system deliberately separates:
 | Data type | Purpose |
 |---|---|
 | Anonymous ballots | Store vote content and drive results |
+| Anonymous ballot contest responses | Store per-office Linked Offices ballot content |
 | Participation records | Track who has participated and prevent duplicate voting |
 | Audit records | Provide lifecycle and integrity evidence |
 | Proof phrases | Let a voter verify a ballot without revealing identity links |
 
 This means:
 
-- Results are calculated from anonymous ballots only.
+- Results are calculated from anonymous ballot content only.
 - Participation records do not contain vote content.
 - Vote content and voter identity are not stored together.
-- `/modnvote verify participation` confirms participation without revealing a vote.
-- `/modnvote verify ballot` uses a proof phrase as a bearer-token style verification mechanism.
-- `/poll` may be used as a shorter alias for `/modnvote`.
-- GUI/session state does not directly write ballots or lifecycle state.
-- Witness publication must not include player names, UUIDs, IP addresses, proof phrases, participation receipts, or per-player vote content.
+- The system does not join `participation_records` to vote content for results.
+- `/modnvote verify participation` confirms participation and integrity without revealing a vote.
+- `/modnvote verify ballot` uses a proof phrase as a bearer-token ballot verification mechanism.
+- GUI/session state is not authoritative; the service layer validates and persists final submissions.
+- Witness publication must not include player names, UUIDs, IP addresses, Floodgate ids, proof phrases, participation receipts, or per-player vote content.
 
 ---
 
 ## Supported poll types
 
-### Ranked single-winner polls
-
-Ranked polls let players rank options in preference order. Results are calculated from anonymous ranked ballots using IRV-style transfer rounds.
-
-Admins can configure through the Poll Builder GUI:
-
-- Poll title
-- Poll description
-- Option names
-- Option descriptions
-- Whether partial rankings are allowed
-- Maximum number of rankings a player may submit
-
-Example:
-
-```text
-/modnvote create ranked_single_winner 5
-```
-
-This creates a DRAFT poll with five placeholder options and immediately opens the Poll Builder GUI.
-
 ### Yes/No polls
 
 Yes/No polls use canonical Yes and No options managed by the service layer.
 
-Example:
+Create one with:
 
 ```text
 /modnvote create yes_no
@@ -104,55 +112,11 @@ Example:
 
 This creates a DRAFT Yes/No poll and opens the Poll Builder GUI.
 
----
+### Ranked single-winner polls
 
-## Ranked-choice result transparency
+Ranked single-winner polls let players rank options in preference order. Results are calculated from anonymous ranked ballots using IRV-style transfer rounds.
 
-Ranked single-winner results are not first-past-the-post results.
-
-For ranked polls:
-
-- First-preference totals are shown as the first IRV round.
-- Later rounds show transfers after eliminations.
-- The winning option may be different from the first-preference leader.
-- Exhausted ballots are reported where applicable.
-- Final winner tally is shown separately from first-preference totals.
-
-In-game result output and Discord witness output are both designed to distinguish:
-
-- Poll winner
-- Final winner tally
-- First Preference Round
-- Final IRV Round
-- IRV Round Breakdown
-- Eliminated option per non-final round
-- Exhausted ballots where applicable
-
-This avoids the misleading situation where a ranked-choice winner is correct but the displayed counts look like first-preference-only totals.
-
----
-
-## Command alias
-
-All `/modnvote` commands can also be used via the shorter alias:
-
-```text
-/poll ...
-```
-
-For example:
-
-```text
-/poll create ranked_single_winner 5
-/poll open <pollId>
-/poll vote <pollId>
-```
-
----
-
-## Admin workflow
-
-### Create a ranked poll
+Create one with:
 
 ```text
 /modnvote create ranked_single_winner <optionCount>
@@ -164,173 +128,384 @@ Example:
 /modnvote create ranked_single_winner 5
 ```
 
-The Poll Builder opens automatically.
+The Poll Builder GUI lets admins configure:
 
-In the builder:
+- title
+- description
+- option names
+- option descriptions
+- whether partial rankings are allowed
+- maximum rankings
 
-- Left-click the title item to edit the poll title.
-- Click the description book to edit the poll description.
-- Left-click an option item to edit its display name.
-- Right-click an option item to edit its description.
-- Click the Allow Partial Rankings item to toggle partial ranking.
-- Click the Max Rankings item to cycle the maximum number of rankings.
-- Red fields still need work.
-- Green fields are complete.
-- When READY turns green, click it to mark the poll ready.
+### Linked Offices elections
 
-### Create a Yes/No poll
+Linked Offices polls are created with:
 
 ```text
-/modnvote create yes_no
+/modnvote create linked_offices
 ```
 
-The Poll Builder opens automatically.
+A Linked Offices poll does not use legacy `poll_options`. Its candidates, offices, counting methods, and dependencies are defined in an `ElectionDefinition` stored in the poll's `config_json`.
 
-Yes/No polls do not show ranked-only settings such as Max Rankings or Allow Partial Rankings.
+Admins can configure the definition by:
 
-### Resume editing a draft poll
+- importing JSON with `/modnvote config <pollId> import <file>`
+- setting inline JSON with `/modnvote config <pollId> set <json>`
+- editing visually with `/modnvote edit-definition <pollId>`
+
+Linked Offices supports these office-level counting methods:
+
+| Method | Use case | Voter action |
+|---|---|---|
+| `IRV` | Single-winner offices such as Mayor | Rank candidates |
+| `STV` | Multi-seat representative offices such as Council | Rank candidates |
+| `APPROVAL_TOP_N` | Simpler multi-seat selection | Approve up to the configured maximum |
+
+---
+
+## Recommended Mayor + Council setup
+
+For a Mayor and four Council seats, use:
 
 ```text
-/modnvote edit <draftPollId>
+Mayor: IRV, 1 seat
+Council: STV, 4 seats
+Dependency: Council excludes winners from Mayor
 ```
 
-This reopens the Poll Builder for an existing DRAFT poll.
+This gives voters a simple flow:
 
-### Clone an existing poll
+1. Rank Mayor candidates.
+2. Rank Council candidates.
+3. Review the whole ballot.
+4. Submit once.
+
+At count time:
+
+1. Mayor is counted first.
+2. The Mayor winner is elected.
+3. The Mayor winner is excluded from the Council contest.
+4. Council is counted by STV from the remaining eligible candidates.
+
+This avoids electing the same player to both Mayor and Council.
+
+A ready-to-adapt example is provided at:
 
 ```text
-/modnvote clone <sourcePollId>
+docs/examples/pineton-mayor-stv-council.json
 ```
 
-This creates a new DRAFT poll by copying the source poll's definition and options, then opens the Poll Builder so the clone can be adjusted.
+For older or simpler workflows, an Approval Top-N example is also available:
 
-Cloning does not copy ballots, participation records, lifecycle timestamps, proof phrases, or audit history.
+```text
+docs/examples/linked-offices-mayor-council.json
+```
 
-### Open a poll for voting
+For live governance elections, prefer the STV example for multi-seat councils.
+
+---
+
+## Linked Offices JSON definitions
+
+Definition files are imported from:
+
+```text
+plugins/ModNVote/definitions/
+```
+
+Import with:
+
+```text
+/modnvote config <pollId> import <fileName>
+```
+
+Example:
+
+```text
+/modnvote config 12 import pineton-mayor-stv-council.json
+```
+
+A Linked Offices definition contains:
+
+- `model`: always `LINKED_OFFICES`
+- `offices`: the offices being elected
+- `candidateDefinitions`: candidate display names and eligibility
+- optional office dependencies such as `excludeWinnersFrom`
+
+Example structure:
+
+```json
+{
+  "model": "LINKED_OFFICES",
+  "offices": {
+    "mayor": {
+      "displayName": "Pineton Mayor",
+      "method": "IRV",
+      "seats": 1,
+      "allowAbstain": false,
+      "candidates": ["vradow", "space", "rooster"]
+    },
+    "council": {
+      "displayName": "Pineton Council",
+      "method": "STV",
+      "seats": 4,
+      "allowAbstain": false,
+      "candidates": ["vradow", "katie", "space", "rooster", "metta", "mort", "fitzy"],
+      "excludeWinnersFrom": ["mayor"]
+    }
+  },
+  "candidateDefinitions": {
+    "vradow": {
+      "displayName": "Vradow",
+      "eligibleFor": ["mayor", "council"]
+    }
+  }
+}
+```
+
+The full example file includes every candidate definition.
+
+---
+
+## Linked Offices admin workflow
+
+### 1. Create the poll
+
+```text
+/modnvote create linked_offices
+```
+
+Record the poll id.
+
+### 2. Set title and description
+
+Use the normal edit flow for poll title and description. For example:
+
+```text
+/modnvote edit <pollId>
+```
+
+or the available title/description edit commands in your admin workflow.
+
+### 3. Import or edit the election definition
+
+Import JSON:
+
+```text
+/modnvote config <pollId> import pineton-mayor-stv-council.json
+```
+
+Or open the definition editor:
+
+```text
+/modnvote edit-definition <pollId>
+```
+
+The editor lets admins manage:
+
+- offices
+- office display names
+- counting methods
+- seats
+- candidates
+- candidate eligibility
+- `EXCLUDE_WINNERS` dependencies
+- validation and save
+
+The GUI editor writes back through the same validated service path as JSON import.
+
+### 4. Validate
+
+```text
+/modnvote validate-definition <pollId>
+```
+
+The definition must be valid before the poll can be marked READY.
+
+### 5. Review
+
+```text
+/modnvote show <pollId>
+```
+
+For Linked Offices polls this shows definition status, office count, candidate count, dependency count, and each office's method and seats.
+
+### 6. Mark READY
+
+```text
+/modnvote ready <pollId>
+```
+
+### 7. Open voting
 
 ```text
 /modnvote open <pollId>
 ```
 
-Only READY polls can be opened.
-
-### Vote in an open poll
+### 8. Voters cast ballots
 
 ```text
 /modnvote vote <pollId>
 ```
 
-Voting uses an inventory GUI.
-
-For ranked polls:
-
-- Options remain visually stable as paper items.
-- Hovering an option shows whether it is currently ranked and at what position.
-- Players review their selection before casting.
-- Ballot submission requires confirmation.
-
-For Linked Offices polls (Tranche 2L):
-
-- An office overview lists every office with its method (ranked/approval), seats, and completion status.
-- Clicking an office opens its screen: rank candidates in order for ranked offices (IRV single-seat and STV multi-seat), or approve up to the configured maximum for approval offices. STV offices use the same ranked screen as IRV with no selection cap.
-- Every eligible candidate is shown for each office; the eventual winner of a source office is not hidden from a dependent office (the `EXCLUDE_WINNERS` dependency is applied during counting, not at cast time).
-- A review screen summarises every office before the final submit, which is guarded until each required office has a selection.
-- On submission the player receives a ballot hash, participation receipt, and a private proof phrase; voting once is enforced by participation token.
-
-### Close a poll
+### 9. Close and calculate results
 
 ```text
 /modnvote close <pollId>
 ```
 
-Closing an open poll calculates results and, when enabled, publishes a best-effort poll-closed witness message to configured webhooks. For Linked Offices polls the published message is the full multi-contest result (per-office method, seats, winners, candidate tallies, dependency exclusions, IRV rounds, and — for STV offices — the quota, transfer/elimination rounds, and exhausted value), built from anonymous content only.
-
-### Show results
+### 10. Show results
 
 ```text
 /modnvote result <pollId>
 ```
 
-Results are calculated from anonymous ballots only.
-
-For ranked single-winner polls, this shows the poll winner, final winner tally, and round-by-round IRV breakdown.
-
-For Linked Offices polls, this shows each office's method and seats, its winners, candidate tallies, IRV round breakdowns, any dependency exclusions applied (an office's winners excluded from a dependent office), and any issues. Counting is deterministic and reads anonymous ballot content only; it exposes no voter identity. As of Tranche 2L, Linked Offices polls are **votable end to end** — players cast multi-office ballots through the voting GUI and those anonymous ballots are what counting operates on.
-
-For approval (top-N) offices, candidate definition order is never used to break a tie that decides the final seat(s). Candidates are elected by approval score in descending groups, and a tied score group is elected only when it fits entirely within the remaining seats. If a tie crosses the seat cutoff (more tied candidates than seats left), **none** of those tied candidates is elected: the office is shown as unresolved with the number of unresolved seats and the tied candidate keys, and a runoff or administrator resolution is required to fill them. Clearly leading candidates above the cutoff are still elected, and a tie that does not cross the cutoff still fills the seats normally.
-
-Multi-seat offices can also be counted by **STV (single transferable vote)**. STV uses ranked ballots like IRV but fills multiple seats: a Droop quota is computed once from the valid ballot value, candidates at or above quota are elected and their surplus is transferred at the Gregory fraction, and when no one reaches quota the lowest candidate is eliminated and transferred; ballots with no further continuing preference exhaust. The result shows the quota, the elected winners, the round-by-round transfers and eliminations, and the exhausted ballot value. As with approval, candidate definition order never decides a seat-deciding tie: both an elimination tie that would decide the final seat(s) and a quota-election tie in which more candidates share the same top at-or-above-quota tally than there are seats remaining leave those seats unresolved for a runoff/administrator resolution. The recommended Pineton configuration is a Mayor counted by IRV plus a Council counted by STV that excludes the Mayor winner — see [`docs/examples/pineton-mayor-stv-council.json`](docs/examples/pineton-mayor-stv-council.json).
-
-### Republish a closed poll result
+### 11. Republish results if needed
 
 ```text
 /modnvote publishresult <pollId>
 ```
 
-This republishes a CLOSED poll's current result display to configured witness webhooks. Linked Offices polls republish the full multi-contest result through the same path; Yes/No and ranked single-winner polls republish their single-contest result exactly as before.
-
-Use this after upgrading result formatting or correcting public result presentation. The command requires the poll to already be `CLOSED`; it does not reopen or recalculate lifecycle state beyond reading current anonymous ballot results.
-
-### Publish a manual integrity checkpoint
+### 12. Verify integrity
 
 ```text
-/modnvote checkpoint <pollId>
+/modnvote verify participation <pollId>
 ```
-
-This publishes a privacy-safe witness checkpoint to the configured webhook targets.
-
-Manual checkpoints include poll-level integrity status only. They do not publish player names, UUIDs, IP addresses, proof phrases, participation receipts, or per-player vote content.
 
 ---
 
-## Witness publication
+## Voter experience
 
-ModNVote can publish public witness events to configured Discord-compatible webhooks.
+Players vote with:
 
-Supported witness events:
-
-- Poll opened
-- Poll closed, including a public result summary
-- Ranked poll closed, including winner, final IRV round, and IRV round breakdown
-- Linked Offices poll closed, including each office's method, seats, winners, candidate tallies, dependency exclusions, and IRV rounds
-- Automatic integrity checkpoints every configured number of accepted ballots
-- Manual integrity checkpoints via `/modnvote checkpoint <pollId>`
-- Manual closed-result republication via `/modnvote publishresult <pollId>`
-
-Webhook delivery is best-effort and non-blocking. A failed webhook does not cancel voting, poll opening, poll closing, result calculation, or persistence.
-
-Configure webhook publication in `config.yml`:
-
-```yaml
-publication:
-  # External witness publication targets.
-  #
-  # Leave this as [] to disable webhook publication:
-  # discord_webhooks: []
-  #
-  # To enable Discord publication, change it to a YAML list:
-  # discord_webhooks:
-  #   - "DISCORD_WEBHOOK_URL_PLACEHOLDER"
-  #
-  # Multiple webhooks are supported:
-  # discord_webhooks:
-  #   - "FIRST_DISCORD_WEBHOOK_URL_PLACEHOLDER"
-  #   - "SECOND_DISCORD_WEBHOOK_URL_PLACEHOLDER"
-  #
-  # Never commit real webhook URLs to source control.
-  discord_webhooks: []
-  publish_poll_opened: true
-  publish_poll_closed: true
-  publish_checkpoints: true
-
-integrity:
-  # Automatic witness checkpoints are published every N accepted ballots
-  # when publication.publish_checkpoints is true and at least one webhook is configured.
-  #
-  # Set to 0 or a negative number to disable automatic interval checkpoints.
-  checkpoint_interval_ballots: 25
-  canonicalization_version: 1
+```text
+/modnvote vote <pollId>
 ```
+
+For Linked Offices:
+
+1. The first screen lists every office.
+2. The voter opens each office.
+3. IRV and STV offices ask the voter to rank candidates.
+4. Approval Top-N offices ask the voter to approve up to the configured maximum.
+5. Required offices must be completed before the final submit button is enabled.
+6. The voter reviews all office responses.
+7. The voter submits once.
+8. The voter receives:
+    - ballot hash
+    - participation receipt
+    - private proof phrase
+
+The proof phrase should be treated like a bearer token. Anyone with the phrase can verify the anonymous ballot content associated with it.
+
+---
+
+## Counting methods
+
+### IRV
+
+IRV is used for single-winner ranked offices.
+
+The count proceeds through rounds:
+
+1. Count first preferences.
+2. If a candidate has a majority, they win.
+3. Otherwise eliminate the lowest candidate.
+4. Transfer ballots to next continuing preferences.
+5. Repeat until a winner is found.
+
+IRV round breakdowns are shown in results and witness publication.
+
+### STV
+
+STV is used for multi-seat ranked offices.
+
+STV uses:
+
+- ranked ballots
+- Droop quota
+- surplus transfer
+- lowest-candidate elimination
+- exhausted ballot reporting
+- deterministic round summaries
+
+STV is recommended for councils and other representative multi-seat bodies because it is better suited to proportional representation than Approval Top-N.
+
+For Linked Offices dependencies, exclusions are applied before the dependent office is counted. For example, if the Mayor winner is excluded from Council, that candidate is removed from the Council candidate set before the Council STV count begins.
+
+### Approval Top-N
+
+Approval Top-N lets voters approve up to a configured maximum number of candidates.
+
+Candidates are elected by approval score descending.
+
+If a tie crosses the final seat cutoff, candidate definition order is **not** used to pick winners. Instead:
+
+- clearly elected candidates above the cutoff remain elected;
+- the tied group at the cutoff is listed;
+- the affected seats are marked unresolved;
+- a runoff or administrator-defined resolution is required.
+
+This prevents arbitrary candidate-order tie-breaking.
+
+---
+
+## Dependencies
+
+Linked Offices currently supports:
+
+```text
+EXCLUDE_WINNERS
+```
+
+In JSON this is written as:
+
+```json
+"excludeWinnersFrom": ["mayor"]
+```
+
+on the dependent office.
+
+Example:
+
+```text
+Council excludes winners from Mayor
+```
+
+Meaning:
+
+- Mayor is counted first.
+- The Mayor winner is elected Mayor.
+- That winner is excluded from the Council contest.
+- Council is then counted without that candidate.
+
+Dependencies are applied at count time, not vote time. Voters still see every candidate who is structurally eligible for each office.
+
+---
+
+## Results
+
+Show results with:
+
+```text
+/modnvote result <pollId>
+```
+
+Results are calculated from anonymous ballot content only.
+
+For Linked Offices results, output includes:
+
+- each office
+- method and seats
+- winners
+- candidate tallies
+- dependency exclusions
+- IRV round breakdowns where applicable
+- STV quota and rounds where applicable
+- exhausted ballots or exhausted value
+- unresolved seats or election issues where applicable
+
+If the result is incomplete because of an unresolved tie, the result remains visible and publishable, but the unresolved office must be settled by runoff or administrator-defined election rules.
 
 ---
 
@@ -342,13 +517,13 @@ integrity:
 /modnvote mypolls
 ```
 
-### Verify participation
+### Verify participation and integrity
 
 ```text
 /modnvote verify participation <pollId>
 ```
 
-This confirms whether the player participated in a poll and reports integrity status (audit chain, ballot hashes, record counts) for any poll type, including Linked Offices. It does not reveal vote content.
+This confirms whether the player participated in a poll and reports integrity status. It does not reveal vote content.
 
 ### Verify a ballot proof phrase
 
@@ -356,11 +531,66 @@ This confirms whether the player participated in a poll and reports integrity st
 /modnvote verify ballot <pollId> <proofPhrase>
 ```
 
-This checks whether a proof phrase matches a stored anonymous ballot and verifies the ballot integrity data.
+This checks whether a proof phrase matches a stored anonymous ballot and verifies the ballot's commitment data.
 
-For Yes/No and ranked single-winner polls it reports the verified selection or ranking. For Linked Offices polls it reports the verified per-office responses (each office's response type and ordered candidate keys). On a non-matching phrase or a failed check it reports an identity-free failure and shows no ballot content.
+For Yes/No and ranked single-winner polls, it reports the verified selection or ranking.
 
-Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify that ballot reference and see its anonymous content. Verification never reveals voter identity (player name, UUID, IP, Floodgate id) or participation receipts.
+For Linked Offices polls, it reports the verified per-office anonymous responses.
+
+On a non-matching phrase or failed integrity check, it reports an identity-free failure and shows no ballot content.
+
+---
+
+## Witness publication
+
+ModNVote can publish public witness events to configured Discord-compatible webhooks.
+
+Supported witness events include:
+
+- poll opened
+- poll closed
+- closed result summary
+- Linked Offices multi-contest result summary
+- automatic integrity checkpoints
+- manual integrity checkpoints
+- manual closed-result republication
+
+Webhook delivery is best-effort and non-blocking. A failed webhook does not cancel voting, poll opening, poll closing, result calculation, or persistence.
+
+Configure in `config.yml`:
+
+```yaml
+publication:
+  discord_webhooks: []
+  publish_poll_opened: true
+  publish_poll_closed: true
+  publish_checkpoints: true
+
+integrity:
+  checkpoint_interval_ballots: 25
+  canonicalization_version: 1
+```
+
+Never commit real webhook URLs to source control.
+
+---
+
+## Command alias
+
+All `/modnvote` commands can also be used via:
+
+```text
+/poll
+```
+
+Examples:
+
+```text
+/poll status
+/poll vote <pollId>
+/poll result <pollId>
+/poll publishresult <pollId>
+```
 
 ---
 
@@ -368,36 +598,29 @@ Treat ballot proof phrases like bearer tokens: anyone with the phrase can verify
 
 All commands below may use either `/modnvote` or `/poll`.
 
-Normal admin-facing commands:
+Common admin commands:
 
 ```text
 /modnvote guide
-/modnvote create ranked_single_winner <optionCount>
 /modnvote create yes_no
+/modnvote create ranked_single_winner <optionCount>
+/modnvote create linked_offices
 /modnvote edit <draftPollId>
+/modnvote edit-definition <linkedPollId>
+/modnvote config <linkedPollId> set <json>
+/modnvote config <linkedPollId> import <file>
+/modnvote validate-definition <linkedPollId>
 /modnvote clone <sourcePollId>
 /modnvote list
 /modnvote show <pollId>
-/modnvote validate-definition <pollId>
-/modnvote create linked_offices
-/modnvote config <pollId> set <json>
-/modnvote config <pollId> import <file>
-/modnvote edit-definition <pollId>
-/modnvote delete <pollId>
+/modnvote ready <pollId>
 /modnvote open <pollId>
 /modnvote close <pollId>
 /modnvote result <pollId>
 /modnvote publishresult <pollId>
 /modnvote checkpoint <pollId>
+/modnvote delete <pollId>
 ```
-
-`/modnvote validate-definition <pollId>` is a read-only admin check that parses and validates a linked-offices election definition stored in a poll's `config_json`. It also warns if a poll's type and its declared config model disagree.
-
-`/modnvote show <pollId>` prints a poll's details. For Yes/No and ranked single-winner polls it shows the ranking rules and the configured options. For Linked Offices polls it instead shows the election definition: whether the stored definition is valid, the office/candidate/dependency counts, and a brief per-office list (each office's counting method, seats, and candidate count). Linked Offices polls carry no `poll_options`, so no options section is shown for them.
-
-`/modnvote create linked_offices` creates a DRAFT Linked Offices poll. `/modnvote config <pollId> set <json>` stores an inline definition, and `/modnvote config <pollId> import <file>` imports one from `plugins/ModNVote/definitions/<file>` (UTF-8 JSON, path-traversal rejected). Definitions are validated before they are saved; invalid definitions are rejected without writing. A valid Linked Offices poll can be marked READY and then **opened for voting** (`/modnvote open <pollId>`); as of Tranche 2L players vote through the GUI with `/modnvote vote <pollId>`, ballots are stored anonymously and counted, and results render after close. See `docs/examples/linked-offices-mayor-council.json` (Mayor IRV + Council approval top-N) and `docs/examples/pineton-mayor-stv-council.json` (Mayor IRV + Council STV) for example definitions.
-
-`/modnvote edit-definition <pollId>` opens an in-game GUI builder/editor for a Linked Offices poll's definition: screens for offices, candidates, and EXCLUDE_WINNERS dependencies, plus Validate and Save. The builder edits definition data only — it is an editor for the `ElectionDefinition`, not a voter GUI, and it saves exclusively through the service layer (the same validated path as JSON import). The separate voter GUI used to cast a ballot is opened with `/modnvote vote <pollId>` once the poll is open (Tranche 2L).
 
 Player-facing commands:
 
@@ -414,17 +637,6 @@ Utility commands:
 /modnvote status
 /modnvote reload
 ```
-
-Short alias examples:
-
-```text
-/poll status
-/poll guide
-/poll vote <pollId>
-/poll publishresult <pollId>
-```
-
-Some older low-level authoring commands may remain callable as recovery tools, but normal poll setup should use the GUI builder.
 
 ---
 
@@ -444,153 +656,43 @@ Common permissions include:
 | `modnvote.verify` | Use verification commands |
 | `modnvote.testvote` | Access test vote tooling where enabled |
 
-Duplicate-prevention bypass support remains configurable through the plugin configuration.
-
----
-
-## GUI design notes
-
-The current GUI intentionally avoids decorative glass panes.
-
-This keeps the interface simpler and more compatible with Bedrock players while still providing clear interaction cues through:
-
-- Item names
-- Item lore
-- Red/green completion status
-- Confirmation screens
-- Wrapped multiline descriptions
-
-The Poll Builder and voting GUI are designed to remain intuitive across Java and Bedrock clients.
-
----
-
-## Architecture overview
-
-ModNVote 2.x uses a service-authoritative design.
-
-### Command layer
-
-Responsible for:
-
-- Parsing user input
-- Checking permissions
-- Displaying formatted output
-- Delegating business logic to services
-
-Not responsible for:
-
-- Writing ballots directly
-- Writing lifecycle state directly
-- Calculating results independently
-- Reconstructing ballot logic
-- Bypassing validation
-
-### GUI/session layer
-
-Responsible for:
-
-- Rendering inventories
-- Holding temporary player interaction state
-- Capturing chat input for builder fields
-- Delegating all mutations to services
-
-Not responsible for:
-
-- Writing ballots directly
-- Writing lifecycle state directly
-- Calculating results
-- Bypassing validation
-
-### Service layer
-
-Responsible for:
-
-- Poll creation
-- Poll cloning
-- Poll validation
-- Lifecycle transitions
-- Option mutation
-- Ballot submission
-- Result calculation
-- Integrity and audit enforcement
-
-### Persistence layer
-
-Responsible for:
-
-- Poll definitions
-- Poll options
-- Anonymous ballots
-- Ballot preferences
-- Participation records
-- Audit records
-
-### Presentation/publication layer
-
-Responsible for:
-
-- Formatting in-game result output
-- Formatting Discord witness result fields
-- Publishing privacy-safe webhook events
-- Keeping ranked-choice public result wording clear and non-misleading
-
-`ResultDisplayFormatter` is the canonical result presentation helper. Future result-display changes should generally go through that class rather than duplicating formatting in command or publication code.
-
----
-
-## Lifecycle
-
-A poll progresses through lifecycle states such as:
-
-```text
-DRAFT -> READY -> OPEN -> CLOSED
-```
-
-Typical admin flow:
-
-```text
-create -> edit in builder -> mark READY -> open -> players vote -> close -> result
-```
-
-The builder keeps polls in DRAFT until required fields are complete and the admin marks the poll ready.
-
----
-
-## Integrity and audit model
-
-ModNVote 2.x includes audit and verification features intended to make election data tamper-evident.
-
-Integrity checks include:
-
-- Participation inclusion checks
-- Ballot hash verification
-- Ballot commitment verification
-- Audit chain validation
-- Optional witness checkpoint publication
-
-The goal is not to identify how someone voted. The goal is to verify that the stored election data remains internally consistent and that a voter can verify their own ballot proof phrase.
-
-Witness publication can optionally publish poll-level lifecycle, result, and checkpoint events to configured webhooks. These events are privacy-safe and do not include voter identity, proof phrases, participation receipts, IP data, or per-player vote content.
-
 ---
 
 ## Installation
-
-ModNVote 2.x requires a clean install. There is no supported upgrade path from v1.x databases.
-
-1. Stop the server.
-2. Remove any legacy ModNVote 1.x jar.
-3. Back up and remove old ModNVote 1.x database/config files if present.
-4. Install the current ModNVote 2.x jar into `/plugins/`.
-5. Start the server.
-6. Configure permissions.
-7. Configure witness publication if desired.
-8. Create and test a new poll.
 
 ### Requirements
 
 - Paper 1.21.x
 - Java 21
+
+### Fresh install
+
+1. Stop the server.
+2. Install the ModNVote jar into `/plugins/`.
+3. Start the server.
+4. Configure permissions.
+5. Configure witness publication if desired.
+6. Create and test a poll.
+
+### Upgrading from ModNVote 2.1.1
+
+ModNVote 2.2.0 is intended to be compatible with existing ModNVote 2.1.1 installs.
+
+The 2.2.0 Linked Offices storage adds a new anonymous contest-response table for multi-office ballots. Existing Yes/No and ranked single-winner ballot formats remain unchanged.
+
+Recommended upgrade process:
+
+1. Stop the server.
+2. Back up the database and config.
+3. Replace the old jar with the 2.2.0 jar.
+4. Start the server.
+5. Check startup logs for schema errors.
+6. Verify old polls still list and display.
+7. Verify old closed results still match.
+8. Verify old proof phrases still work.
+9. Create a test Linked Offices poll before using it for live governance.
+
+There is no supported upgrade path from legacy ModNVote 1.x databases.
 
 ---
 
@@ -608,23 +710,13 @@ On Windows:
 gradlew.bat clean build
 ```
 
-The Java source/target level should remain Java 21 unless explicitly changed.
+The Java source/target level should remain Java 21 unless intentionally changed.
 
-The release jar is produced by the Shadow plugin under `build/libs/`.
+The release jar is produced by the Shadow plugin under:
 
----
-
-## Development notes
-
-- Keep `.gradle/` out of version control.
-- Do not commit local Gradle cache files.
-- Prefer tranche-based changes that build after each tranche.
-- GUI features should remain Folia-aware through `ModNScheduler`.
-- Results must always come from anonymous ballots only.
-- Participation verification must never reveal vote content.
-- Witness publication must remain best-effort and privacy-safe.
-- Ranked-choice result wording must not make first-preference totals look like final results.
-- Read `CURRENT_STATE.md` before starting a new implementation session.
+```text
+build/libs/
+```
 
 ---
 
@@ -634,18 +726,20 @@ After significant changes, test a representative flow:
 
 ```text
 /modnvote status
-/modnvote create ranked_single_winner 3
 /modnvote create yes_no
-/modnvote edit <draftPollId>
-/modnvote open <readyPollId>
-/modnvote vote <openPollId>
-/modnvote close <openPollId>
-/modnvote result <closedPollId>
-/modnvote publishresult <closedPollId>
-/modnvote checkpoint <pollId>
-/modnvote mypolls
-/modnvote verify participation <pollId>
-/modnvote verify ballot <pollId> <proofPhrase>
+/modnvote create ranked_single_winner 3
+/modnvote create linked_offices
+/modnvote config <linkedPollId> import pineton-mayor-stv-council.json
+/modnvote validate-definition <linkedPollId>
+/modnvote show <linkedPollId>
+/modnvote ready <linkedPollId>
+/modnvote open <linkedPollId>
+/modnvote vote <linkedPollId>
+/modnvote close <linkedPollId>
+/modnvote result <linkedPollId>
+/modnvote publishresult <linkedPollId>
+/modnvote verify participation <linkedPollId>
+/modnvote verify ballot <linkedPollId> <proofPhrase>
 ```
 
 Also verify alias behavior:
@@ -653,20 +747,99 @@ Also verify alias behavior:
 ```text
 /poll status
 /poll vote <pollId>
-/poll publishresult <closedPollId>
+/poll result <pollId>
 ```
 
-For the full Linked Offices release-candidate validation (admin, voter,
-post-election, privacy, and YES_NO/RANKED regression checks), follow
-[`docs/release/2.2.0-linked-offices-smoke-test.md`](docs/release/2.2.0-linked-offices-smoke-test.md).
-2.2.0 Linked Offices is **release-candidate ready**; this in-server smoke test
-remains the final step before tagging. The first manual smoke run exposed one
-release-blocking fairness defect — APPROVAL_TOP_N decided seat-deciding ties by
-candidate definition order — which has been fixed (a cutoff tie now leaves the
-seats unresolved for a runoff/admin resolution). STV counting for multi-seat
-council contests is now also supported (recommended Pineton config: Mayor IRV +
-Council STV) and follows the same no-silent-tie-break fairness rule; the checklist
-must be re-run to completion against the rebuilt jar before tagging.
+For the full Linked Offices release validation, use:
+
+```text
+docs/release/2.2.0-linked-offices-smoke-test.md
+```
+
+---
+
+## Architecture overview
+
+ModNVote uses a service-authoritative design.
+
+### Command layer
+
+Responsible for:
+
+- parsing user input
+- checking permissions
+- displaying formatted output
+- delegating business logic to services
+
+Not responsible for:
+
+- writing ballots directly
+- writing lifecycle state directly
+- calculating results independently
+- bypassing validation
+
+### GUI/session layer
+
+Responsible for:
+
+- rendering inventories
+- holding temporary player interaction state
+- capturing chat input for builder fields
+- delegating all mutations to services
+
+Not responsible for:
+
+- writing ballots directly
+- writing lifecycle state directly
+- calculating results
+- bypassing validation
+
+### Service layer
+
+Responsible for:
+
+- poll creation
+- poll validation
+- lifecycle transitions
+- ballot submission
+- result calculation
+- integrity verification
+- audit enforcement
+
+### Persistence layer
+
+Responsible for:
+
+- poll definitions
+- poll options for non-linked polls
+- anonymous ballots
+- anonymous ballot preferences
+- anonymous linked-office contest responses
+- participation records
+- audit records
+
+### Presentation/publication layer
+
+Responsible for:
+
+- formatting in-game output
+- formatting result output
+- formatting witness output
+- publishing privacy-safe webhook events
+
+---
+
+## Development notes
+
+- Keep `.gradle/` out of version control.
+- Do not commit local Gradle cache files.
+- GUI features should remain Folia-aware through `ModNScheduler`.
+- Results must always come from anonymous ballots only.
+- Participation verification must never reveal vote content.
+- Witness publication must remain best-effort and privacy-safe.
+- Ranked-choice and STV result wording must make the counting method clear.
+- Approval Top-N must not silently break seat-deciding ties by candidate order.
+- Read `CURRENT_STATE.md` before starting a new implementation session.
 
 ---
 
@@ -674,13 +847,12 @@ must be re-run to completion against the rebuilt jar before tagging.
 
 Potential future 2.x work:
 
-- Multi-winner STV
-- Combined elections such as Mayor + Council
 - Exportable signed audit snapshots
 - Advanced reporting and dashboards
 - Dedicated GUI delete confirmation flow
 - Additional admin transparency tooling
 - Multi-target witness publication beyond Discord-compatible webhooks
+- Larger-election pagination refinements for very large Linked Offices definitions
 
 ---
 
