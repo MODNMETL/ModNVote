@@ -1,1047 +1,356 @@
-# CURRENT_STATE — ModNVote
+# CURRENT STATE
 
-This is the primary handoff document for new development sessions.
+## Version
 
-Read this after:
+Current version: **2.2.0**
 
-1. `README.md`
-2. `ARCHITECTURE.md`
-3. `CHANGELOG.md`
-4. `Project-Context.txt` if present in the active context upload
+Status: **Release Candidate**
 
-If this file disagrees with code, verify against the code and resolve the disagreement before editing.
+Build status:
 
----
-
-## Baseline
-
-- Branch: `main`
-- Current release: `v2.1.1`
-- In development: `2.2.0` (Linked Offices development stretch; as of Tranche 2M, `LINKED_OFFICES` is votable end to end and its closed result publishes to witness webhooks. As of Tranche 2N it is **release-candidate ready**. Manual in-server smoke testing began and exposed one release-blocking fairness defect — APPROVAL_TOP_N broke seat-deciding ties by candidate definition order — now **fixed** so a cutoff tie leaves seats unresolved for a runoff/admin resolution instead of arbitrarily electing. Tranche 2O adds **STV** as a multi-seat linked-office counting method (recommended Pineton config: Mayor IRV + Council STV) following the same no-silent-tie-break fairness rule. A presentation-only RC polish then bolds key in-game result headings (Winners, etc.) for live-review readability. The manual smoke checklist in `docs/release/2.2.0-linked-offices-smoke-test.md` must be re-run to completion against the rebuilt jar before tagging — see CHANGELOG and the "2.2.0 groundwork" section below)
-- Java target: 21
-- Platform target: Paper 1.21.x
-- Folia-aware scheduling: through `ModNScheduler`
-- Build command, Unix/macOS: `./gradlew clean build`
-- Build command, Windows: `gradlew.bat clean build`
-- Release jar: produced by `shadowJar` as `build/libs/modnvote-<version>.jar`
-
-`build.gradle.kts` is authoritative for the current plugin version.
+* Linked Offices feature complete
+* Automated test suite passing
+* Manual smoke test completed successfully
+* Ready for production deployment
 
 ---
 
-## 2.2.0 groundwork (in progress)
+# Overview
 
-The 2.2.0 stretch targets a generic Linked Offices election model (multiple
-contests resolved from a single anonymous ballot). As of Tranche 2M that feature
-is **implemented end to end**: admins define/validate/ready/open a
-`LINKED_OFFICES` poll, players vote through the GUI, ballots are stored
-anonymously and counted, the multi-contest result renders after close, and the
-closed result publishes to the configured witness webhooks. Tranche 2N is
-release-hardening (lifecycle audit, regression tests, docs/help/show polish, and
-stale-message cleanup) ahead of the 2.2.0 release — see the "2.2.0 release
-readiness" section in CHANGELOG.md. The feature is now **release-candidate
-ready**. The remaining pre-tag step is the manual in-server smoke test documented
-in `docs/release/2.2.0-linked-offices-smoke-test.md`; the first manual smoke run
-exposed one release-blocking fairness defect (APPROVAL_TOP_N cutoff ties decided by
-candidate order), which is now fixed — a cutoff tie leaves the seats unresolved for
-a runoff/admin resolution — so the checklist must be re-run to completion against
-the rebuilt jar before tagging. The per-tranche
-sections below are retained
-as a historical build record; where an early section says "non-votable", read it
-as the state at that tranche, superseded by Tranche 2K–2M.
+ModNVote is a privacy-first election and polling platform for PaperMC servers.
 
-Completed groundwork so far:
+The plugin currently supports:
 
-- Extracted a shared `BallotCanonicalizer` (`service.canonical`) as the single
-  source of truth for anonymous-ballot canonical payload construction. Both
-  `BallotService` (submission) and `IntegrityVerificationService`
-  (recount/verification) now use it instead of duplicated private builders.
-  Canonical output is byte-for-byte unchanged (`rule_snapshot_version=v2`), so
-  existing stored ballot hashes and proof commitments still verify.
-- Added a test foundation under `src/test`:
-  - golden/stability tests locking the canonical payload format for existing
-    `YES_NO` and `RANKED_SINGLE_WINNER` ballots
-  - schema privacy/non-joinability regression tests over the live schema
-- Bumped the project version to `2.2.0`.
+* Yes/No polls
+* Ranked single-winner polls (IRV)
+* Linked Offices elections
 
-Tranche 2A added the generic election-definition/config layer (definition only, no voting):
-
-- Generic election-definition domain model under `domain.election`
-  (`ElectionDefinition`, `ContestDefinition`, `CandidateDefinition`,
-  `OfficeDependencyRule`, `CountingMethod`, `OfficeDependencyType`). Mayor/Council
-  are examples only; nothing is hardcoded.
-- `ElectionDefinitionParser` (parses `polls.config_json`; preserves office and
-  candidate order; converts `excludeWinnersFrom` into `EXCLUDE_WINNERS`
-  dependencies; rejects unknown models/methods) and `ElectionDefinitionValidator`
-  (generic structural rules including an acyclic dependency check).
-- Surfaced `config_json` on `Poll`/`PollDao` and `metadata_json` on
-  `PollOption`/`PollOptionDao`, both defaulting to `"{}"` via backward-compatible
-  constructors. No schema change.
-- Gson is used for parsing as a `compileOnly` (Paper-provided) + test-only
-  dependency; it is not shaded into the plugin jar.
-
-Tranche 2B added read-only admin definition validation (still no voting):
-
-- `ElectionDefinitionService` (`service`) parses+validates a poll's `config_json`
-  and returns a structured `ElectionDefinitionValidationResult` (no throwing, no
-  persistence, no identity/ballot involvement).
-- `/modnvote validate-definition <pollId>` admin command (permission
-  `modnvote.admin.poll.create`) reports valid/invalid + issues. Read-only: no
-  status change, no DB write, no GUI.
-- Reserved, NON-VOTABLE `PollType.LINKED_OFFICES`. It is guarded out of the vote
-  command, the vote session layer, `ResultService`, and authoring/lifecycle
-  (cannot be created or readied for voting). Existing types/data stay compatible.
-
-Tranche 2C added linked-offices authoring + lifecycle readiness (still no voting):
-
-- `/modnvote create linked_offices` creates a DRAFT, non-votable poll
-  (`PollService.createPoll` now accepts `LINKED_OFFICES`; default `config_json`
-  is `"{}"`, no default options).
-- `/modnvote config <pollId> set <json>` and `/modnvote config <pollId> import
-  <file>` store a definition via `PollService.updatePollConfigJson` /
-  `PollDao.updatePollConfigJson` (writes only `config_json`). Definitions are
-  parsed+validated first; invalid ones are rejected with no write. File import
-  uses `LinkedOfficesDefinitionFileLoader`, reading UTF-8 from
-  `plugins/ModNVote/definitions` with path-traversal rejection. Config writes are
-  allowed only for `LINKED_OFFICES` polls and only while DRAFT.
-- A `POLL_CONFIG_UPDATED` audit event stores poll id, actor, declared model, a
-  SHA-256 hash of the definition, and its byte length — never the raw JSON.
-- `validatePollDefinition`/`readyPoll` accept `LINKED_OFFICES` only with a valid
-  definition; an explicit `openPoll` guard rejects it even when READY.
-- Example: `docs/examples/linked-offices-mayor-council.json` (example only).
-
-Tranche 2D added an in-game admin builder GUI for the definition (still no voting):
-
-- `/modnvote edit-definition <pollId>` opens a GUI to edit a `LINKED_OFFICES`
-  poll's `ElectionDefinition` (offices, candidates, EXCLUDE_WINNERS dependencies),
-  with Validate and Save buttons. Code lives in `ui.builder.election`.
-- The GUI is an editor for `ElectionDefinition`, **not** a source of truth. It
-  loads by parsing `config_json` into a Bukkit-free `LinkedOfficesBuilderState`;
-  Save serializes via `ElectionDefinitionSerializer` and writes **only** through
-  `PollService.updatePollConfigJson` (no DAO bypass). Validate reuses
-  `ElectionDefinitionService`. Invalid definitions cannot be saved.
-- `ElectionDefinitionSerializer` is the deterministic, order-stable inverse of
-  `ElectionDefinitionParser` (`parse(serialize(x))` equals `x`).
-- The JSON `config set`/`import` paths from Tranche 2C remain supported.
-- Hardening: the legacy `poll_options` authoring methods are rejected for
-  `LINKED_OFFICES` polls, so the `ElectionDefinition` in `config_json` is the
-  single source of truth for linked-offices candidates.
-
-Tranche 2E added the in-memory execution model for linked-offices votes (still
-no voting, storage, or counting):
-
-- New `domain.election.execution` package, pure in-memory and Bukkit-free:
-  sealed `ContestVote` (`RankedContestVote` / `ApprovalContestVote`) and
-  `LinkedElectionBallot` (an `ElectionDefinition` plus per-contest responses).
-- `LinkedElectionBallotValidator` validates a ballot against its definition and
-  returns a structured `BallotValidationResult` (never throws for ordinary voter
-  mistakes): office exists, vote shape matches the contest method, no duplicate
-  response per office, candidates exist/unique/eligible, approval within
-  `maxSelections`, and definition dependency references resolve.
-- `ElectionDependencyEvaluator` interprets dependency rules **without applying
-  outcomes** (`determineCandidatesEligibleForContest`, `evaluateDependencies` →
-  deterministic `DependencyEvaluation` with counting order and cycle detection).
-- `LinkedElectionCanonicalModel` fixes the deterministic ordering for future
-  ballot hashing (contest order from the definition; ranked order preserved;
-  approval normalised to contest order) and produces a `CanonicalBallot`. This
-  is canonicalization planning, NOT the final hash implementation.
-
-Explicitly NOT done **by the Tranche 2A–2C groundwork above** (later superseded —
-see the Tranche 2G–2L sections for storage, counting, and voting):
-
-- At that point `PollType.LINKED_OFFICES` was authorable/readyable but non-votable;
-  there was NO linked-offices voting, submission, counting, or result calculation,
-  and it could not be opened. (Tranche 2K added counting/results; Tranche 2L added
-  voting/submission and made it openable; Tranche 2M added close/result witness
-  publication.)
-- No `anonymous_ballot_contest_responses` table or any schema change. (Tranche 2G
-  later added that table; no schema change since.)
-- No multi-contest ballot submission, counting pipeline, or IRV extraction. (Added
-  across Tranches 2G/2K/2L.)
-- The linked-offices GUI edits definition data only; there is NO linked-offices
-  voter GUI/session flow, and no proof-phrase or participation-token changes.
-- The Tranche 2E execution model is pure in-memory types only: no ballot
-  submission, no persistence, no counting/tallying, and no participation/privacy
-  changes. Nothing constructs or stores a `LinkedElectionBallot` in production.
-
-Tranche 2F added the linked-offices canonical payload (the deterministic hashing
-input), still with no voting, storage, or counting:
-
-- New `BallotCanonicalizer.canonicalLinkedOfficesBallotPayload(Poll,
-  ElectionDefinition, LinkedElectionBallot, Instant)` builds a deterministic,
-  versioned text payload for a multi-contest ballot — the exact bytes a later
-  tranche will hash for ballot hash / commitment / proof-phrase / recount.
-- It uses its own version `rule_snapshot_version=linked_offices_v1`, separate
-  from the single-contest `v2`; the existing `YES_NO` / `RANKED_SINGLE_WINNER`
-  canonical payloads are unchanged byte-for-byte.
-- It validates the ballot via `LinkedElectionBallotValidator` first and throws
-  `IllegalArgumentException` for an invalid ballot (and for a non-`LINKED_OFFICES`
-  poll, or a definition that does not match the ballot's own); it never hashes an
-  invalid ballot. Ordering comes from `LinkedElectionCanonicalModel` (contest
-  order, ranked preserved, approval normalised). The payload carries no player
-  UUID/name/IP, session state, or participation token.
-
-Explicitly NOT done by Tranche 2F:
-
-- Nothing in production calls `canonicalLinkedOfficesBallotPayload`; there is no
-  submission, no multi-contest storage, no vote session, no counting, and no
-  result calculation. No schema/`SchemaInitializer`/`anonymous_ballot*` changes,
-  and no proof-phrase or participation-token changes.
-
-Tranche 2G added anonymous multi-contest ballot **storage infrastructure** and
-wired the 2F canonical payload into hash derivation, still with no voting,
-counting, or results:
-
-- New `anonymous_ballot_contest_responses` table (the first 2.2.0 schema
-  addition): `response_id`, `anonymous_ballot_id`, `office_key`, `response_type`
-  (`RANKED`/`APPROVAL`), `candidate_key`, `rank_position` (ranked only),
-  `selection_order` (approval only, canonical order), `created_at`. Only FK is to
-  `anonymous_ballots` (ON DELETE CASCADE); no identity columns, no
-  `participation_records` link. UNIQUE `(anonymous_ballot_id, office_key,
-  candidate_key)`.
-- New `AnonymousBallotContestResponse` (domain) + `AnonymousBallotContestResponseDao`
-  (insert canonical rows / read by ballot in deterministic order / delete by
-  ballot); no identity-aware queries.
-- New `LinkedBallotStorageService` (Bukkit-free, **not** a voting path, not
-  reachable from any command/session/GUI): validates via
-  `canonicalLinkedOfficesBallotPayload`, derives `ballot_hash =
-  SHA-256(payload)` and `ballot_commitment_hash` (existing proof semantics), and
-  transactionally writes one participation record + one anonymous ballot + the
-  contest-response rows (all-or-nothing). Approval rows stored in canonical
-  contest order. Requires a `LINKED_OFFICES` poll; deliberately does not require
-  `OPEN` (storage primitive — a future real submission path must add it).
-- New `LinkedBallotReconstructor` rebuilds a `LinkedElectionBallot` from stored
-  rows; re-canonicalising reproduces the original payload/hash (recount
-  foundation; no counting).
-
-Explicitly NOT done by Tranche 2G:
-
-- No voter GUI, vote session, player voting command, counting, IRV/approval
-  tallying, dependency-outcome application, or result calculation; nothing in
-  production calls `LinkedBallotStorageService`. Existing `YES_NO`/`RANKED`
-  submission, `anonymous_ballot_preferences`, single-contest canonical payloads,
-  participation-token hashing, and proof-phrase generation are all unchanged.
-
-The canonicalizer is intentionally shaped so multi-contest canonicalization can
-be added later without altering the existing single-contest format.
-
-Tranche 2H wired linked-offices stored content into integrity verification, with
-**no schema changes** (it consumes the 2G schema) and still no voting, counting,
-or results:
-
-- `IntegrityVerificationService.verifyPollIntegrity` now branches on poll type:
-  `LINKED_OFFICES` polls are delegated to the new, Bukkit-free
-  `LinkedOfficesIntegrityVerifier`; the single-contest (`YES_NO`/`RANKED`) path is
-  unchanged. For a linked-offices poll the verifier parses + validates the
-  definition from `config_json`, and for each anonymous ballot loads its
-  `anonymous_ballot_contest_responses` rows, reconstructs the
-  `LinkedElectionBallot`, rebuilds the canonical payload, recomputes
-  `ballot_hash = SHA-256(payload)` via the shared `BallotHashingService`, and
-  compares it to the stored hash. Failures: missing/invalid `config_json`, a
-  ballot with no rows, rows that cannot reconstruct a valid ballot (unknown
-  office/candidate, ineligible), and any recomputed-vs-stored hash mismatch —
-  reported with deterministic, identity-free messages (poll id, anonymous ballot
-  id, failure type, expected/actual hash).
-- Only `ballot_hash` is recomputed. `ballot_commitment_hash` binds the voter's
-  proof phrase, which integrity does not hold, so commitment recomputation stays
-  in the bearer-token proof path; there is no linked-office proof-phrase bypass.
-- `LinkedBallotReconstructor` is hardened: it now throws
-  `LinkedBallotReconstructionException` for mixed response types in one office,
-  missing/non-positive/duplicate `rank_position`/`selection_order`, duplicate
-  candidate rows, and unknown response types — it no longer silently repairs
-  malformed stored rows.
-
-Explicitly NOT done by Tranche 2H:
-
-- No voter GUI, vote session, player voting command, counting, IRV/approval
-  tallying, dependency-outcome application, or result calculation. No schema
-  changes. Existing `YES_NO`/`RANKED` integrity behaviour, single-contest
-  canonical payloads, participation-token hashing, and proof-phrase generation
-  are unchanged. **Linked-office bearer-token proof-phrase verification is
-  deferred** to a later tranche (the existing single-contest proof path is
-  untouched).
-
-Tranche 2I completed the linked-offices proof loop the 2H commitment boundary
-deferred, with **no schema changes** (it consumes the 2G schema) and still no
-voting, counting, or results:
-
-- New `BallotService.verifyLinkedOfficeBallotProof(pollId, ballotProofPhrase)`
-  resolves and type-checks the poll, then delegates to the new, Bukkit-free
-  `LinkedOfficesProofVerifier`. The verifier hashes the phrase to
-  `ballot_proof_hash`, loads the matching anonymous ballot, reconstructs it from
-  its `anonymous_ballot_contest_responses` rows, re-canonicalises it, and compares
-  **both** the recomputed `ballot_hash` and the phrase-bound
-  `ballot_commitment_hash` to the stored values — proving the held phrase commits
-  to that exact stored ballot. The single-contest `verifyBallotProof` path and
-  its `BallotProofVerificationResult` are unchanged.
-- Result type `LinkedOfficeBallotProofVerificationResult` (nested `OfficeResponse`)
-  exposes anonymous content only: poll id, anonymous ballot id, `submitted_at`, a
-  `verified` flag, the anonymous `ballot_hash`, per-office response content (office
-  key, response type, ordered candidate keys, populated only on success), and an
-  identity-free `failureReason` on failure. Bearer-token semantics: success
-  reveals the anonymous content to the phrase holder, but never voter identity.
-- Failures reported (identity-free, no content): proof phrase not found,
-  mismatched/non-linked poll, invalid `config_json`, missing contest rows,
-  reconstruction/canonicalization failure, and `ballot_hash`/commitment mismatch.
-
-Explicitly NOT done by Tranche 2I:
-
-- No voter GUI, vote session, player voting command, counting, IRV/approval
-  tallying, dependency-outcome application, or result calculation. No schema
-  changes. No production command is wired to the new linked-offices proof method
-  yet. Existing single-contest proof verification, canonical payloads,
-  participation-token hashing, and proof-phrase generation are unchanged. The
-  verifier reads only anonymous content keyed by `anonymous_ballot_id` and never
-  joins `participation_records`, preserving identity↔content non-joinability.
-
-Tranche 2J wired the already-built linked-offices verification into the existing
-commands, with **no schema changes** and no new verification logic, and still no
-voting, counting, or results:
-
-- `/modnvote verify ballot <pollId> <proofPhrase>` now routes `LINKED_OFFICES`
-  polls to `BallotService.verifyLinkedOfficeBallotProof` (Tranche 2I) and renders
-  the result through the new, Bukkit-free `LinkedOfficeProofDisplayFormatter`. The
-  `YES_NO`/`RANKED_SINGLE_WINNER` branch of `handleBallotVerification` is unchanged
-  byte-for-byte; the linked-offices case is an early route added at the top.
-- On success the command shows the poll id, `submitted_at`, the anonymous
-  `ballot_hash`, and per-office responses (office key, response type, ordered
-  candidate keys — ranked offices numbered, approval offices bulleted). On a
-  not-found phrase or a failed verification it shows an identity-free message plus
-  the identity-free `failureReason`, and **no** office/candidate content.
-- Linked-office **integrity** verification needed no command change: it was already
-  reachable generically via `/modnvote verify participation <pollId>`
-  (`IntegrityVerificationService.verifyPollIntegrity` delegates `LINKED_OFFICES` to
-  `LinkedOfficesIntegrityVerifier` since Tranche 2H). Command help text was updated
-  to say `verify participation` covers all poll types and `verify ballot` covers
-  yes/no, ranked, and linked-offices proof phrases.
-
-Explicitly NOT done by Tranche 2J:
-
-- No voting, vote session, voter GUI, player linked-offices voting command,
-  counting, IRV/approval tallying, dependency-outcome application, or result
-  calculation. No schema changes, no new verification logic, no new command,
-  permission, or tab-completion entry (the existing `modnvote.verify` permission
-  and `verify ballot`/`verify participation` arguments are reused). Existing
-  single-contest proof/integrity command output, canonical payloads,
-  participation-token hashing, and proof-phrase generation are unchanged. Command
-  output is structurally incapable of echoing voter identity or the proof phrase,
-  preserving identity↔content non-joinability.
+The system is designed around anonymous ballot storage, integrity verification, proof-based ballot verification, and public witness publication.
 
 ---
 
-### 2.2.0 groundwork — Tranche 2K (counting and result calculation)
+# Supported Election Types
 
-Tranche 2K implemented deterministic linked-offices counting and result
-calculation over already-stored anonymous ballots, with **no schema changes** and
-still **no voter GUI, vote session, or ballot submission path**:
+## YES_NO
 
-- New result domain model under `domain.election.results`: `LinkedElectionResult`,
-  `ContestResult`, `CandidateResult`, `IrvRoundResult`, `CandidateTally` — all
-  immutable, anonymous (office/candidate keys + counts only), Bukkit-free.
-- `LinkedElectionCountingService` (`domain.election.results`) — a pure,
-  database-free, deterministic calculator. It counts contests in the topological
-  order from `ElectionDependencyEvaluator`, applies `EXCLUDE_WINNERS` (source-office
-  winners removed from a dependent office before it is counted), and produces a
-  `LinkedElectionResult`. Generic — no office/candidate name hardcoded.
-  - **IRV** (single-seat ranked): each ballot counts toward its highest-ranked
-    continuing candidate; strict majority of active (non-exhausted) ballots elects;
-    otherwise the lowest tally is eliminated, ties broken by eliminating the tied
-    candidate **latest** in contest order (earlier-defined candidates survive);
-    ballots with no continuing ranked candidate exhaust; rounds are recorded.
-  - **Approval top-N**: distinct eligible approvals score candidates. Winners are
-    chosen by walking score groups from highest to lowest and electing a whole tied
-    group **only when it fits within the remaining seats**. A tie that crosses the
-    seat cutoff (a tied score group larger than the seats left) elects **none** of
-    that group: the contest is marked incomplete with `unresolvedSeatCount` and
-    `unresolvedCandidateKeys`, and a runoff/admin resolution fills those seats outside
-    the count. Candidate order is display-stability only and never decides winners at
-    the cutoff. Approvals for excluded candidates are ignored; too few eligible
-    candidates fills what it can and reports an issue.
-  - A dependency cycle (or unresolved reference) is reported and the result marked
-    incomplete; it does not pretend success.
-- `LinkedElectionResultService` (`service`) — Bukkit-free collaborator (holds only a
-  `DatabaseManager`, like `LinkedOfficesIntegrityVerifier`) that loads anonymous
-  ballots + contest responses, reconstructs each via `LinkedBallotReconstructor`,
-  skips and reports any that cannot be reconstructed, and runs the counting service.
-- `ResultService.getLinkedElectionResult(pollId)` (CLOSED polls only) exposes the
-  linked result; `/modnvote result <pollId>` branches on poll type and renders
-  `LINKED_OFFICES` through the new Bukkit-free `LinkedElectionResultDisplayFormatter`
-  (offices, method/seats, winners, candidate tallies, IRV rounds, dependency
-  exclusions, issues). The single-contest `getPollResult` path and its rendering are
-  unchanged.
+Status: Complete
 
-Explicitly NOT done by Tranche 2K:
+Capabilities:
 
-- No voter GUI, vote session, or player linked-offices voting/submission command —
-  this counts already-stored anonymous content only. No schema changes, no changes
-  to canonical payloads, proof-phrase generation, or participation-token hashing.
-  Counting reads only `anonymous_ballots`, `anonymous_ballot_contest_responses`, and
-  the election definition; it never reads or joins `participation_records` identity
-  fields, and the result exposes no voter identity. Existing `YES_NO`/
-  `RANKED_SINGLE_WINNER` result behaviour is unchanged (regression-locked).
+* Anonymous voting
+* Duplicate-vote prevention
+* Participation verification
+* Ballot proof verification
+* Witness publication
+* Integrity verification
 
-### 2.2.0 groundwork — Tranche 2L (voter session and ballot submission)
-
-Tranche 2L makes `LINKED_OFFICES` **votable end to end**, with **no schema
-changes** (it reuses the Tranche 2G storage and Tranche 2K counting):
-
-- `PollService.openPoll` now opens a `LINKED_OFFICES` poll when it is `READY` and
-  its definition still validates; an invalid definition cannot open. `YES_NO`/
-  `RANKED_SINGLE_WINNER` open behaviour is unchanged.
-- `/modnvote vote <pollId>` routes `LINKED_OFFICES` to a multi-screen voting GUI
-  (office overview → per-office ranking/approval → review/submit). `YES_NO`/
-  `RANKED_SINGLE_WINNER` voting is unchanged.
-- Bukkit-free voting core: `LinkedOfficesVoteState` (per-office selections,
-  `maxSelections` enforcement, ballot construction, submit-readiness, validation),
-  `LinkedOfficesVoteSession`/`LinkedOfficesVoteScreen`/`LinkedOfficesVoteSessionManager`.
-  Every structurally eligible candidate is offered for each office; `EXCLUDE_WINNERS`
-  is applied at count time, never at cast time.
-- GUI layer (`ui.render`): `LinkedOfficesInventoryHolder`,
-  `LinkedOfficesVoteRenderer`, `LinkedOfficesVoteListener`, and quit/close cleanup
-  listeners — mirrors the yes/no and ranked GUI architecture.
-- `LinkedOfficesSubmissionService` (`service`) — Bukkit-free (holds only a
-  `DatabaseManager`). Enforces poll exists / `LINKED_OFFICES` / `OPEN` / definition
-  valid / ballot valid (`LinkedElectionBallotValidator`), issues a proof phrase, and
-  delegates the transactional write to `LinkedBallotStorageService` (one participation
-  record, one anonymous ballot, the contest-response rows). Duplicate voting is
-  prevented by participation-token semantics; a rejected/duplicate submission writes
-  nothing. `VoteSubmissionCoordinator.submitLinkedOfficesVote(...)` bridges the GUI to it.
-- Shared `BallotProofPhraseGenerator` (`service`) holds the proof-phrase word list +
-  four-word logic extracted verbatim from `BallotService`; semantics unchanged.
-
-Explicitly NOT done by Tranche 2L:
-
-- No schema changes; no changes to canonical payloads, counting rules, proof-phrase
-  generation, or participation-token hashing. Voter identity is used only for the
-  participation token/record; vote content goes only to the anonymous tables and no
-  contest-response row carries identity. Witness/Discord publication of linked-offices
-  results is still single-contest only (not wired for linked offices). Existing
-  `YES_NO`/`RANKED_SINGLE_WINNER` voting/submission behaviour is unchanged.
-
-### 2.2.0 groundwork — Tranche 2M (close / result witness publication)
-
-Tranche 2M wires `LINKED_OFFICES` results into the existing close/publish witness
-flow, with **no schema changes** and **no privacy-model change**:
-
-- `/modnvote close <pollId>` and `/modnvote publishresult <pollId>` now route through
-  a shared `PollCommand.publishClosedResult(poll)` helper that branches on poll type:
-  `LINKED_OFFICES` computes a `LinkedElectionResult` and publishes it via the new
-  overload, while `YES_NO`/`RANKED_SINGLE_WINNER` stay on the unchanged single-contest
-  `getPollResult` + `publishPollClosed(Poll, options, PollResult)` path. Previously the
-  linked close/publish step failed because it called the single-contest result path,
-  which throws for `LINKED_OFFICES`.
-- New `WitnessPublicationService.publishPollClosed(Poll, LinkedElectionResult)` overload
-  renders the linked result onto the existing Discord "Poll Closed" embed.
-- New Bukkit-free `LinkedElectionWitnessPayloadFormatter` (`presentation`) builds the
-  deterministic witness fields: poll id/type/status/close time/completeness/counted +
-  skipped ballots, one field per office (counting method, seats, winners, candidate
-  tallies, dependency exclusions, IRV rounds, issues), then an election-issues field.
-  Offices/candidates/rounds render in result order.
-- `/modnvote checkpoint <pollId>` is integrity-only and poll-type agnostic; it already
-  works for `LINKED_OFFICES` via Tranche 2H and was left unchanged.
-
-Explicitly NOT done by Tranche 2M:
-
-- No schema changes; no changes to canonical payloads, counting rules, proof-phrase
-  generation, participation-token hashing, or the privacy model. The published payload
-  carries only anonymous result data — never player UUID/name, IP hash, Floodgate id,
-  participation token/receipt, proof phrase, identity key, or anonymous ballot id.
-  No new voting behaviour. Existing `YES_NO`/`RANKED_SINGLE_WINNER` close/publishresult/
-  checkpoint behaviour and the single-contest publication path are unchanged.
-
-### 2.2.0 groundwork — Tranche 2O (STV multi-seat council counting)
-
-Tranche 2O adds **STV (single transferable vote)** as a linked-office counting
-method for multi-seat representative contests, with **no schema, canonical-payload,
-proof-phrase, participation-token-hash, or privacy change**:
-
-- New `CountingMethod.STV`, alongside `IRV` and `APPROVAL_TOP_N`. STV voters rank
-  candidates exactly as for IRV (same `RankedContestVote`, same `RANKED` storage rows
-  with `rank_position`, same reconstruction and proof/integrity verification); the
-  difference is purely in the count and the number of seats. A shared
-  `CountingMethod.usesRankedBallot()` is the single source of truth for "is this
-  contest ranked?" used by the voter GUI, ballot validator, canonicalization, and
-  storage.
-- **STV count** in `LinkedElectionCountingService`: deterministic fractional STV with a
-  Droop quota (`floor(validBallots / (seats + 1)) + 1`) computed once from the initial
-  valid ballot value. Candidates at/above quota are elected and their surplus is
-  transferred at the Gregory fraction `surplus / tally`; when no one reaches quota the
-  lowest candidate is eliminated and transferred at full value; ballots with no further
-  continuing preference exhaust. All fractional arithmetic uses a fixed scale (6) and
-  `RoundingMode.DOWN`, so repeated counts are identical. Dependency exclusions
-  (`EXCLUDE_WINNERS`, e.g. the Mayor winner) are applied before the Council STV count,
-  exactly as for the other methods.
-- **No silent tie-break by candidate order** (matching the approval cutoff-tie rule): a
-  non-seat-deciding elimination tie is broken deterministically by latest-in-contest
-  order and reported in the round summary, but a **seat-deciding** tie leaves the
-  affected seats **unresolved** (`unresolvedSeatCount` / `unresolvedCandidateKeys`,
-  contest + election `complete = false`) for a runoff/admin resolution. This applies to
-  both an **elimination** tie whose outcome would decide the final elected seats and a
-  **quota-election** tie in which more candidates share the same top at-or-above-quota
-  tally than there are seats remaining (`highestAtOrAboveQuotaGroup`). Under a strict
-  Droop quota the quota-tie guard is a defensive invariant — value conservation caps the
-  number of candidates at or above quota at the remaining-seat count — so it is verified
-  by a direct helper-unit test rather than through ballots.
-- New STV result records `StvResultData` (quota, exhausted value, final fractional
-  tallies, round summaries), `StvRoundResult`, `StvCandidateTally`, carried on a single
-  nullable `ContestResult.stv` field (`null` for IRV/approval). `IrvRoundResult` is
-  unchanged. The in-game and witness formatters render STV quota/winners/rounds/exhausted
-  value and never leak identity.
-- The definition validator accepts `method: "STV"` for multi-seat contests and rejects
-  `maxSelections` on an STV office. The admin builder cycles `IRV → APPROVAL_TOP_N → STV`,
-  allows multi-seat STV, and hides/disables the max-selections control for STV. The voter
-  GUI presents STV on the same ranked screen as IRV with no selection cap. Example
-  `docs/examples/pineton-mayor-stv-council.json` (Mayor IRV + Council STV, Council
-  excludes the Mayor winner) is the recommended Pineton configuration.
-
-Explicitly NOT done by Tranche 2O:
-
-- No schema change, no canonical-payload-format change, no proof-phrase change, no
-  participation-token-hash change, no privacy change. STV reuses the existing ranked
-  storage/canonicalization/proof/integrity path. `IRV`, `APPROVAL_TOP_N` (including the
-  unresolved cutoff-tie fix), `YES_NO`, and `RANKED_SINGLE_WINNER` behaviour is unchanged
-  and regression-locked. The standalone `PollType.RANKED_MULTI_WINNER_STV` remains an
-  unimplemented top-level poll type; STV ships only as a linked-office method.
+Production ready.
 
 ---
 
-## Current product state
+## RANKED_SINGLE_WINNER
 
-ModNVote 2.x is a clean-install, privacy-first, auditable voting plugin for Paper servers.
+Status: Complete
 
-The legacy 1.x Yes/No-only workflow has been replaced by a GUI-first ballot platform supporting:
+Capabilities:
 
-- Ranked single-winner polls
-- Yes/No polls
-- Anonymous ballot storage
-- Identity-aware participation tracking without joining identity to vote content
-- Ballot proof-phrase verification
-- Tamper-evident audit records
-- External witness publication through Discord-compatible webhooks
-- Automatic and manual integrity checkpoints
-- Transparent ranked-choice result reporting
+* Ranked ballots
+* IRV counting
+* Anonymous ballot storage
+* Proof verification
+* Integrity verification
+* Witness publication
 
-Migration from legacy 1.x databases is not currently supported.
+Production ready.
 
 ---
 
-## Proven implemented state
+## LINKED_OFFICES
 
-The following are implemented and should be treated as current behavior unless code inspection proves otherwise.
+Status: Complete
 
-### Poll authoring and lifecycle
+Capabilities:
 
-- GUI Poll Builder for ranked single-winner polls
-- GUI Poll Builder for Yes/No polls
-- `/modnvote create ranked_single_winner <optionCount>`
-- `/modnvote create yes_no`
-- `/modnvote edit <draftPollId>`
-- `/modnvote clone <sourcePollId>`
-- `/modnvote guide`
-- Builder title editing through chat prompts
-- Builder description editing through chat prompts
-- Builder option name editing through chat prompts
-- Builder option description editing through chat prompts
-- Ranked builder Allow Partial toggle
-- Ranked builder Max Rankings cycle control
-- Builder READY validation and transition
-- Builder Cancel closes without deleting draft
-- Poll deletion for DRAFT/READY polls
-- `/poll` alias for `/modnvote`
+* Multi-office elections
+* JSON definition import
+* In-game election editor
+* Definition validation
+* Office dependencies
+* Multi-contest anonymous ballots
+* Proof verification
+* Integrity verification
+* Result calculation
+* Witness publication
+* Player voting GUI
 
-### Voting
-
-- Ranked voting GUI
-- Yes/No voting GUI
-- Mandatory vote confirmation
-- Anonymous ballot submission
-- Join notifications for open unvoted polls
-- Pane-less Java/Bedrock-friendly GUI design
-
-### Verification and integrity
-
-- `/modnvote mypolls`
-- `/modnvote verify participation <pollId>`
-- `/modnvote verify ballot <pollId> <proofPhrase>`
-- Participation verification
-- Ballot proof-phrase verification
-- Audit chain verification
-- Ballot hash and commitment verification
-- Result display from anonymous ballots only
-
-### Witness publication
-
-- Configurable Discord-compatible webhook publication
-- Best-effort poll-opened witness publication
-- Best-effort poll-closed witness publication
-- Automatic integrity checkpoints at configured accepted-ballot intervals
-- Manual checkpoint publication through `/modnvote checkpoint <pollId>`
-- Manual closed-result republication through `/modnvote publishresult <pollId>`
-
-Webhook delivery is intentionally best-effort and must never block or roll back poll lifecycle, voting, closing, or persistence.
+Production ready.
 
 ---
 
-## Core invariants
+# Linked Offices Features
 
-Do not break these.
+## Office Types
 
-- Anonymous ballots are the source of truth for vote content.
-- Participation records are identity-aware but separate from vote content.
-- Identity and vote content must not be joinable.
-- Results must come from anonymous ballots only.
-- `/verify participation` must not reveal vote content.
-- `/verify ballot` is proof-phrase bearer-token ballot verification.
-- Proof phrases must not be derived from player identity.
-- GUI/session layer must not write ballots or lifecycle state directly.
-- Service layer owns validation, lifecycle, and persistence authority.
-- GUI/session work must remain Folia-aware through `ModNScheduler`.
-- Witness publication must be privacy-safe and must not include voter identity, proof phrases, participation receipts, IP data, or per-player vote content.
-- Webhook failures must be logged safely without exposing full webhook URLs.
+Supported:
+
+| Method         | Status   |
+| -------------- | -------- |
+| IRV            | Complete |
+| STV            | Complete |
+| APPROVAL_TOP_N | Complete |
 
 ---
 
-## Command surface
+## Dependencies
 
-All commands use `/modnvote`; `/poll` is a direct alias for the same command executor and tab completer.
-
-### Normal admin workflow
+Supported:
 
 ```text
-/modnvote guide
-/modnvote create ranked_single_winner <optionCount>
-/modnvote create yes_no
-/modnvote edit <draftPollId>
-/modnvote clone <sourcePollId>
-/modnvote list
-/modnvote show <pollId>
-/modnvote validate-definition <pollId>
-/modnvote create linked_offices
-/modnvote config <pollId> set <json>
-/modnvote config <pollId> import <file>
-/modnvote edit-definition <pollId>
-/modnvote delete <pollId>
-/modnvote open <pollId>
-/modnvote close <pollId>
-/modnvote result <pollId>
-/modnvote checkpoint <pollId>
-/modnvote publishresult <pollId>
+EXCLUDE_WINNERS
 ```
 
-### Player workflow
+Example:
 
 ```text
-/modnvote vote <pollId>
-/modnvote mypolls
+Mayor winner excluded from Council
+```
+
+Dependencies are applied during counting.
+
+---
+
+## Recommended Governance Configuration
+
+For towns, nations, and community governments:
+
+| Office  | Seats | Method |
+| ------- | ----- | ------ |
+| Mayor   | 1     | IRV    |
+| Council | 2+    | STV    |
+
+This is the recommended ModNVote 2.2.0 governance model.
+
+---
+
+# Privacy Model
+
+The system intentionally separates:
+
+| Component             | Contains                   |
+| --------------------- | -------------------------- |
+| Participation records | Identity evidence          |
+| Anonymous ballots     | Vote content               |
+| Contest responses     | Linked-office vote content |
+| Audit records         | Lifecycle evidence         |
+
+Results are calculated solely from anonymous ballot content.
+
+The system does not join voter identity to vote content during counting, verification, or witness publication.
+
+---
+
+# Verification Features
+
+## Participation Verification
+
+```text
 /modnvote verify participation <pollId>
+```
+
+Confirms:
+
+* Participation
+* Integrity status
+
+Does not reveal vote content.
+
+---
+
+## Ballot Proof Verification
+
+```text
 /modnvote verify ballot <pollId> <proofPhrase>
 ```
 
-### Utility commands
+Confirms:
 
-```text
-/modnvote status
-/modnvote reload
-```
+* Ballot existence
+* Ballot integrity
+* Anonymous ballot contents
 
-### Hidden or recovery authoring commands
-
-These may remain callable but are not the preferred normal workflow:
-
-```text
-/modnvote set <pollId> <field> <value>
-/modnvote option <add|edit|move|remove> ...
-/modnvote validate <pollId>
-/modnvote ready <pollId>
-/modnvote rankedpolldemo
-```
-
-Prefer the GUI Poll Builder for normal authoring.
+Does not reveal voter identity.
 
 ---
 
-## Result model
-
-Results are calculated by `ResultService` from anonymous ballots only.
-
-### Yes/No polls
-
-Yes/No polls use canonical service-managed options and straightforward tally output.
-
-### Ranked single-winner polls
-
-Ranked single-winner polls use IRV-style transfer rounds.
-
-Important points for future sessions:
-
-- First-preference totals are not necessarily the final result.
-- A candidate can win after transfers even if they did not lead the first-preference round.
-- The public result output must make this clear.
-- `ResultService.PollResult` includes ranked-choice round data, final winner tally, and exhausted ballot count.
-- `ResultService.RankedChoiceRound` snapshots each IRV round.
-- Empty ranked polls must not resolve to a winner.
-
-### Linked offices polls (Tranche 2K)
-
-Linked-offices results are calculated by `LinkedElectionResultService` (loading and
-reconstructing anonymous ballots) plus the pure `LinkedElectionCountingService`,
-reached through `ResultService.getLinkedElectionResult(pollId)` and rendered by
-`LinkedElectionResultDisplayFormatter`. The single-contest `PollResult` shape is not
-reused — a linked election produces a multi-contest `LinkedElectionResult`.
-
-Important points for future sessions:
-
-- Contests are counted in dependency order; `EXCLUDE_WINNERS` removes a source
-  office's winners from a dependent office before it is counted.
-- IRV is single-seat; approval is top-N. IRV tie-breaks are deterministic from
-  contest candidate order (the latest-in-order tied candidate is eliminated).
-  **Approval does NOT break a cutoff tie by candidate order**: a tied score group is
-  elected only if it fits the remaining seats, otherwise none of it is elected and
-  the seats are reported unresolved (`unresolvedSeatCount` / `unresolvedCandidateKeys`,
-  contest `complete = false`) for an external runoff/admin resolution. Candidate order
-  is display-stability only. No office/candidate name is hardcoded.
-- Counting is over anonymous content only; it never touches participation/identity.
-- Voting/submission for linked offices exists as of Tranche 2L (voter GUI + the
-  `LinkedOfficesSubmissionService` path).
-- As of Tranche 2M, closing/republishing a linked poll publishes the multi-contest
-  result to witness webhooks via `WitnessPublicationService.publishPollClosed(Poll,
-  LinkedElectionResult)`, rendered by the Bukkit-free `LinkedElectionWitnessPayloadFormatter`
-  (anonymous result data only).
-
-### Canonical presentation layer
-
-`ResultDisplayFormatter` is the shared result presentation helper.
-
-Use it for:
-
-- in-game result output
-- Discord witness result fields
-- future result-display paths where practical
-
-Do not duplicate ranked-choice result formatting in command or publication code unless there is a deliberate reason.
-
-Current ranked output should distinguish:
-
-- poll winner
-- final winner tally
-- first preference round
-- final IRV round
-- full IRV round breakdown
-- eliminated option per non-final round
-- exhausted ballots where applicable
-
-This was added to avoid the previous failure mode where the winner was correct but the displayed counts looked like first-preference-only totals.
-
----
-
-## Witness publication model
-
-Witness publication is handled by the publication layer, with command/lifecycle code invoking it after successful state changes.
-
-Expected events:
-
-- poll opened
-- poll closed with result summary
-- automatic integrity checkpoint
-- manual integrity checkpoint
-- manual closed-result republication
-
-Design rules:
-
-- Best-effort only.
-- Use asynchronous webhook delivery.
-- Log failures.
-- Never block or roll back voting, lifecycle transitions, or persistence because a webhook failed.
-- Never log full webhook URLs.
-- Keep payloads privacy-safe.
-
-Manual result republication:
-
-```text
-/modnvote publishresult <pollId>
-```
-
-This is intended for republishing corrected/updated closed-poll result formatting to configured witness webhooks. It requires the poll to be `CLOSED`.
-
-Manual checkpoint publication:
+## Integrity Verification
 
 ```text
 /modnvote checkpoint <pollId>
 ```
 
-This publishes a privacy-safe integrity snapshot, not per-player vote content.
-
----
-
-## Config surface
-
-`config.yml` includes publication controls similar to:
-
-```yaml
-publication:
-  discord_webhooks: []
-  publish_poll_opened: true
-  publish_poll_closed: true
-  publish_checkpoints: true
-
-integrity:
-  checkpoint_interval_ballots: 25
-  canonicalization_version: 1
-```
-
-Rules:
-
-- `discord_webhooks: []` disables external publication.
-- One or more Discord-compatible webhook URLs can be configured.
-- Real webhook URLs must never be committed.
-- Automatic checkpoints require publication to be enabled and at least one webhook configured.
-- `checkpoint_interval_ballots <= 0` disables automatic interval checkpoints.
-
----
-
-## Important implementation notes
-
-- `PollCommand.java` is large. Prefer targeted local edits unless doing a fresh full-file replacement with extreme care.
-- Always fetch/read current canonical files before editing.
-- Never write snippet-only placeholder files to the repo.
-- Keep Gradle Java source/target at Java 21 unless explicitly agreed.
-- Do not commit `.gradle/`.
-- Prefer changes that build after each tranche.
-- Use service-layer APIs for poll lifecycle, validation, persistence, results, and verification.
-- GUI/session code must delegate authoritative mutations to services.
-- Result display changes should generally go through `ResultDisplayFormatter`.
-- Witness publication changes should preserve privacy and best-effort delivery semantics.
-- Anonymous-ballot canonical payloads must go through `BallotCanonicalizer` (`service.canonical`); never re-inline a private canonical builder in a service.
-
----
-
-## Main source map
-
-Key files and areas for future sessions:
+and
 
 ```text
-src/main/java/com/modnmetl/modnvote/ModNVotePlugin.java
-```
-
-Plugin bootstrap, dependency wiring, command registration, configuration reload, listener registration.
-
-```text
-src/main/java/com/modnmetl/modnvote/commands/PollCommand.java
-```
-
-Root `/modnvote` and `/poll` command executor/tab completer.
-
-```text
-src/main/java/com/modnmetl/modnvote/service/PollService.java
-```
-
-Poll creation, cloning, lifecycle, option mutation, validation.
-
-```text
-src/main/java/com/modnmetl/modnvote/service/BallotService.java
-```
-
-Ballot submission and participation/ballot verification.
-
-```text
-src/main/java/com/modnmetl/modnvote/service/canonical/BallotCanonicalizer.java
-```
-
-Shared canonical anonymous-ballot payload construction used by both
-`BallotService` and `IntegrityVerificationService`. Tranche 2F added a separate
-`canonicalLinkedOfficesBallotPayload(...)` method (version `linked_offices_v1`)
-that builds the deterministic hashing input for a multi-contest linked-offices
-ballot; it validates first, is not yet wired to any production path, and leaves
-the single-contest `v2` output byte-for-byte unchanged.
-
-```text
-src/main/java/com/modnmetl/modnvote/domain/election/
-```
-
-Generic linked-offices election definition layer (Tranche 2A): immutable
-definition model, `ElectionDefinitionParser`, and `ElectionDefinitionValidator`.
-Definition/config only — no voting, persistence of multi-contest content,
-counting, or GUI.
-
-```text
-src/main/java/com/modnmetl/modnvote/domain/election/execution/
-```
-
-In-memory linked-offices execution model (Tranche 2E): `ContestVote`
-(`RankedContestVote`/`ApprovalContestVote`), `LinkedElectionBallot`,
-`LinkedElectionBallotValidator` (structured `BallotValidationResult`),
-`ElectionDependencyEvaluator` (no outcomes applied), and
-`LinkedElectionCanonicalModel` (ordering planning for future hashing). Pure
-in-memory types — no submission, persistence, counting, or voter GUI.
-
-```text
-src/main/java/com/modnmetl/modnvote/storage/AnonymousBallotContestResponseDao.java
-src/main/java/com/modnmetl/modnvote/service/LinkedBallotStorageService.java
-src/main/java/com/modnmetl/modnvote/service/LinkedBallotReconstructor.java
-```
-
-Linked-offices anonymous storage (Tranche 2G): DAO for the
-`anonymous_ballot_contest_responses` content table (no identity, FK only to
-`anonymous_ballots`), the Bukkit-free `LinkedBallotStorageService` (validates +
-hashes via `canonicalLinkedOfficesBallotPayload`, transactionally writes one
-participation + one anonymous ballot + contest rows; not a voting path, not
-called in production), and `LinkedBallotReconstructor` (rebuilds a ballot from
-stored rows for recount/debugging; hardened in Tranche 2H to reject malformed
-rows via `LinkedBallotReconstructionException`). No counting, results, or voter
-GUI.
-
-```text
-src/main/java/com/modnmetl/modnvote/service/IntegrityVerificationService.java
-src/main/java/com/modnmetl/modnvote/service/LinkedOfficesIntegrityVerifier.java
-```
-
-Integrity verification / recount. `IntegrityVerificationService` recomputes
-single-contest anonymous-ballot hashes and, since Tranche 2H, branches on poll
-type: `LINKED_OFFICES` polls are delegated to the standalone, Bukkit-free
-`LinkedOfficesIntegrityVerifier`, which parses the definition from `config_json`,
-reconstructs each anonymous ballot from its `anonymous_ballot_contest_responses`
-rows, re-canonicalises it, recomputes `ballot_hash`, and compares it to the
-stored hash. Verification only — no counting, results, or voter GUI; only
-`ballot_hash` is recomputed (commitment recomputation lives in the bearer-token
-proof path below).
-
-```text
-src/main/java/com/modnmetl/modnvote/service/LinkedOfficesProofVerifier.java
-src/main/java/com/modnmetl/modnvote/service/LinkedOfficeBallotProofVerificationResult.java
-```
-
-Linked-offices bearer-token proof verification (Tranche 2I). `BallotService`
-gains `verifyLinkedOfficeBallotProof(pollId, proofPhrase)`, which resolves +
-type-checks the poll and delegates to the standalone, Bukkit-free
-`LinkedOfficesProofVerifier`. The verifier hashes the phrase to
-`ballot_proof_hash`, loads the matching anonymous ballot, reconstructs it from its
-`anonymous_ballot_contest_responses` rows, re-canonicalises it, and compares
-**both** the recomputed `ballot_hash` and the phrase-bound
-`ballot_commitment_hash` to the stored values. `LinkedOfficeBallotProofVerificationResult`
-exposes anonymous content only (per-office response keys on success; identity-free
-`failureReason` otherwise) and never reveals voter identity. Verification only —
-no counting, results, or voter GUI. The single-contest `verifyBallotProof` path is
-unchanged.
-
-```text
-src/main/java/com/modnmetl/modnvote/presentation/LinkedOfficeProofDisplayFormatter.java
-```
-
-Linked-offices proof verification command output (Tranche 2J). A Bukkit-free,
-unit-tested formatter that turns a `LinkedOfficeBallotProofVerificationResult` into
-in-game chat lines. `/modnvote verify ballot` now branches on poll type:
-`LINKED_OFFICES` polls call `BallotService.verifyLinkedOfficeBallotProof` and print
-these lines (poll id, `submitted_at`, anonymous `ballot_hash`, and per-office
-responses — ranked numbered, approval bulleted, on success; an identity-free
-message and reason with no content on not-found/failure), while the
-`YES_NO`/`RANKED_SINGLE_WINNER` rendering is unchanged. Linked-office integrity
-remains reachable via `verify participation`. The formatter only reads anonymous
-content already on the result and is incapable of emitting voter identity or the
-proof phrase. Command access only — no voting, counting, or results.
-
-```text
-src/main/java/com/modnmetl/modnvote/service/ResultService.java
-```
-
-Result calculation, including ranked-choice IRV rounds.
-
-```text
-src/main/java/com/modnmetl/modnvote/presentation/ResultDisplayFormatter.java
-```
-
-Canonical result display formatting for in-game and Discord-facing output.
-
-```text
-src/main/java/com/modnmetl/modnvote/publication/WitnessPublicationService.java
-```
-
-High-level witness publication orchestration.
-
-```text
-src/main/java/com/modnmetl/modnvote/ui/
-```
-
-Builder, voting GUI, session, renderer, and listener code.
-
-```text
-src/test/java/com/modnmetl/modnvote/
-```
-
-Test foundation (added in the 2.2.0 groundwork): canonicalizer golden/stability
-tests and schema privacy/non-joinability tests.
-
-```text
-src/main/resources/plugin.yml
-```
-
-Bukkit/Paper command metadata, aliases, and permissions.
-
-```text
-src/main/resources/config.yml
-```
-
-Default plugin configuration.
-
-```text
-src/main/resources/messages.yml
-```
-
-Message strings used by the command/UI layer.
-
----
-
-## Known technical debt and caution areas
-
-- `PollCommand.java` is large and mixes many command branches; keep changes small and verify tab-completion/help updates when adding commands.
-- Some low-level authoring commands remain as recovery paths even though GUI builder is preferred.
-- Result output is user-facing and witness-facing; avoid wording that makes first-preference totals look like final ranked-choice totals.
-- Any future multi-winner/STV work must not reuse single-winner IRV assumptions blindly.
-- Publication should remain decoupled from lifecycle persistence.
-- Avoid introducing identity-to-ballot joins for convenience reporting.
-
----
-
-## Recommended smoke test
-
-After significant changes, run:
-
-```text
-/modnvote status
-/modnvote create ranked_single_winner 3
-/modnvote create yes_no
-/modnvote edit <draftPollId>
-/modnvote open <readyPollId>
-/modnvote vote <openPollId>
-/modnvote close <openPollId>
-/modnvote result <closedPollId>
-/modnvote publishresult <closedPollId>
-/modnvote checkpoint <pollId>
-/modnvote mypolls
 /modnvote verify participation <pollId>
-/modnvote verify ballot <pollId> <proofPhrase>
 ```
 
-Also verify:
-
-```text
-/poll status
-/poll vote <pollId>
-```
-
-and tab completion for common admin commands.
+allow administrators to verify election integrity without exposing voter identities.
 
 ---
 
-## New-session rule
+# Witness Publication
 
-Do not rely on prior chat memory if repo docs and code can answer the question.
+Supported events:
 
-When starting a new session:
+* Poll opened
+* Poll closed
+* Result publication
+* Integrity checkpoints
+* Linked Offices result publication
 
-1. Read `README.md`.
-2. Read `ARCHITECTURE.md`.
-3. Read `CHANGELOG.md`.
-4. Read this file.
-5. Inspect current code before editing, especially if the task touches commands, result calculation, witness publication, or persistence.
+Publication is best-effort and non-blocking.
 
-If docs and code disagree, resolve the disagreement explicitly before editing.
+Webhook delivery failure never affects election execution.
+
+---
+
+# Result Calculation
+
+## IRV
+
+Supported.
+
+Features:
+
+* Majority detection
+* Elimination rounds
+* Vote transfer
+* Exhausted ballot handling
+
+---
+
+## STV
+
+Supported.
+
+Features:
+
+* Droop quota
+* Surplus transfer
+* Elimination transfer
+* Exhausted ballot handling
+* Deterministic counting
+
+For multi-seat representative elections, STV is the recommended counting method.
+
+---
+
+## Approval Top-N
+
+Supported.
+
+Features:
+
+* Approval counting
+* Fair cutoff tie handling
+* Unresolved seat reporting
+
+Candidate definition order is never used to award seats.
+
+A seat-deciding approval tie produces an incomplete result requiring runoff or administrator resolution.
+
+---
+
+# Tie Handling
+
+ModNVote intentionally avoids using candidate definition order to award seats.
+
+Approval Top-N:
+
+* Seat-deciding ties remain unresolved.
+
+STV:
+
+* Seat-deciding elimination ties remain unresolved.
+* Seat-deciding quota ties remain unresolved.
+
+IRV:
+
+* Existing deterministic elimination ordering remains in place for non-seat-deciding elimination ties.
+
+This prevents arbitrary winner selection.
+
+---
+
+# Storage Architecture
+
+Anonymous content is stored in:
+
+```text
+anonymous_ballots
+anonymous_ballot_preferences
+anonymous_ballot_contest_responses
+```
+
+Identity tracking remains separate:
+
+```text
+participation_records
+```
+
+This separation is intentional and foundational to the plugin's privacy guarantees.
+
+---
+
+# Included Example Definitions
+
+Recommended:
+
+```text
+docs/examples/pineton-mayor-stv-council.json
+```
+
+Alternative:
+
+```text
+docs/examples/linked-offices-mayor-council.json
+```
+
+The STV example is the recommended starting point for real elections.
+
+---
+
+# Intentionally Unsupported
+
+The following top-level poll types remain reserved and are not implemented:
+
+* RANKED_MULTI_WINNER_STV
+* SINGLE_CHOICE
+* Other future election models
+
+Use Linked Offices for multi-seat STV elections.
+
+---
+
+# Known Limitations
+
+* Discord embeds may truncate very large election result payloads.
+* Command wiring is covered primarily through service-level tests rather than a Bukkit command harness.
+* Witness publication is best-effort and does not guarantee webhook delivery.
+* Actual close timestamps are not stored separately from scheduled close timestamps.
+
+None of these limitations block production use.
+
+---
+
+# Recommended Next Major Release
+
+Potential future work for 2.3.x:
+
+* Additional dependency types
+* Advanced STV configuration options
+* Result pagination improvements
+* Additional governance templates
+* Expanded witness publication formats
+
+No mandatory development work remains for 2.2.0.
