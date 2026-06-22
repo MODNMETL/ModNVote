@@ -72,16 +72,18 @@ class LinkedElectionResultDisplayFormatterTest {
         // Offices
         assertTrue(joined.contains("office_exec"), joined);
         assertTrue(joined.contains("office_board"), joined);
-        // Winners
-        assertTrue(joined.contains("Winners: §falice"), joined);
+        // Winners (label is bold)
+        assertTrue(joined.contains("§a§lWinners:§r §falice"), joined);
         assertTrue(joined.contains("dave, erin"), joined);
-        // Tallies / scores
+        // Tallies / scores (heading is bold, values stay readable)
+        assertTrue(joined.contains("§e§lCandidate tallies:§r"), joined);
         assertTrue(joined.contains("alice§7: §f3"), joined);
         assertTrue(joined.contains("dave§7: §f4"), joined);
-        // IRV round detail and dependency exclusion
+        // IRV round detail (bold heading) and dependency exclusion (bold label)
+        assertTrue(joined.contains("§e§lIRV round breakdown:§r"), joined);
         assertTrue(joined.contains("Round 1"), joined);
         assertTrue(joined.contains("Eliminated: §fcarol"), joined);
-        assertTrue(joined.contains("Excluded by dependency"), joined);
+        assertTrue(joined.contains("§7§lExcluded by dependency:§r §falice"), joined);
     }
 
     @Test
@@ -95,6 +97,8 @@ class LinkedElectionResultDisplayFormatterTest {
 
         assertTrue(joined.contains("incomplete"), joined);
         assertTrue(joined.contains("Skipped ballots: §f2"), joined);
+        // Election issues heading is bold when present.
+        assertTrue(joined.contains("§c§lElection issues:§r"), joined);
         assertTrue(joined.contains("cycle"), joined);
     }
 
@@ -122,9 +126,10 @@ class LinkedElectionResultDisplayFormatterTest {
 
         String joined = String.join("\n", LinkedElectionResultDisplayFormatter.formatInGame(result));
 
-        assertTrue(joined.contains("Winners: §fspace, rooster"), joined);
-        assertTrue(joined.contains("unresolved: §f2"), joined);
-        assertTrue(joined.contains("Tied candidates: §fkatie, metta, mort"), joined);
+        assertTrue(joined.contains("§a§lWinners:§r §fspace, rooster"), joined);
+        // Unresolved tie headings are bold when present.
+        assertTrue(joined.contains("§c§lCouncil unresolved:§r §f2"), joined);
+        assertTrue(joined.contains("§c§lTied candidates:§r §fkatie, metta, mort"), joined);
         assertTrue(joined.contains("runoff/admin resolution"), joined);
         assertTrue(joined.contains("katie§7: §f2 §c(tied — unresolved)"), joined);
         // Tied candidates must never be rendered as elected.
@@ -172,9 +177,10 @@ class LinkedElectionResultDisplayFormatterTest {
 
         String joined = String.join("\n", LinkedElectionResultDisplayFormatter.formatInGame(result));
 
+        // STV output is structurally unchanged except bold labels: quota, winners, rounds.
         assertTrue(joined.contains("Quota: §f3.000000"), joined);
-        assertTrue(joined.contains("Winners: §fc1, c2, c3"), joined);
-        assertTrue(joined.contains("STV round breakdown"), joined);
+        assertTrue(joined.contains("§a§lWinners:§r §fc1, c2, c3"), joined);
+        assertTrue(joined.contains("§e§lSTV round breakdown:§r"), joined);
         assertTrue(joined.contains("Round 1"), joined);
         assertTrue(joined.contains("Elected: §fc1"), joined);
         assertTrue(joined.contains("Eliminated: §fc4"), joined);

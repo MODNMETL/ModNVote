@@ -53,7 +53,7 @@ public final class LinkedElectionResultDisplayFormatter {
         }
 
         if (!result.issues().isEmpty()) {
-            lines.add("§cElection issues:");
+            lines.add("§c§lElection issues:§r");
             for (String issue : result.issues()) {
                 lines.add(" §8- §7" + issue);
             }
@@ -73,20 +73,20 @@ public final class LinkedElectionResultDisplayFormatter {
         if (contest.winners().isEmpty()) {
             lines.add("§eNo winner could be determined.");
         } else {
-            lines.add("§aWinners: §f" + String.join(", ", contest.winners()));
+            lines.add("§a§lWinners:§r §f" + String.join(", ", contest.winners()));
         }
 
         if (contest.unresolvedSeatCount() > 0) {
-            lines.add("§c" + contest.displayName() + " unresolved: §f" + contest.unresolvedSeatCount()
+            lines.add("§c§l" + contest.displayName() + " unresolved:§r §f" + contest.unresolvedSeatCount()
                     + " §cseat(s) require runoff/admin resolution.");
-            lines.add("§cTied candidates: §f" + String.join(", ", contest.unresolvedCandidateKeys()));
+            lines.add("§c§lTied candidates:§r §f" + String.join(", ", contest.unresolvedCandidateKeys()));
         }
 
         if (!contest.excludedCandidateKeys().isEmpty()) {
-            lines.add("§7Excluded by dependency: §f" + String.join(", ", contest.excludedCandidateKeys()));
+            lines.add("§7§lExcluded by dependency:§r §f" + String.join(", ", contest.excludedCandidateKeys()));
         }
 
-        lines.add("§eCandidate tallies:");
+        lines.add("§e§lCandidate tallies:§r");
         for (CandidateResult candidate : contest.candidateResults()) {
             if (candidate.excluded()) {
                 lines.add(" §8- §7" + candidate.candidateKey() + " §8(excluded)");
@@ -99,7 +99,7 @@ public final class LinkedElectionResultDisplayFormatter {
         }
 
         if (!contest.rounds().isEmpty()) {
-            lines.add("§eIRV round breakdown:");
+            lines.add("§e§lIRV round breakdown:§r");
             for (IrvRoundResult round : contest.rounds()) {
                 appendRound(lines, round);
             }
@@ -114,13 +114,13 @@ public final class LinkedElectionResultDisplayFormatter {
         }
 
         for (String issue : contest.issues()) {
-            lines.add("§cIssue: §7" + issue);
+            lines.add("§c§lIssue:§r §7" + issue);
         }
     }
 
     private static void appendStv(List<String> lines, StvResultData stv) {
         if (!stv.rounds().isEmpty()) {
-            lines.add("§eSTV round breakdown:");
+            lines.add("§e§lSTV round breakdown:§r");
             for (StvRoundResult round : stv.rounds()) {
                 lines.add("§6Round " + round.roundNumber() + "§7:");
                 for (StvCandidateTally tally : round.tallies()) {
